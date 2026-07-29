@@ -58,3 +58,6 @@ out/
 # AI logs — tracked structure, ignored content
 .ai-log/*.jsonl
 .ai-log/archive/
+
+# Claude Code personal settings (mỗi người một bản, không commit)
+.claude/settings.local.json
