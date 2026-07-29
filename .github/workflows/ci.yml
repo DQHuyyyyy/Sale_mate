@@ -4,7 +4,13 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
+
+# Mỗi người làm trên nhánh riêng và push nhiều lần trong ngày. Huỷ run cũ khi
+# có commit mới trên cùng PR để không đốt Actions minutes vào kết quả đã lỗi thời.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint-and-test:
