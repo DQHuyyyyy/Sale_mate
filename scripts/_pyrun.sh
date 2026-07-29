@@ -8,14 +8,25 @@
 # Exits 0 silently if no Python is found — hooks must never block the AI tool.
 set -u
 
-if command -v python3 >/dev/null 2>&1; then
+# On Windows, `python`/`python3` on PATH can resolve to App Execution Alias
+# stubs (AppData\Local\Microsoft\WindowsApps\python3.exe) that exist as a
+# file — so `command -v` finds them — but don't run Python at all; they just
+# print a Microsoft Store redirect and exit nonzero. Verify a candidate
+# actually executes before trusting it, instead of trusting PATH lookup alone.
+is_real_python() {
+  "$@" -c "" >/dev/null 2>&1
+}
+
+PY=""
+if command -v python3 >/dev/null 2>&1 && is_real_python python3; then
   PY=python3
-elif command -v python >/dev/null 2>&1; then
+elif command -v python >/dev/null 2>&1 && is_real_python python; then
   PY=python
-elif command -v py >/dev/null 2>&1; then
+elif command -v py >/dev/null 2>&1 && is_real_python py -3; then
   PY="py -3"
 else
-  # PATH lookup failed — probe standard Windows install locations.
+  # PATH lookup failed or found only broken stubs — probe standard Windows
+  # install locations.
   PY=""
   shopt -s nullglob 2>/dev/null || true
   for cand in \
