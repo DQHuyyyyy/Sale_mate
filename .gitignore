@@ -28,8 +28,10 @@ env/
 .DS_Store
 Thumbs.db
 
-# Data (never commit large data)
-data/
+# Dữ liệu lớn — CHỈ thư mục data/ ở gốc repo.
+# Dấu / ở đầu là bắt buộc: nếu viết "data/" thì git bỏ qua MỌI thư mục tên data
+# ở mọi cấp, nuốt luôn cả src/data/ (module RAG) và làm CI đỏ vì thiếu module.
+/data/
 *.db
 *.sqlite3
 
@@ -58,3 +60,14 @@ out/
 # AI logs — tracked structure, ignored content
 .ai-log/*.jsonl
 .ai-log/archive/
+
+# Frontend build output
+frontend/.next/
+frontend/out/
+frontend/node_modules/
+frontend/.env.local
+
+# Coverage
+.coverage
+coverage.xml
+htmlcov/
