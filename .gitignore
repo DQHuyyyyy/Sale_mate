@@ -58,3 +58,14 @@ out/
 # AI logs — tracked structure, ignored content
 .ai-log/*.jsonl
 .ai-log/archive/
+
+# Frontend build output
+frontend/.next/
+frontend/out/
+frontend/node_modules/
+frontend/.env.local
+
+# Coverage
+.coverage
+coverage.xml
+htmlcov/
