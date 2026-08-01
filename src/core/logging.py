@@ -42,6 +42,29 @@ class JSONFormatter(logging.Formatter):
         return json.dumps(entry, ensure_ascii=False)
 
 
+class SafeStreamHandler(logging.StreamHandler):
+    """StreamHandler không bao giờ làm sập app vì lỗi mã hoá.
+
+    Vì sao cần: log của hệ thống này toàn tiếng Việt. Nếu stdout không phải UTF-8
+    (console Windows cp1252, hoặc stream đã bị wrap trong Docker/CI), việc ghi
+    log sẽ ném UnicodeEncodeError — tức là chính công cụ chẩn đoán lại trở thành
+    nguồn lỗi. Ở đây ta lùi về dạng ASCII-escaped (\\uXXXX): xấu mắt hơn nhưng
+    vẫn là JSON hợp lệ và không mất thông tin.
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            super().emit(record)
+        except UnicodeEncodeError:
+            try:
+                message = self.format(record)
+                escaped = message.encode("unicode_escape").decode("ascii")
+                self.stream.write(escaped + self.terminator)
+                self.flush()
+            except Exception:  # noqa: BLE001 - log hỏng thì thôi, đừng làm sập app
+                self.handleError(record)
+
+
 def setup_logging(level: str = "INFO") -> None:
     """Cấu hình root logger. Gọi một lần lúc app khởi động."""
     root = logging.getLogger()
@@ -59,7 +82,7 @@ def setup_logging(level: str = "INFO") -> None:
         except (ValueError, OSError):  # stream đã bị thay bằng thứ không đổi được
             pass
 
-    handler = logging.StreamHandler(stream)
+    handler = SafeStreamHandler(stream)
     handler.setFormatter(JSONFormatter())
     root.addHandler(handler)
 
