@@ -16,6 +16,19 @@
 
 ---
 
+## 2026-08-01
+
+| Member | Task | Status | Output | Time |
+|--------|------|--------|--------|------|
+| Viet | Xử lý dữ liệu tồn kho căn hộ (CSV + ảnh) thành tài liệu RAG | ✅ Done | `src/data/sources/inventory.py` — nạp 100/100 căn, gắn ảnh đúng folder, loại giá/tình trạng khỏi text embed (tránh sai lệch với tool tra tồn kho); có test | — |
+| Viet | Crawl tin đăng Vinhomes Ocean Park trên batdongsan.com.vn | ✅ Done | Thử crawl tự động — bị Cloudflare chặn (`cf-mitigated: challenge`), không né tránh; chuyển sang thu thập thủ công 33 trang chi tiết + viết `src/data/crawling/batdongsan.py` xử lý hàng loạt (giá, diện tích, pháp lý, mô tả, ảnh, nguồn) — 33/33 parse đúng | — |
+| Viet | Dựng pipeline ingest & chứng minh RAG chạy đầu-cuối | ✅ Done | `scripts/ingest_inventory.py`, `scripts/ingest_batdongsan.py`, `scripts/chat_demo_rag.py` — agent thật trả lời đúng kèm trích dẫn nguồn từ dữ liệu đã crawl | — |
+| Viet | Viết test cho toàn bộ phần trên | ✅ Done | 69/69 test pass, `ruff check`/`format` sạch, coverage 80% | — |
+
+**Tổng kết ngày:** Hoàn thành phần "crawl data và xử lý data cho RAG" do huy giao. Dữ liệu (tồn kho + tin đăng BĐS thật) đã sẵn sàng và chứng minh chạy được qua demo agent có trích nguồn. Còn lại: bật `ENABLE_RAG` trong `bootstrap.py`, chuyển Qdrant, và hiển thị ảnh/nguồn trong widget — cần team quyết định và phối hợp (agent + frontend), không thuộc phạm vi việc này.
+
+---
+
 <!--
 Mẫu cho ngày làm việc tiếp theo:
 

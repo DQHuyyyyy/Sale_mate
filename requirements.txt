@@ -34,6 +34,10 @@ psycopg2-binary==2.9.12
 httpx==0.28.1
 tenacity==9.1.4
 
+# ---- Crawling (nạp dữ liệu ngoài cho RAG) ----
+beautifulsoup4==4.15.0
+soupsieve==2.9.1
+
 # ---- GHI CHÚ ----
 # Embedding tiếng Việt (BGE-M3) cần torch + sentence-transformers (~2GB).
 # KHÔNG đưa vào đây để Docker image nhỏ và CI chạy nhanh.
