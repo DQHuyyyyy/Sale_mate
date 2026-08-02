@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SalesMate — Nền tảng bất động sản</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@600&display=swap&subset=vietnamese,latin" rel="stylesheet">
+<style>
+:root{
+  --brand:#1570EF; --brand-d:#0B4FC0;
+  --page:#F2F4F7; --card:#FFFFFF; --cream:#FAF9F5;
+  --text:#1D2939; --muted:#667085; --faint:#98A2B3;
+  --border:#EAECF0; --line:#E4E7EC;
+  --gold:#F5A623; --new:#E5484D; --green:#12B76A; --price:#E5484D;
+  --rb:4px; --rc:12px;
+  --shadow:0 1px 3px rgba(16,24,40,.08), 0 8px 28px -14px rgba(16,24,40,.18);
+  --shadow-sm:0 1px 2px rgba(16,24,40,.06);
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Be Vietnam Pro",system-ui,sans-serif;background:var(--page);color:var(--text);font-size:15px;line-height:1.5}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit;cursor:pointer}
+:focus-visible{outline:2.5px solid var(--brand);outline-offset:2px}
+.wrap{max-width:1140px;margin:0 auto;padding:0 20px}
+.mono{font-family:"JetBrains Mono"}
+
+/* ---------- Header ---------- */
+header{background:var(--brand);position:sticky;top:0;z-index:40}
+.hd{display:flex;align-items:center;gap:26px;height:64px}
+.logo{display:flex;align-items:center;gap:9px;color:#fff;font-weight:700;font-size:20px;flex:none}
+.logo .mk{width:30px;height:30px}
+nav.main{display:flex;gap:20px;flex:1}
+nav.main a{color:#fff;font-size:14px;font-weight:500;opacity:.95;display:flex;align-items:center;gap:5px;white-space:nowrap}
+nav.main a:hover{opacity:1}
+.tag-new{background:var(--new);color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:20px;letter-spacing:.03em}
+.hd-ic{display:flex;align-items:center;gap:14px}
+.hd-ic .ib{color:#fff;opacity:.9;display:grid;place-items:center;background:none;border:0;padding:2px}
+.hd-ic .ib svg{width:21px;height:21px}
+.hd-auth{color:#fff;font-size:14px;font-weight:500;white-space:nowrap}
+.btn-post{background:#fff;color:var(--brand);font-weight:600;font-size:14px;border:0;border-radius:var(--rb);padding:9px 15px;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.btn-post svg{width:16px;height:16px}
+.burger{display:none;background:none;border:0;color:#fff;padding:2px}
+.burger svg{width:24px;height:24px}
+
+/* ---------- Hero ---------- */
+.hero{background:linear-gradient(160deg,var(--brand),var(--brand-d));padding:34px 0 40px}
+.hero-grid{display:grid;grid-template-columns:1fr 420px;gap:26px}
+.hero h1{color:#fff;font-size:26px;font-weight:600;margin:0 0 18px;letter-spacing:-.01em}
+.search{background:#fff;border-radius:10px;display:flex;align-items:center;padding:6px 6px 6px 4px;box-shadow:var(--shadow)}
+.loc{display:flex;align-items:center;gap:6px;padding:9px 12px;font-size:14px;font-weight:500;color:var(--text);white-space:nowrap;border:0;background:none}
+.loc svg{width:16px;height:16px;color:var(--brand)}
+.search .divider{width:1px;height:22px;background:var(--line)}
+.search input{flex:1;border:0;padding:10px 12px;font-size:15px;font-family:inherit;color:var(--text);background:none}
+.search input:focus{outline:0}
+.search .go{width:42px;height:42px;border-radius:8px;background:var(--brand);border:0;display:grid;place-items:center;flex:none}
+.search .go svg{width:19px;height:19px;color:#fff}
+.verif{display:flex;gap:10px;margin-top:16px}
+.vitem{flex:1;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:11px 12px;display:flex;align-items:center;gap:9px;color:#fff}
+.vitem svg{width:20px;height:20px;flex:none;color:#bcd7ff}
+.vitem b{font-size:13px;font-weight:600;display:block;line-height:1.2}
+.vitem span{font-size:11px;opacity:.8}
+
+/* market panel */
+.market{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);border-radius:14px;padding:16px 18px;color:#fff}
+.mk-row{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin-bottom:12px}
+.mk-row .em{color:#bcd7ff;margin-left:auto;font-weight:500}
+.mk-stats{display:flex;gap:8px;font-size:13px;color:#dbe8ff;margin-bottom:6px}
+.mk-stats b{color:#fff;font-family:"JetBrains Mono"}
+.mk-sep{border-top:1px solid rgba(255,255,255,.16);margin:12px 0}
+.mk-title{font-size:13px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:7px}
+.chart{display:flex;align-items:flex-end;gap:14px;height:140px;padding:0 4px}
+.bar{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end}
+.bar .val{font-size:12px;font-weight:600;font-family:"JetBrains Mono"}
+.bar .col{width:100%;border-radius:4px 4px 0 0;min-height:6px}
+.legend{display:flex;flex-wrap:wrap;gap:10px 16px;margin-top:12px}
+.legend span{font-size:11px;color:#dbe8ff;display:flex;align-items:center;gap:6px}
+.legend i{width:9px;height:9px;border-radius:2px;display:inline-block}
+
+/* ---------- Sections ---------- */
+section{padding:26px 0}
+.sec-hd{display:flex;align-items:center;margin-bottom:16px}
+.sec-hd h2{font-size:19px;font-weight:600;margin:0}
+.sec-hd .all{margin-left:auto;color:var(--brand);font-size:13px;font-weight:600;display:flex;align-items:center;gap:4px}
+.sec-hd .all svg{width:15px;height:15px}
+
+/* demand row */
+.hscroll{display:flex;gap:12px;overflow-x:auto;padding-bottom:6px;scrollbar-width:thin}
+.dcard{flex:none;width:184px;background:var(--card);border:1px solid var(--border);border-radius:var(--rc);padding:14px;box-shadow:var(--shadow-sm)}
+.dcard.add{background:var(--brand);color:#fff;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:8px;border:0}
+.dcard.add .plus{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.2);display:grid;place-items:center}
+.dcard.add .plus svg{width:18px;height:18px}
+.dcard.add b{font-size:14px;font-weight:600}
+.dc-top{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+.dc-av{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#cfe0ff,#9cc0ff);flex:none;display:grid;place-items:center;color:var(--brand);font-weight:700;font-size:13px}
+.dc-name{font-size:12.5px;font-weight:600;line-height:1.2}
+.dc-name span{display:block;font-size:11px;color:var(--faint);font-weight:400}
+.dc-txt{font-size:12.5px;color:var(--muted);line-height:1.45}
+
+/* tabs */
+.tabs{display:flex;gap:6px;margin-bottom:16px}
+.tab{background:var(--card);border:1px solid var(--border);color:var(--muted);border-radius:20px;padding:7px 16px;font-size:13.5px;font-weight:600}
+.tab.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+
+/* listing grid */
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.lcard{background:var(--card);border:1px solid var(--border);border-radius:var(--rc);overflow:hidden;box-shadow:var(--shadow-sm);transition:transform .15s,box-shadow .15s}
+.lcard:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+.thumb{aspect-ratio:4/3;position:relative;background:linear-gradient(135deg,#e7eef7,#d4e0ee);display:grid;place-items:center}
+.thumb .house{width:44px;height:44px;color:#b6c6da}
+.badge-vf{position:absolute;top:9px;left:9px;background:rgba(18,183,106,.95);color:#fff;font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:5px;display:flex;align-items:center;gap:4px}
+.badge-vf svg{width:11px;height:11px}
+.badge-heart{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.9);display:grid;place-items:center;border:0}
+.badge-heart svg{width:15px;height:15px;color:var(--muted)}
+.photos{position:absolute;bottom:8px;right:8px;background:rgba(16,24,40,.6);color:#fff;font-size:11px;padding:2px 7px;border-radius:20px;display:flex;align-items:center;gap:4px}
+.photos svg{width:11px;height:11px}
+.lbody{padding:12px 13px}
+.ltitle{font-size:14px;font-weight:600;line-height:1.35;margin:0 0 8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:38px}
+.lprice{font-size:16px;font-weight:700;color:var(--price)}
+.lprice .u{font-size:12px;font-weight:500;color:var(--muted)}
+.lmeta{display:flex;gap:12px;margin:8px 0;font-size:12px;color:var(--muted)}
+.lmeta span{display:flex;align-items:center;gap:4px}
+.lmeta svg{width:13px;height:13px;color:var(--faint)}
+.lloc{font-size:12px;color:var(--faint);display:flex;align-items:center;gap:5px;padding-top:9px;border-top:1px solid var(--line)}
+.lloc svg{width:13px;height:13px}
+
+/* project cards */
+.pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.pcard{background:var(--card);border:1px solid var(--border);border-radius:var(--rc);overflow:hidden;box-shadow:var(--shadow-sm)}
+.pthumb{aspect-ratio:16/9;background:linear-gradient(135deg,#dbe7f5,#c3d5ec);display:grid;place-items:center}
+.pthumb svg{width:40px;height:40px;color:#a9bdd6}
+.pbody{padding:13px 14px}
+.pname{font-size:15px;font-weight:600;margin:0 0 4px}
+.pdev{font-size:12px;color:var(--faint);margin-bottom:8px}
+.pfrom{font-size:13px;color:var(--muted)}
+.pfrom b{color:var(--price);font-weight:700}
+
+/* footer */
+footer{background:var(--card);border-top:1px solid var(--border);margin-top:20px;padding:30px 0 24px}
+.fcols{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;padding-bottom:24px;border-bottom:1px solid var(--line)}
+.fcol h4{font-size:13px;font-weight:700;margin:0 0 12px}
+.fcol a{display:block;font-size:13px;color:var(--muted);margin-bottom:8px}
+.fcol a:hover{color:var(--brand)}
+.fbottom{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;padding-top:20px;font-size:12.5px;color:var(--muted)}
+.fbottom .fbrand{font-weight:700;font-size:16px;color:var(--brand);display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.cert{display:inline-grid;place-items:center;width:52px;height:36px;border:1px solid var(--border);border-radius:6px;font-size:9px;color:var(--faint);text-align:center;font-weight:600}
+
+/* ---------- AI widget ---------- */
+.fab{position:fixed;right:22px;bottom:22px;display:flex;flex-direction:column;gap:12px;z-index:60}
+.fab button{width:52px;height:52px;border-radius:50%;border:0;box-shadow:var(--shadow);display:grid;place-items:center}
+.fab .msg{background:#fff}
+.fab .msg svg{width:24px;height:24px;color:var(--brand)}
+.fab .ai{background:linear-gradient(150deg,#3b8bff,#0B4FC0);position:relative}
+.fab .ai svg{width:26px;height:26px;color:#fff}
+.fab .ai::after{content:"";position:absolute;top:2px;right:4px;width:8px;height:8px;background:var(--gold);border-radius:50%;box-shadow:0 0 0 2px #fff}
+
+.chatw{position:fixed;right:22px;bottom:22px;width:376px;height:min(600px,88vh);background:#fff;border-radius:16px;box-shadow:0 20px 60px -20px rgba(16,24,40,.4);z-index:61;display:none;flex-direction:column;overflow:hidden}
+.chatw.open{display:flex}
+.cw-hd{background:linear-gradient(150deg,var(--brand),var(--brand-d));color:#fff;padding:14px 16px;display:flex;align-items:center;gap:10px}
+.cw-hd .ava{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.18);display:grid;place-items:center;flex:none}
+.cw-hd .ava svg{width:19px;height:19px}
+.cw-hd b{font-size:15px;font-weight:600;display:block;line-height:1.1}
+.cw-hd span{font-size:11px;opacity:.85}
+.cw-hd .x{margin-left:auto;background:none;border:0;color:#fff;opacity:.9;padding:4px}
+.cw-hd .x svg{width:20px;height:20px}
+.cw-body{flex:1;overflow-y:auto;padding:16px;background:var(--page);display:flex;flex-direction:column;gap:14px}
+.cw-greet{background:#fff;border:1px solid var(--border);border-radius:12px;padding:13px 14px;font-size:13.5px}
+.cw-greet b{color:var(--brand)}
+.qa{display:flex;flex-wrap:wrap;gap:8px}
+.qa button{background:#fff;border:1px solid var(--border);border-radius:20px;padding:7px 12px;font-size:12.5px;font-weight:500;color:var(--text)}
+.qa button:hover{border-color:var(--brand);color:var(--brand);background:#f5f9ff}
+.cmsg{max-width:100%}
+.cmsg.u{align-self:flex-end;background:#e7edf5;color:var(--text);border-radius:14px 14px 4px 14px;padding:9px 13px;font-size:13.5px;max-width:82%}
+.cmsg.a{font-size:13.5px;color:var(--text);line-height:1.55}
+.cmsg.a h4{font-size:13.5px;font-weight:700;margin:10px 0 5px}
+.cmsg.a p{margin:0 0 8px}.cmsg.a ul{margin:4px 0 8px;padding-left:18px}.cmsg.a li{margin:2px 0}
+.cmsg.a .note{font-size:11.5px;color:var(--faint);font-style:italic}
+.cfollow{display:flex;flex-direction:column;gap:7px;margin-top:4px}
+.cfollow button{display:flex;align-items:center;gap:8px;text-align:left;background:#fff;border:1px solid var(--border);border-radius:10px;padding:9px 12px;font-size:12.5px;font-weight:500;color:var(--text)}
+.cfollow button:hover{border-color:var(--brand);color:var(--brand);background:#f5f9ff}
+.cfollow .arw{margin-left:auto}.cfollow .arw svg{width:15px;height:15px}
+.ctyping{display:flex;gap:4px;padding:11px 14px;background:#fff;border:1px solid var(--border);border-radius:12px;width:fit-content}
+.ctyping i{width:6px;height:6px;border-radius:50%;background:var(--faint)}
+@media (prefers-reduced-motion:no-preference){.ctyping i{animation:bob 1.1s infinite}.ctyping i:nth-child(2){animation-delay:.15s}.ctyping i:nth-child(3){animation-delay:.3s}@keyframes bob{0%,60%,100%{transform:translateY(0);opacity:.5}30%{transform:translateY(-4px);opacity:1}}}
+.cw-foot{border-top:1px solid var(--border);padding:10px 12px;background:#fff}
+.cw-inrow{display:flex;align-items:flex-end;gap:8px;background:var(--page);border:1px solid var(--border);border-radius:12px;padding:6px 6px 6px 12px}
+.cw-inrow textarea{flex:1;border:0;background:none;resize:none;font-family:inherit;font-size:13.5px;padding:6px 0;max-height:90px;line-height:1.4}
+.cw-inrow textarea:focus{outline:0}
+.cw-send{width:34px;height:34px;border-radius:9px;background:var(--brand);border:0;display:grid;place-items:center;flex:none}
+.cw-send svg{width:16px;height:16px;color:#fff}
+.cw-meta{display:flex;align-items:center;gap:10px;margin-top:6px;padding:0 2px}
+.cw-meta .cnt{font-size:11px;color:var(--faint);font-family:"JetBrains Mono";margin-left:auto}
+.cw-meta button{background:none;border:0;color:var(--faint);padding:2px;display:grid;place-items:center}
+.cw-meta button svg{width:16px;height:16px}
+
+.backdrop{display:none;position:fixed;inset:0;background:rgba(16,24,40,.4);z-index:39}
+.app.nav-open .backdrop{display:block}
+
+@media (max-width:960px){
+  .hero-grid{grid-template-columns:1fr}
+  .grid{grid-template-columns:repeat(2,1fr)}
+  .pgrid{grid-template-columns:1fr 1fr}
+  .fcols{grid-template-columns:1fr 1fr}
+  nav.main{position:fixed;left:0;top:0;bottom:0;width:250px;background:var(--brand-d);flex-direction:column;padding:70px 18px 18px;transform:translateX(-100%);transition:.25s;z-index:41}
+  .app.nav-open nav.main{transform:none}
+  .burger{display:block}
+  .hd{gap:12px}.hd .hd-auth,.hd .hd-ic .ib{display:none}
+}
+@media (max-width:560px){
+  .grid{grid-template-columns:1fr}.pgrid{grid-template-columns:1fr}.fcols{grid-template-columns:1fr}
+  .hero h1{font-size:21px}.verif{flex-direction:column}
+  .chatw{right:0;bottom:0;width:100%;height:100dvh;border-radius:0}
+  .btn-post span{display:none}
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+<div class="backdrop" id="backdrop"></div>
+
+<!-- Header -->
+<header>
+  <div class="wrap hd">
+    <button class="burger" id="burger" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+    <a class="logo" href="#"><svg class="mk" viewBox="0 0 40 40" fill="none"><path d="M6 30V14l14-8 14 8v16" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 30v-8h10v8" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>SalesMate</a>
+    <nav class="main" id="nav">
+      <a href="#">Mua bán nhà đất</a>
+      <a href="#">Cho thuê</a>
+      <a href="#">Sang nhượng</a>
+      <a href="#">Dự án</a>
+      <a href="#">Tin tức</a>
+      <a href="#">Bảng giá</a>
+      <a href="#">Khám phá <span class="tag-new">NEW</span></a>
+    </nav>
+    <div class="hd-ic">
+      <button class="ib" aria-label="Yêu thích"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.6l-1-1a5.5 5.5 0 10-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 000-7.8z"/></svg></button>
+      <button class="ib" aria-label="Thông báo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0"/></svg></button>
+      <span class="hd-auth">Đăng nhập / Đăng ký</span>
+      <button class="btn-post"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg><span>Đăng tin</span></button>
+    </div>
+  </div>
+</header>
+
+<!-- Hero -->
+<div class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <h1>Nền tảng bất động sản xác thực</h1>
+      <div class="search">
+        <button class="loc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-5.7 7-12A7 7 0 005 9c0 6.3 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>Toàn quốc
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M6 9l6 6 6-6"/></svg></button>
+        <div class="divider"></div>
+        <input placeholder="Nhập khu vực, dự án, từ khoá…">
+        <button class="go" aria-label="Tìm kiếm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></button>
+      </div>
+      <div class="verif">
+        <div class="vitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4v5c0 4.4-3.4 7.6-8 9-4.6-1.4-8-4.6-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg><div><b>Xác thực pháp lý</b><span>sổ đỏ, giấy tờ</span></div></div>
+        <div class="vitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 20l-5.5 2V6L9 4m0 16l6-2m-6 2V4m6 14l5.5 2V6L15 4m0 14V4m0 0L9 6"/></svg><div><b>Xác thực quy hoạch</b><span>bản đồ đất</span></div></div>
+        <div class="vitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg><div><b>Xác thực giá</b><span>định giá AI</span></div></div>
+      </div>
+    </div>
+
+    <div class="market">
+      <div class="mk-row"><svg viewBox="0 0 24 24" fill="none" stroke="#bcd7ff" stroke-width="2" style="width:18px;height:18px"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>Thị trường hôm nay <span class="em">31/07/2026</span></div>
+      <div class="mk-stats">Tin đang hiệu lực: <b>153.838</b></div>
+      <div class="mk-stats">Tin đăng hôm nay: <b>8.438</b></div>
+      <div class="mk-sep"></div>
+      <div class="mk-title"><svg viewBox="0 0 24 24" fill="none" stroke="#bcd7ff" stroke-width="2" style="width:15px;height:15px"><path d="M4 20V10M10 20V4M16 20v-8M22 20h-20"/></svg>Thống kê tin đăng trong ngày</div>
+      <div class="chart">
+        <div class="bar"><span class="val">3635</span><div class="col" style="height:100%;background:linear-gradient(#f6b352,#e88a1e)"></div></div>
+        <div class="bar"><span class="val">1871</span><div class="col" style="height:52%;background:linear-gradient(#5aa0ff,#2f7bef)"></div></div>
+        <div class="bar"><span class="val">1189</span><div class="col" style="height:33%;background:linear-gradient(#f28aa0,#e2536f)"></div></div>
+        <div class="bar"><span class="val">436</span><div class="col" style="height:14%;background:linear-gradient(#57c7a8,#28a684)"></div></div>
+        <div class="bar"><span class="val">188</span><div class="col" style="height:8%;background:linear-gradient(#f6d365,#e5b93b)"></div></div>
+      </div>
+      <div class="legend">
+        <span><i style="background:#e88a1e"></i>Nhà riêng</span>
+        <span><i style="background:#2f7bef"></i>Căn hộ chung cư</span>
+        <span><i style="background:#e2536f"></i>Đất</span>
+        <span><i style="background:#28a684"></i>Biệt thự liền kề</span>
+        <span><i style="background:#e5b93b"></i>Shophouse</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Nhu cầu -->
+<div class="wrap">
+<section>
+  <div class="sec-hd"><h2>Nhu cầu</h2><a class="all" href="#">Xem tất cả <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></a></div>
+  <div class="hscroll">
+    <div class="dcard add"><div class="plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg></div><b>Thêm nhu cầu BĐS</b></div>
+    <div class="dcard"><div class="dc-top"><div class="dc-av">TA</div><div class="dc-name">Tuấn Anh<span>2 giờ trước</span></div></div><div class="dc-txt">Vốn 420 triệu, tìm đất nền cửa ngõ khu vực phía Tây Hà Nội.</div></div>
+    <div class="dcard"><div class="dc-top"><div class="dc-av">ML</div><div class="dc-name">Mỹ Linh<span>3 giờ trước</span></div></div><div class="dc-txt">Vốn 400 triệu sở hữu đất nền sổ đỏ, ưu tiên pháp lý rõ ràng.</div></div>
+    <div class="dcard"><div class="dc-top"><div class="dc-av">QH</div><div class="dc-name">Quốc Huy<span>5 giờ trước</span></div></div><div class="dc-txt">Cần mua shophouse 6×19m, tầm giá 1,6 tỷ và 5 triệu/tháng.</div></div>
+    <div class="dcard"><div class="dc-top"><div class="dc-av">NP</div><div class="dc-name">Ngọc Phương<span>hôm qua</span></div></div><div class="dc-txt">Suất nội bộ căn hộ 2PN, sổ hồng cầm tay, khu vực trung tâm.</div></div>
+  </div>
+</section>
+
+<!-- Bất động sản nổi bật -->
+<section>
+  <div class="sec-hd"><h2>Bất động sản nổi bật</h2><a class="all" href="#">Xem tất cả <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></a></div>
+  <div class="tabs" id="tabs"><button class="tab on">Mua bán</button><button class="tab">Cho thuê</button><button class="tab">Sang nhượng</button></div>
+  <div class="grid" id="listings"></div>
+</section>
+
+<!-- Dự án nổi bật -->
+<section>
+  <div class="sec-hd"><h2>Dự án nổi bật</h2><a class="all" href="#">Xem tất cả <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></a></div>
+  <div class="pgrid">
+    <div class="pcard"><div class="pthumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-5h6v5"/></svg></div><div class="pbody"><h3 class="pname">Lakeside Metropole</h3><div class="pdev">CĐT An Phú · Tây Hồ, Hà Nội</div><div class="pfrom">Từ <b>3,2 tỷ</b>/căn</div></div></div>
+    <div class="pcard"><div class="pthumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-5h6v5"/></svg></div><div class="pbody"><h3 class="pname">The Origin Riverside</h3><div class="pdev">CĐT Nam Long · Thủ Đức, HCM</div><div class="pfrom">Từ <b>2,8 tỷ</b>/căn</div></div></div>
+    <div class="pcard"><div class="pthumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-5h6v5"/></svg></div><div class="pbody"><h3 class="pname">Sunrise Garden City</h3><div class="pdev">CĐT Hoàng Gia · Long Biên, Hà Nội</div><div class="pfrom">Từ <b>2,1 tỷ</b>/căn</div></div></div>
+  </div>
+</section>
+</div>
+
+<!-- Footer -->
+<footer>
+  <div class="wrap">
+    <div class="fcols">
+      <div class="fcol"><h4>Bán căn hộ chung cư</h4><a href="#">Căn hộ Hà Nội</a><a href="#">Căn hộ Hồ Chí Minh</a><a href="#">Căn hộ Hải Phòng</a><a href="#">Căn hộ Đà Nẵng</a></div>
+      <div class="fcol"><h4>Cho thuê</h4><a href="#">Cho thuê căn hộ</a><a href="#">Cho thuê văn phòng</a><a href="#">Cho thuê mặt bằng</a><a href="#">Cho thuê nhà riêng</a></div>
+      <div class="fcol"><h4>Dự án nổi bật</h4><a href="#">Lakeside Metropole</a><a href="#">The Origin Riverside</a><a href="#">Sunrise Garden City</a><a href="#">Xem tất cả dự án</a></div>
+      <div class="fcol"><h4>Hỗ trợ</h4><a href="#">Quy định đăng tin</a><a href="#">Liên hệ</a><a href="#">Chính sách bảo mật</a><a href="#">Trợ giúp</a></div>
+    </div>
+    <div class="fbottom">
+      <div style="flex:1;min-width:220px">
+        <div class="fbrand"><svg class="mk" viewBox="0 0 40 40" fill="none" style="width:24px;height:24px"><path d="M6 30V14l14-8 14 8v16" stroke="#1570EF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 30v-8h10v8" stroke="#1570EF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>SalesMate</div>
+        Nền tảng bất động sản xác thực — kết nối người mua, người bán và môi giới.
+      </div>
+      <div><b>Chứng nhận</b><div style="display:flex;gap:8px;margin-top:8px"><span class="cert">ISO 27001</span><span class="cert">ISO 9001</span></div></div>
+    </div>
+  </div>
+</footer>
+
+</div>
+
+<!-- Floating AI widget -->
+<div class="fab" id="fab">
+  <button class="msg" aria-label="Tin nhắn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.4 8.4 0 01-9 8.4L3 21l1.1-6A8.4 8.4 0 1121 11.5z"/></svg></button>
+  <button class="ai" id="aiBtn" aria-label="Trợ lý AI"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15l-1.9-4.1L5.5 9l4.6-1.4L12 3z"/><path d="M18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9L18 15z"/></svg></button>
+</div>
+
+<div class="chatw" id="chatw" role="dialog" aria-label="Trợ lý AI">
+  <div class="cw-hd">
+    <div class="ava"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15l-1.9-4.1L5.5 9l4.6-1.4L12 3z"/></svg></div>
+    <div><b>Trợ lý AI</b><span>SalesMate</span></div>
+    <button class="x" id="cwClose" aria-label="Đóng"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="cw-body" id="cwBody" aria-live="polite">
+    <div class="cw-greet">Xin chào 👋 <b>Trợ lý AI SalesMate</b> có thể giúp bạn tư vấn giá, tìm bất động sản phù hợp, giải đáp pháp lý và soạn tin đăng.</div>
+    <div class="qa" id="qa">
+      <button>Tư vấn giá theo khu vực</button>
+      <button>Tìm căn hộ phù hợp</button>
+      <button>Đặt câu hỏi pháp lý</button>
+      <button>Viết tin đăng</button>
+    </div>
+  </div>
+  <div class="cw-foot">
+    <div class="cw-inrow">
+      <textarea id="cwInput" rows="1" maxlength="2000" placeholder="Tiếp tục cuộc trò chuyện"></textarea>
+      <button class="cw-send" id="cwSend" aria-label="Gửi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg></button>
+    </div>
+    <div class="cw-meta">
+      <button aria-label="Cuộc trò chuyện mới"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 109-9M3 12v-4M3 12h4"/></svg></button>
+      <span class="cnt" id="cwCount">0 / 2000</span>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ----- listings render ----- */
+const listings=[
+  {t:'Bán căn hộ 2PN Lakeside Metropole, view hồ',price:'3,85 tỷ',u:'56 tr/m²',area:'68 m²',bed:'2 PN',loc:'Tây Hồ, Hà Nội'},
+  {t:'Nhà phố 5 tầng khu đô thị, sổ đỏ chính chủ',price:'6,5 tỷ',u:'92 tr/m²',area:'70 m²',bed:'4 PN',loc:'Cầu Giấy, Hà Nội'},
+  {t:'Căn hộ 3PN The Origin Riverside, full nội thất',price:'4,2 tỷ',u:'48 tr/m²',area:'88 m²',bed:'3 PN',loc:'Thủ Đức, HCM'},
+  {t:'Đất nền dự án Sunrise Garden City, giá gốc CĐT',price:'2,1 tỷ',u:'35 tr/m²',area:'60 m²',bed:'—',loc:'Long Biên, Hà Nội'}
+];
+const houseSvg='<svg class="house" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6"/></svg>';
+function renderListings(){
+  document.getElementById('listings').innerHTML=listings.map(l=>`
+    <article class="lcard">
+      <div class="thumb">${houseSvg}
+        <span class="badge-vf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>Xác thực</span>
+        <button class="badge-heart" aria-label="Lưu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.6l-1-1a5.5 5.5 0 10-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 000-7.8z"/></svg></button>
+        <span class="photos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 17l-5-5-4 4"/></svg>12</span>
+      </div>
+      <div class="lbody">
+        <h3 class="ltitle">${l.t}</h3>
+        <div class="lprice">${l.price} <span class="u">· ${l.u}</span></div>
+        <div class="lmeta">
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/></svg>${l.area}</span>
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M6 12V7a2 2 0 012-2h8a2 2 0 012 2v5M3 12v6M21 12v6"/></svg>${l.bed}</span>
+        </div>
+        <div class="lloc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-5.7 7-12A7 7 0 005 9c0 6.3 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>${l.loc}</div>
+      </div>
+    </article>`).join('');
+}
+renderListings();
+document.getElementById('tabs').addEventListener('click',e=>{
+  const t=e.target.closest('.tab');if(!t)return;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');
+});
+
+/* ----- mobile nav ----- */
+const app=document.getElementById('app');
+document.getElementById('burger').addEventListener('click',()=>app.classList.toggle('nav-open'));
+document.getElementById('backdrop').addEventListener('click',()=>app.classList.remove('nav-open'));
+
+/* ----- AI widget ----- */
+const chatw=document.getElementById('chatw'),fab=document.getElementById('fab');
+const cwBody=document.getElementById('cwBody'),cwInput=document.getElementById('cwInput');
+function openChat(){chatw.classList.add('open');fab.style.display='none';cwInput.focus();}
+function closeChat(){chatw.classList.remove('open');fab.style.display='flex';}
+document.getElementById('aiBtn').addEventListener('click',openChat);
+document.getElementById('fab').querySelector('.msg').addEventListener('click',openChat);
+document.getElementById('cwClose').addEventListener('click',closeChat);
+
+const arw='<span class="arw"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>';
+
+/* NOTE: lõi AI sẽ thay đổi sau — đây chỉ là kịch bản mẫu cho UI */
+const demo={
+  'Tư vấn giá theo khu vực':{
+    html:`<p>Mình cần biết <b>khu vực</b> bạn quan tâm để tư vấn sát nhất. Ví dụ mặt bằng giá tham khảo:</p>
+      <h4>Căn hộ chung cư</h4><ul><li>Trung tâm: 55–80 tr/m²</li><li>Ven đô: 30–45 tr/m²</li></ul>
+      <p class="note">Kịch bản mẫu — bản thật sẽ tra dữ liệu giá theo khu vực.</p>`,
+    fu:['Giá khu vực Cầu Giấy, Hà Nội?','Nên mua chung cư hay nhà trong ngõ?']
+  },
+  'Tìm căn hộ phù hợp':{
+    html:`<p>Cho mình biết <b>ngân sách</b>, <b>khu vực</b> và <b>số phòng ngủ</b> mong muốn, mình sẽ gợi ý các căn phù hợp.</p><p class="note">Kịch bản mẫu.</p>`,
+    fu:['Căn 2PN dưới 4 tỷ ở Hà Nội','So sánh 2 dự án ven hồ']
+  },
+  'Đặt câu hỏi pháp lý':{
+    html:`<p>Bạn hỏi về thủ tục nào? (sổ đỏ/sổ hồng, hợp đồng mua bán, thuế phí…). Mình sẽ giải thích từng bước.</p><p class="note">Kịch bản mẫu — không thay thế tư vấn luật.</p>`,
+    fu:['Thủ tục sang tên sổ đỏ gồm những gì?','Thuế phí khi mua căn hộ?']
+  },
+  'Viết tin đăng':{
+    html:`<p>Gửi mình <b>loại BĐS, diện tích, giá, vị trí, điểm nổi bật</b> — mình soạn tin đăng hấp dẫn ngay.</p><p class="note">Kịch bản mẫu.</p>`,
+    fu:['Viết tin bán căn hộ 2PN 68m²','Tối ưu tiêu đề cho tin đăng']
+  }
+};
+function fallback(){return{html:`<p>Đây là bản prototype UI nên mình có sẵn vài kịch bản mẫu: <b>tư vấn giá, tìm BĐS, pháp lý, viết tin đăng</b>. Lõi AI sẽ được nối sau.</p>`,fu:['Tư vấn giá theo khu vực','Viết tin đăng']};}
+
+function cel(h){const t=document.createElement('template');t.innerHTML=h.trim();return t.content.firstChild;}
+function cwScroll(){cwBody.scrollTop=cwBody.scrollHeight;}
+function esc(s){return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function addU(t){cwBody.appendChild(cel(`<div class="cmsg u">${esc(t)}</div>`));cwScroll();}
+function ctyping(){const t=cel('<div class="ctyping"><i></i><i></i><i></i></div>');cwBody.appendChild(t);cwScroll();return t;}
+function addA(d){
+  const t=ctyping();
+  setTimeout(()=>{
+    t.remove();
+    let h=`<div class="cmsg a">${d.html}`;
+    if(d.fu)h+=`<div class="cfollow">`+d.fu.map(f=>`<button><span>${f}</span>${arw}</button>`).join('')+`</div>`;
+    h+='</div>';
+    const node=cel(h);cwBody.appendChild(node);cwScroll();
+    node.querySelectorAll('.cfollow button').forEach(b=>b.addEventListener('click',()=>ask(b.querySelector('span').textContent)));
+  },600);
+}
+function ask(text){addU(text);addA(demo[text]||fallback());}
+
+document.getElementById('qa').addEventListener('click',e=>{const b=e.target.closest('button');if(b)ask(b.textContent);});
+document.getElementById('cwSend').addEventListener('click',cwSendFn);
+cwInput.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();cwSendFn();}});
+cwInput.addEventListener('input',()=>{cwInput.style.height='auto';cwInput.style.height=Math.min(cwInput.scrollHeight,90)+'px';document.getElementById('cwCount').textContent=cwInput.value.length+' / 2000';});
+function cwSendFn(){const v=cwInput.value.trim();if(!v)return;cwInput.value='';cwInput.style.height='auto';document.getElementById('cwCount').textContent='0 / 2000';ask(v);}
+</script>
+</body>
+</html>
