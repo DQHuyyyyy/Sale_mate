@@ -29,6 +29,17 @@
 
 ---
 
+## 2026-08-02
+
+| Member | Task | Status | Output | Time |
+|--------|------|--------|--------|------|
+| Viet | Chuyển dữ liệu từ vector store tạm sang Qdrant thật | ✅ Done | Bật Qdrant qua `make infra`; sửa `scripts/ingest_inventory.py`, `scripts/ingest_batdongsan.py` dùng `QdrantVectorStore` + `OpenAIEmbedder` thật thay vì tạm; ingest thành công 158 chunk (100 tồn kho + 58 batdongsan), verify qua `GET /collections/documents_chunks` (`points_count=158`) | — |
+| Viet | Chứng minh agent đọc đúng dữ liệu từ Qdrant thật | ✅ Done | Sửa `scripts/chat_demo_rag.py` đọc thẳng Qdrant (không ingest tạm); chạy thử 3 câu hỏi mẫu — trả lời đúng, trích dẫn đúng nguồn, coverage tăng (0.70 → 0.85) nhờ embedding thật | — |
+
+**Tổng kết ngày:** Hoàn tất "Data Handling" đúng DOD đã cam kết trong sprint (pipeline ingest chạy với Qdrant, có test, retriever trả đúng chunk). Dữ liệu tồn kho + batdongsan.com.vn đã nằm bền trong Qdrant, sẵn sàng cho "Build RAG" (PhucCH) và "AI Agent" (HuyDQ) sử dụng.
+
+---
+
 <!--
 Mẫu cho ngày làm việc tiếp theo:
 

@@ -4,8 +4,8 @@ Nguồn crawl tự động bị Cloudflare chặn (xem src/data/crawling/batdong
 nên dữ liệu đến từ các file .html người dùng tự lưu bằng trình duyệt
 (Ctrl+S → "Chỉ HTML") đặt trong data/raw/.
 
-Chạy:
-    PYTHONPATH=. .venv/Scripts/python.exe scripts/ingest_batdongsan.py
+Chạy (cần `make infra` bật Qdrant trước):
+    PYTHONUTF8=1 PYTHONPATH=. .venv/Scripts/python.exe scripts/ingest_batdongsan.py
 """
 
 from __future__ import annotations
@@ -13,14 +13,15 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+from src.core.config import get_settings
 from src.core.logging import get_logger, setup_logging
 from src.data.crawling.batdongsan import load_saved_detail_pages
 from src.data.ingestion.chunkers import ParagraphChunker
-from src.data.ingestion.embedders import FakeEmbedder
+from src.data.ingestion.embedders import FakeEmbedder, OpenAIEmbedder
 from src.data.pipelines import IngestPipeline
 from src.data.retrieval.rerankers import KeywordOverlapReranker
 from src.data.retrieval.retriever import DefaultRetriever
-from src.data.stores.memory_store import InMemoryVectorStore
+from src.data.stores.qdrant_store import QdrantVectorStore
 
 logger = get_logger(__name__)
 
@@ -29,12 +30,20 @@ RAW_DIR = Path(__file__).resolve().parents[1] / "data" / "raw"
 
 async def main() -> None:
     setup_logging("INFO")
+    settings = get_settings()
 
     documents = load_saved_detail_pages(RAW_DIR)
     logger.info("Đọc được %d tài liệu batdongsan.com.vn", len(documents))
 
-    embedder = FakeEmbedder(dimension=64)
-    store = InMemoryVectorStore()
+    if settings.has_openai_key:
+        embedder = OpenAIEmbedder(
+            settings.openai_api_key, model=settings.embedding_model, dimension=settings.embedding_dim
+        )
+    else:
+        logger.warning("Chưa có OPENAI_API_KEY hợp lệ — dùng FakeEmbedder")
+        embedder = FakeEmbedder(dimension=64)
+
+    store = QdrantVectorStore(settings.qdrant_url, settings.qdrant_collection)
     pipeline = IngestPipeline(ParagraphChunker(), embedder, store)
 
     total_chunks = 0
