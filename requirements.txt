@@ -1,25 +1,41 @@
-# Core
-fastapi>=0.115.0
-uvicorn[standard]>=0.34.0
-pydantic>=2.10.0
-pydantic-settings>=2.7.0
-python-dotenv>=1.0.0
+# ============================================
+# SalesMate — Runtime dependencies
+# Python 3.11 (bắt buộc — khớp CI + Dockerfile). Xem README.
+# Pinned versions: mọi máy và CI cài đúng một bản, không trôi version.
+# ============================================
 
-# AI / LangChain
-langchain>=0.3.0
-langchain-openai>=0.3.0
-langgraph>=0.2.0
+# ---- Web framework ----
+fastapi==0.141.1
+uvicorn[standard]==0.52.0
+sse-starlette==3.4.6
+python-multipart==0.0.32
 
-# Database (uncomment as needed)
-# sqlalchemy>=2.0.0
-# alembic>=1.14.0
-# psycopg2-binary>=2.9.0
+# ---- Validation & config ----
+pydantic==2.13.4
+pydantic-settings==2.14.2
+python-dotenv==1.2.2
 
-# Vector Store (uncomment as needed)
-# chromadb>=0.5.0
+# ---- AI / Agent ----
+langgraph==1.2.10
+langchain-core==1.5.3
+langchain-openai==1.4.1
+openai==2.52.0
+langsmith==0.10.15
 
-# Dev tools
-ruff>=0.8.0
-pytest>=8.0.0
-pytest-asyncio>=0.24.0
-httpx>=0.28.0
+# ---- Vector store ----
+qdrant-client==1.18.0
+
+# ---- Database ----
+sqlalchemy==2.0.51
+alembic==1.18.5
+psycopg2-binary==2.9.12
+
+# ---- Utilities ----
+httpx==0.28.1
+tenacity==9.1.4
+
+# ---- GHI CHÚ ----
+# Embedding tiếng Việt (BGE-M3) cần torch + sentence-transformers (~2GB).
+# KHÔNG đưa vào đây để Docker image nhỏ và CI chạy nhanh.
+# Xem requirements-ml.txt — chỉ cài khi chạy ingestion local.
+
