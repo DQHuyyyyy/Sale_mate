@@ -1,9 +1,15 @@
 """Nạp dữ liệu tồn kho căn hộ thật — CSV (Google Sheet) + ảnh (Google Drive).
 
-Đây là dữ liệu CÓ CẤU TRÚC (giá, diện tích, tình trạng, pháp lý) nên KHÔNG đi
-qua pipeline RAG (contracts.py / stores/). Theo Context Product/Kientruc.md
-mục 6: "Tồn kho qua tool, không vào vector DB" — module này chỉ chuẩn hoá dữ
-liệu thô để cắm vào tool tra cứu tồn kho, không embed, không chunk.
+Phần định tính (view, nội thất, hướng, pháp lý) ĐƯỢC đưa qua pipeline RAG
+(embed + chunk + lưu Qdrant) để trả lời tìm kiếm ngữ nghĩa. Giá và tình trạng
+còn/hết KHÔNG đưa vào text embed — hai trường đó chỉ có trong tool
+`inventory_lookup` (tra trực tiếp CSV), tránh hai nguồn số liệu lệch nhau
+theo thời gian. Xem chi tiết ở `unit_to_document()`.
+
+`visibility = "internal"` — đây là tồn kho THẬT của chính team, chỉ Admin/Sale
+được thấy qua RAG (portal công khai không tìm kiếm ra căn hộ nội bộ, chỉ thấy
+tin đăng bên thứ 3 từ batdongsan/meeyland). Lọc tại tầng truy hồi qua
+`RetrievalFilter.visibility` — không lọc ở UI, đúng nguyên tắc dự án.
 
 File nguồn nằm ở data/raw/ (bị .gitignore, mỗi máy phải tự tải về — xem
 README/hướng dẫn nội bộ), nên mọi hàm ở đây nhận đường dẫn tường minh thay vì
@@ -13,6 +19,7 @@ giả định file luôn tồn tại.
 from __future__ import annotations
 
 import csv
+from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -130,9 +137,16 @@ def unit_to_document(unit: InventoryUnit) -> LoadedDocument:
         title=f"Mô tả căn {unit.unit_code} ({unit.building})",
         text=text,
         metadata={
-            "visibility": "public",
+            "visibility": "internal",
             "section": unit.building,
             "project": unit.building,
+            "source_site": "noi-bo",
+            # Ảnh nằm local (data/raw/photos/), chưa có static server public nên
+            # để rỗng thay vì bịa URL — không được hiển thị trên widget cho tới
+            # khi có hạ tầng phục vụ ảnh (ngoài phạm vi "data" solo).
+            "image_urls": [],
+            "local_photo_files": unit.photos,
+            "version": datetime.now(UTC).date().isoformat(),
         },
     )
 

@@ -112,4 +112,6 @@ def test_chuyen_unit_thanh_document_khong_lo_gia_va_tinh_trang():
     # inventory_lookup trả lời chính xác, tránh hai nguồn số liệu lệch nhau.
     assert "3,1 tỷ" not in doc.text
     assert "available" not in doc.text
-    assert doc.metadata["visibility"] == "public"
+    # Tồn kho là dữ liệu nội bộ của team — chỉ Admin/Sale thấy qua RAG, portal
+    # công khai không được lộ ra (đúng nguyên tắc lọc tại tầng truy hồi).
+    assert doc.metadata["visibility"] == "internal"

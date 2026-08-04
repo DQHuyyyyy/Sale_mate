@@ -41,7 +41,7 @@ async def main() -> None:
         logger.warning("Chưa có OPENAI_API_KEY hợp lệ — dùng FakeEmbedder")
         embedder = FakeEmbedder(dimension=64)
 
-    store = QdrantVectorStore(settings.qdrant_url, settings.qdrant_collection)
+    store = QdrantVectorStore(settings.qdrant_url, settings.qdrant_collection, api_key=settings.qdrant_api_key)
     pipeline = IngestPipeline(ParagraphChunker(), embedder, store)
 
     total_chunks = 0

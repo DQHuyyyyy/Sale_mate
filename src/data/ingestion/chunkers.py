@@ -37,13 +37,20 @@ class ParagraphChunker:
             if len(candidate) <= self._target:
                 buffer = candidate
                 continue
+
+            tail = buffer[-self._overlap :] if buffer and self._overlap else ""
             if buffer:
                 pieces.append(buffer)
-                tail = buffer[-self._overlap :] if self._overlap else ""
-                buffer = f"{tail}\n\n{paragraph}" if tail else paragraph
+
+            # Đoạn mới (kể cả cộng thêm tail overlap) có thể vẫn vượt target —
+            # phải cắt cứng ngay, không được gán thẳng làm buffer mới, nếu
+            # không chunk cuối cùng sẽ phình to hơn target nhiều lần.
+            merged = f"{tail}\n\n{paragraph}" if tail else paragraph
+            if len(merged) <= self._target:
+                buffer = merged
             else:
-                pieces.extend(self._hard_split(paragraph))
-                buffer = ""
+                *full_pieces, buffer = self._hard_split(merged)
+                pieces.extend(full_pieces)
         if buffer:
             pieces.append(buffer)
 

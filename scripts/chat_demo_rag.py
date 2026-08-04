@@ -27,9 +27,18 @@ from src.services.llm import OpenAIProvider, ScriptedProvider
 logger = get_logger(__name__)
 
 DEMO_QUESTIONS = [
-    "Cho tôi thông tin căn hộ 3 phòng ngủ ở Vinhomes Ocean Park",
+    # Lưu ý: RouterNode (module agents, không phải data) hiện phân loại câu có
+    # từ "căn hộ"/"tìm nhà" vào intent LISTING — nhưng needs_retrieval chỉ bật
+    # cho {document, legal, price} nên LISTING KHÔNG kích hoạt truy hồi, dù dữ
+    # liệu tin đăng có đầy đủ trong Qdrant (đã verify bằng Retriever trực
+    # tiếp). Đây là bug ở router, đã báo agents, KHÔNG tự sửa (ngoài phạm vi
+    # module data). Né từ khoá "căn hộ" trong câu demo dưới để không bị lỗi
+    # này che mất phép thử thật của tầng data.
     "Có biệt thự song lập nào không, giá bao nhiêu?",
-    "Thủ tục sang tên sổ đỏ gồm những gì?",  # câu KHÔNG có trong dữ liệu -> phải từ chối
+    "Thủ tục sang tên sổ đỏ và thuế phí gồm những gì?",  # tài liệu kiến thức chung, public
+    "Dự án có những tiện ích nội khu nào, ví dụ trường học bệnh viện?",  # tài liệu kiến thức chung, public
+    "Chính sách chiết khấu hiện tại là bao nhiêu phần trăm?",  # internal -> mặc định chỉ public nên phải từ chối
+    "Lãi suất vay ngân hàng mua nhà năm nay là bao nhiêu?",  # KHÔNG có trong dữ liệu -> phải từ chối
 ]
 
 
@@ -39,7 +48,7 @@ async def main() -> None:
 
     # ---- Đọc thẳng Qdrant thật — dữ liệu đã ingest sẵn bằng scripts/ingest_*.py ----
     embedder = OpenAIEmbedder(settings.openai_api_key) if settings.has_openai_key else FakeEmbedder(dimension=64)
-    store = QdrantVectorStore(settings.qdrant_url, settings.qdrant_collection)
+    store = QdrantVectorStore(settings.qdrant_url, settings.qdrant_collection, api_key=settings.qdrant_api_key)
     count = await store.count()
     logger.info("Qdrant collection '%s' hiện có %d chunk", settings.qdrant_collection, count)
 

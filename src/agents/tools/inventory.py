@@ -1,8 +1,18 @@
-"""Tool tra tồn kho căn hộ — hiện dùng dữ liệu mock.
+"""Tool tra tồn kho căn hộ — đọc dữ liệu tồn kho THẬT từ data/raw/inventory.csv.
 
-Tồn kho là dữ liệu ĐỘNG, thay đổi theo phút, nên đi qua tool chứ không nhét vào
-vector store (RAG luôn là bản chụp cũ). Khi có DB thật, chỉ đổi phần thân
-InventoryLookupTool.run() — chữ ký và ToolResult giữ nguyên.
+Tồn kho là dữ liệu ĐỘNG (giá/tình trạng đổi theo phút), nên đi qua tool chứ
+không nhét vào vector store (RAG luôn là bản chụp cũ — xem
+src/data/sources/inventory.py, phần view/nội thất/pháp lý mới vào RAG, giá và
+tình trạng cố tình KHÔNG vào RAG để tránh hai nguồn số liệu lệch nhau).
+
+Đọc lại CSV ở MỖI lần gọi (không cache trong tiến trình) — gần nhất với "thời
+gian thực" khi hệ thống chưa có DB/ERP thật kết nối trực tiếp (mục 9 Data
+Handling — phần nối API doanh nghiệp thật vẫn cần team quyết định, ngoài khả
+năng solo vì chưa có ERP để nối).
+
+Trước đây tool này trả dữ liệu mock hoàn toàn hư cấu ("Lakeside Metropole",
+"The Origin Riverside") không liên quan gì tới tồn kho Vinhomes Ocean Park
+thật — đã phát hiện và sửa.
 """
 
 from __future__ import annotations
@@ -13,37 +23,7 @@ from pydantic import BaseModel, Field
 
 from src.agents.contracts import AgentTool, ToolResult
 from src.agents.tools.registry import register_tool
-
-# Dữ liệu mock — thay bằng truy vấn DB khi có.
-_MOCK_INVENTORY: list[dict[str, Any]] = [
-    {
-        "project": "Lakeside Metropole",
-        "building": "A",
-        "unit_code": "A-12-05",
-        "unit_type": "2PN",
-        "area_m2": 68,
-        "status": "available",
-        "price_label": "3,85 tỷ",
-    },
-    {
-        "project": "Lakeside Metropole",
-        "building": "A",
-        "unit_code": "A-15-02",
-        "unit_type": "3PN",
-        "area_m2": 95,
-        "status": "reserved",
-        "price_label": "5,40 tỷ",
-    },
-    {
-        "project": "The Origin Riverside",
-        "building": "B",
-        "unit_code": "B-08-11",
-        "unit_type": "3PN",
-        "area_m2": 88,
-        "status": "sold",
-        "price_label": "4,20 tỷ",
-    },
-]
+from src.data.sources.inventory import InventoryUnit, load_inventory_csv
 
 _STATUS_LABEL = {
     "available": "Còn trống",
@@ -53,19 +33,34 @@ _STATUS_LABEL = {
 
 
 class InventoryArgs(BaseModel):
-    project: str = Field(description="Tên dự án")
-    building: str | None = Field(default=None, description="Toà nhà")
-    unit_type: str | None = Field(default=None, description="Loại căn, ví dụ '2PN'")
+    unit_code: str | None = Field(default=None, description="Mã căn cụ thể, ví dụ 'VOP398'")
+    building: str | None = Field(default=None, description="Toà nhà, ví dụ 'R103'")
+    unit_type: str | None = Field(default=None, description="Loại căn, ví dụ '2PN' (khớp gần đúng)")
+
+
+def _to_row(unit: InventoryUnit) -> dict[str, Any]:
+    return {
+        "unit_code": unit.unit_code,
+        "building": unit.building,
+        "floor": unit.floor,
+        "unit_type": unit.unit_type,
+        "area_m2": unit.area_m2,
+        "direction": unit.direction,
+        "status": unit.status,
+        "status_label": _STATUS_LABEL.get(unit.status, unit.status),
+        "price_label": unit.price_label,
+    }
 
 
 @register_tool
 class InventoryLookupTool(AgentTool):
-    """Tra trạng thái căn theo dự án / toà / loại căn."""
+    """Tra tình trạng căn hộ tồn kho thật theo mã căn / toà / loại căn."""
 
     name = "inventory_lookup"
     description = (
-        "Tra tình trạng căn hộ theo thời gian thực (Còn trống / Giữ chỗ / Đã bán). "
-        "Dùng khi người dùng hỏi còn căn nào, căn nào trống, tình trạng căn cụ thể."
+        "Tra tình trạng căn hộ THẬT theo thời gian thực (Còn trống / Giữ chỗ / Đã bán), "
+        "kèm giá — từ tồn kho nội bộ. Dùng khi người dùng hỏi còn căn nào trống, "
+        "giá/tình trạng một căn cụ thể theo mã căn hoặc toà nhà."
     )
     args_schema = InventoryArgs
 
@@ -75,20 +70,28 @@ class InventoryLookupTool(AgentTool):
         except Exception as exc:  # noqa: BLE001 - trả lỗi cho agent, không làm đứt luồng
             return ToolResult.failure(f"Tham số không hợp lệ: {exc}")
 
+        try:
+            units = load_inventory_csv()
+        except FileNotFoundError:
+            return ToolResult.failure(
+                "Chưa có dữ liệu tồn kho (data/raw/inventory.csv) trên máy này — "
+                "cần tải file từ Drive về trước khi tra cứu."
+            )
+
         matches = [
-            {**row, "status_label": _STATUS_LABEL[row["status"]]}
-            for row in _MOCK_INVENTORY
-            if row["project"].lower() == args.project.lower()
-            and (args.building is None or row["building"] == args.building)
-            and (args.unit_type is None or row["unit_type"] == args.unit_type)
+            unit
+            for unit in units
+            if (args.unit_code is None or unit.unit_code.lower() == args.unit_code.lower())
+            and (args.building is None or unit.building.lower() == args.building.lower())
+            and (args.unit_type is None or args.unit_type.lower() in unit.unit_type.lower())
         ]
 
         if not matches:
             return ToolResult(
                 ok=True,
                 data=[],
-                source="inventory:mock",
+                source="inventory:csv",
                 error="Không tìm thấy căn nào khớp điều kiện.",
             )
 
-        return ToolResult(ok=True, data=matches, source="inventory:mock")
+        return ToolResult(ok=True, data=[_to_row(unit) for unit in matches], source="inventory:csv")

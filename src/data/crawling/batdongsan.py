@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import re
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -124,7 +125,9 @@ def parse_listing_detail(html: str, url: str) -> LoadedDocument | None:
             "image_urls": image_urls,
             "visibility": "public",
             "section": "Vinhomes Ocean Park Gia Lâm",
+            "project": "Vinhomes Ocean Park Gia Lâm",
             "source_site": "batdongsan.com.vn",
+            "version": datetime.now(UTC).date().isoformat(),
         },
     )
 
