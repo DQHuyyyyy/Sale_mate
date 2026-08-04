@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Cross-platform Python launcher for AI log hooks.
-# Tries python3 → python → py -3 on PATH; on Windows, falls back to common
-# Python install locations because Git Bash launched by some hooks gets a
-# stripped PATH that omits the Windows Python directory.
+# Ưu tiên .venv của chính repo (chắc chắn có đủ dependency, vd python-dotenv
+# mà submit_log.py cần để đọc AI_LOG_SERVER từ .env); nếu không có mới dò
+# python3 → python → py -3 trên PATH; trên Windows, fallback về các vị trí cài
+# Python phổ biến vì Git Bash launched by some hooks gets a stripped PATH that
+# omits the Windows Python directory.
 # Designed to be sourced or called as: bash scripts/_pyrun.sh <script> [args...]
 #
 # Exits 0 silently if no Python is found — hooks must never block the AI tool.
@@ -17,8 +19,24 @@ is_real_python() {
   "$@" -c "" >/dev/null 2>&1
 }
 
+# Bug thật gặp phải: PATH có thể trỏ `python` sang một venv KHÁC của repo (vd
+# frontend/.venv) thiếu python-dotenv — submit_log.py nuốt ImportError âm
+# thầm, AI_LOG_SERVER đọc ra rỗng, log AI bắt buộc của BTC không được gửi mà
+# không có cảnh báo rõ ràng. Ưu tiên .venv gốc repo để tránh lặp lại.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
 PY=""
-if command -v python3 >/dev/null 2>&1 && is_real_python python3; then
+for venv_py in "$REPO_ROOT/.venv/Scripts/python.exe" "$REPO_ROOT/.venv/bin/python"; do
+  if [ -x "$venv_py" ] && is_real_python "$venv_py"; then
+    PY="$venv_py"
+    break
+  fi
+done
+
+if [ -n "$PY" ]; then
+  : # đã tìm được .venv gốc repo, dùng luôn
+elif command -v python3 >/dev/null 2>&1 && is_real_python python3; then
   PY=python3
 elif command -v python >/dev/null 2>&1 && is_real_python python; then
   PY=python
