@@ -1,0 +1,13 @@
+# ============================================
+# SalesMate — Embedding/rerank chạy local (TÙY CHỌN)
+# ============================================
+# Chỉ cài khi cần chạy BGE-M3 / bge-reranker trên máy:
+#     pip install -r requirements-ml.txt
+#
+# KHÔNG thêm vào requirements.txt: torch nặng ~2GB, làm Docker image phình
+# và CI chậm. Mặc định hệ thống dùng OpenAI embedding (xem src/data/embedders).
+#
+# Bỏ comment khi module Data cần tới:
+# sentence-transformers==3.3.1
+# FlagEmbedding==1.3.4
+# torch==2.5.1
