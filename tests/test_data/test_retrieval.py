@@ -71,6 +71,64 @@ async def test_xoa_theo_doc_id(memory_store, fake_embedder):
     assert await memory_store.count() == 1
 
 
+@pytest.mark.asyncio
+async def test_loc_cau_truc_bat_dong_san(memory_store, fake_embedder):
+    """Test bộ lọc cấu trúc (giá, diện tích, số phòng, tòa, loại căn) tách biệt khỏi ngữ nghĩa."""
+    c1 = _chunk("c1", "Căn 2PN sang trọng", metadata={"price": 3.5, "area": 65.0, "num_bedrooms": 2, "building": "S1.01", "property_type": "2PN"})
+    c2 = _chunk("c2", "Căn 3PN rộng rãi", metadata={"price": 5.0, "area": 90.0, "num_bedrooms": 3, "building": "S1.02", "property_type": "3PN"})
+    c3 = _chunk("c3", "Căn Studio tiện nghi", metadata={"price": 2.0, "area": 35.0, "num_bedrooms": 1, "building": "S1.01", "property_type": "Studio"})
+
+    chunks = [c1, c2, c3]
+    vectors = await fake_embedder.embed_texts([c.text for c in chunks])
+    await memory_store.upsert(chunks, vectors)
+
+    query_vec = await fake_embedder.embed_query("căn hộ")
+
+    # Lọc khoảng giá [3.0, 4.0] tỷ
+    found = await memory_store.search(query_vec, filters=RetrievalFilter(min_price=3.0, max_price=4.0), limit=10)
+    assert [c.id for c in found] == ["c1"]
+
+    # Lọc diện tích >= 80m²
+    found = await memory_store.search(query_vec, filters=RetrievalFilter(min_area=80.0), limit=10)
+    assert [c.id for c in found] == ["c2"]
+
+    # Lọc theo số phòng = 2
+    found = await memory_store.search(query_vec, filters=RetrievalFilter(num_bedrooms=2), limit=10)
+    assert [c.id for c in found] == ["c1"]
+
+    # Lọc kết hợp Tòa S1.01 & Loại căn Studio
+    found = await memory_store.search(query_vec, filters=RetrievalFilter(building="S1.01", property_type="Studio"), limit=10)
+    assert [c.id for c in found] == ["c3"]
+
+
+def test_qdrant_filter_translation():
+    """Kiểm tra việc chuyển đổi RetrievalFilter thành Qdrant Filter object."""
+    from qdrant_client import models
+    from src.data.stores.qdrant_store import _to_qdrant_filter
+
+    f = RetrievalFilter(
+        min_price=3.0,
+        max_price=5.0,
+        min_area=50.0,
+        num_bedrooms=2,
+        building="S1.01",
+        property_type="2PN",
+    )
+    qdrant_filter = _to_qdrant_filter(f)
+
+    assert isinstance(qdrant_filter, models.Filter)
+    assert isinstance(qdrant_filter.must, list)
+    assert len(qdrant_filter.must) >= 6
+
+    # Verify presence of range and match conditions
+    keys_contained = [cond.key for cond in qdrant_filter.must if isinstance(cond, models.FieldCondition)]
+    assert "price" in keys_contained
+    assert "area" in keys_contained
+    assert "num_bedrooms" in keys_contained
+    assert "building" in keys_contained
+    assert "property_type" in keys_contained
+
+
 # ---------------- Chunker ----------------
 
 

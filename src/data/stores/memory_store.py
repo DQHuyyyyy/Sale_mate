@@ -68,6 +68,26 @@ def _matches(chunk: Chunk, filters: RetrievalFilter) -> bool:
         return False
     if filters.project is not None and chunk.metadata.get("project") != filters.project:
         return False
+
+    price = chunk.metadata.get("price")
+    if filters.min_price is not None and (price is None or price < filters.min_price):
+        return False
+    if filters.max_price is not None and (price is None or price > filters.max_price):
+        return False
+
+    area = chunk.metadata.get("area")
+    if filters.min_area is not None and (area is None or area < filters.min_area):
+        return False
+    if filters.max_area is not None and (area is None or area > filters.max_area):
+        return False
+
+    if filters.num_bedrooms is not None and chunk.metadata.get("num_bedrooms") != filters.num_bedrooms:
+        return False
+    if filters.building is not None and chunk.metadata.get("building") != filters.building:
+        return False
+    if filters.property_type is not None and chunk.metadata.get("property_type") != filters.property_type:
+        return False
+
     for key, expected in filters.extra.items():
         if chunk.metadata.get(key) != expected:
             return False
