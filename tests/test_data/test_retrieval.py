@@ -5,10 +5,12 @@ from __future__ import annotations
 import pytest
 
 from src.data.contracts import Chunk, LoadedDocument, RetrievalFilter
+from src.data.crawling.meeyland import parse_listing_detail
 from src.data.ingestion.chunkers import ParagraphChunker
 from src.data.pipelines import IngestPipeline
 from src.data.retrieval.rerankers import KeywordOverlapReranker, PassthroughReranker
 from src.data.retrieval.retriever import DefaultRetriever
+from src.data.sources.inventory import InventoryUnit, unit_to_document
 
 
 def _chunk(chunk_id: str, text: str, **kwargs) -> Chunk:
@@ -42,6 +44,58 @@ async def test_tai_lieu_noi_bo_khong_lot_ra_khi_chi_co_quyen_public(memory_store
     found = await memory_store.search(query, filters=RetrievalFilter(visibility=["public"]), limit=10)
 
     assert [c.id for c in found] == ["pub"]
+
+
+@pytest.mark.asyncio
+async def test_ton_kho_that_khong_lot_ra_portal_cong_khai_tin_dang_thi_co(memory_store, fake_embedder):
+    """Mục 6 Data Handling — phân quyền dữ liệu, kiểm tra bằng đúng nguồn thật
+    (không phải Chunk dựng tay): tồn kho nội bộ (visibility=internal) không
+    được lọt ra khi portal công khai tìm kiếm (filter mặc định chỉ public),
+    trong khi tin đăng bên thứ 3 (visibility=public) vẫn thấy bình thường.
+    """
+    inventory_doc = unit_to_document(
+        InventoryUnit(
+            unit_code="VOP999",
+            building="R199",
+            floor="9",
+            room_no="0909",
+            unit_type="2PN",
+            area_m2="60m2",
+            direction="Đông Nam",
+            view="View hồ trung tâm độc quyền",
+            legal_status="Sẵn sổ",
+            price_label="4 tỷ",
+            furniture="Full nội thất",
+            status="available",
+        )
+    )
+    listing_html = """
+<html><head>
+<meta property="og:title" content="Bán căn view hồ trung tâm độc quyền Vinhomes Ocean Park">
+<meta name="description" content="Diện tích 60m², giá 4.000.000.000 VNĐ.">
+</head><body><div class="article-description"><p>Căn đẹp, view hồ trung tâm độc quyền.</p></div></body></html>
+"""
+    listing_doc = parse_listing_detail(listing_html, "https://meeyland.com/test/999999")
+    assert listing_doc is not None
+
+    pipeline = IngestPipeline(ParagraphChunker(), fake_embedder, memory_store)
+    await pipeline.ingest_document(inventory_doc)
+    await pipeline.ingest_document(listing_doc)
+
+    retriever = DefaultRetriever(fake_embedder, memory_store, PassthroughReranker())
+
+    # Portal công khai: filter mặc định (chỉ public) — KHÔNG được thấy tồn kho.
+    public_result = await retriever.retrieve("view hồ trung tâm độc quyền", filters=RetrievalFilter())
+    public_doc_ids = {chunk.doc_id for chunk in public_result.chunks}
+    assert inventory_doc.doc_id not in public_doc_ids
+    assert listing_doc.doc_id in public_doc_ids
+
+    # Admin/Sale: filter gồm cả internal — PHẢI thấy tồn kho.
+    internal_result = await retriever.retrieve(
+        "view hồ trung tâm độc quyền", filters=RetrievalFilter(visibility=["public", "internal"])
+    )
+    internal_doc_ids = {chunk.doc_id for chunk in internal_result.chunks}
+    assert inventory_doc.doc_id in internal_doc_ids
 
 
 @pytest.mark.asyncio
@@ -100,6 +154,19 @@ def test_chunker_van_ban_rong_thi_khong_sinh_chunk():
     chunks = ParagraphChunker().split(LoadedDocument(doc_id="d1", title="T", text="   "))
 
     assert chunks == []
+
+
+def test_chunker_doan_dai_dung_sau_doan_ngan_van_bi_cat_dung_target():
+    """Bug thật gặp trên dữ liệu meeyland: đoạn đầu ngắn (title) chiếm buffer,
+    đoạn sau dài hơn target nhiều lần từng bị ghép nguyên vào buffer cũ thay vì
+    cắt cứng — sinh chunk tới 3293 ký tự dù target=900. Không được lặp lại.
+    """
+    text = "Tiêu đề ngắn.\n\n" + "Mô tả dài. " * 100  # đoạn 2 dài hơn 900 nhiều lần
+    document = LoadedDocument(doc_id="d1", title="T", text=text)
+
+    chunks = ParagraphChunker(target_chars=900, overlap_chars=120).split(document)
+
+    assert all(len(chunk.text) <= 900 for chunk in chunks), [len(c.text) for c in chunks]
 
 
 # ---------------- Reranker ----------------

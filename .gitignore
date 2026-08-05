@@ -35,6 +35,11 @@ Thumbs.db
 *.db
 *.sqlite3
 
+# Output tự động của script eval — đổi mỗi lần chạy, không commit để tránh
+# nhiễu git history. Số liệu quan trọng đã tóm tắt có phân tích trong
+# eval/results/report.md (file đó VẪN track bình thường).
+/eval/results/retrieval_eval.json
+
 # Logs
 logs/
 *.log

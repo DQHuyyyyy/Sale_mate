@@ -1,29 +1,91 @@
-# Worklog — Team [Tên Team]
+# Worklog — Team P-055
 
-> Ghi lại tất cả công việc đã làm theo ngày. Ai làm gì, kết quả gì.
+> Ghi lại tất cả công việc đã làm theo ngày, người thực hiện và kết quả.
 
 ---
 
-## [YYYY-MM-DD]
+## 2026-07-29
 
 | Member | Task | Status | Output | Time |
 |--------|------|--------|--------|------|
-| [Tên] | [mô tả task] | ✅ Done | [link/kết quả] | 2h |
-| [Tên] | [mô tả task] | 🔄 WIP | [mô tả tiến độ] | 1.5h |
-| [Tên] | [mô tả task] | ❌ Blocked | [lý do block] | - |
+| Viet | Thiết lập repository P-055 trên máy cá nhân | ✅ Done | Repository đã sẵn sàng để phát triển | — |
+| Viet | Tạo nhánh làm việc cá nhân và kết nối với GitHub | ✅ Done | Nhánh `viet` đã được tạo và push lên `origin/viet` | — |
+| Viet | Cấu hình hook ghi nhận lịch sử làm việc với AI | ✅ Done | Prompt được ghi vào `.ai-log/session.jsonl`; hook hoạt động trên Windows | — |
 
-**Tổng kết ngày:** [1-2 câu về tiến độ chung]
+**Tổng kết ngày:** Hoàn tất thiết lập ban đầu cho repository P-055. Nhánh `viet` đã có trên GitHub và môi trường ghi AI log đã hoạt động.
 
 ---
 
-## [YYYY-MM-DD]
+## 2026-08-01
 
 | Member | Task | Status | Output | Time |
 |--------|------|--------|--------|------|
-| | | | | |
+| Viet | Xử lý dữ liệu tồn kho căn hộ (CSV + ảnh) thành tài liệu RAG | ✅ Done | `src/data/sources/inventory.py` — nạp 100/100 căn, gắn ảnh đúng folder, loại giá/tình trạng khỏi text embed (tránh sai lệch với tool tra tồn kho); có test | — |
+| Viet | Crawl tin đăng Vinhomes Ocean Park trên batdongsan.com.vn | ✅ Done | Thử crawl tự động — bị Cloudflare chặn (`cf-mitigated: challenge`), không né tránh; chuyển sang thu thập thủ công 33 trang chi tiết + viết `src/data/crawling/batdongsan.py` xử lý hàng loạt (giá, diện tích, pháp lý, mô tả, ảnh, nguồn) — 33/33 parse đúng | — |
+| Viet | Dựng pipeline ingest & chứng minh RAG chạy đầu-cuối | ✅ Done | `scripts/ingest_inventory.py`, `scripts/ingest_batdongsan.py`, `scripts/chat_demo_rag.py` — agent thật trả lời đúng kèm trích dẫn nguồn từ dữ liệu đã crawl | — |
+| Viet | Viết test cho toàn bộ phần trên | ✅ Done | 69/69 test pass, `ruff check`/`format` sạch, coverage 80% | — |
 
-**Tổng kết ngày:**
+**Tổng kết ngày:** Hoàn thành phần "crawl data và xử lý data cho RAG" do huy giao. Dữ liệu (tồn kho + tin đăng BĐS thật) đã sẵn sàng và chứng minh chạy được qua demo agent có trích nguồn. Còn lại: bật `ENABLE_RAG` trong `bootstrap.py`, chuyển Qdrant, và hiển thị ảnh/nguồn trong widget — cần team quyết định và phối hợp (agent + frontend), không thuộc phạm vi việc này.
 
 ---
 
-<!-- Format: copy block trên cho mỗi ngày làm việc -->
+## 2026-08-02
+
+| Member | Task | Status | Output | Time |
+|--------|------|--------|--------|------|
+| Viet | Chuyển dữ liệu từ vector store tạm sang Qdrant thật | ✅ Done | Bật Qdrant qua `make infra`; sửa `scripts/ingest_inventory.py`, `scripts/ingest_batdongsan.py` dùng `QdrantVectorStore` + `OpenAIEmbedder` thật thay vì tạm; ingest thành công 158 chunk (100 tồn kho + 58 batdongsan), verify qua `GET /collections/documents_chunks` (`points_count=158`) | — |
+| Viet | Chứng minh agent đọc đúng dữ liệu từ Qdrant thật | ✅ Done | Sửa `scripts/chat_demo_rag.py` đọc thẳng Qdrant (không ingest tạm); chạy thử 3 câu hỏi mẫu — trả lời đúng, trích dẫn đúng nguồn, coverage tăng (0.70 → 0.85) nhờ embedding thật | — |
+
+**Tổng kết ngày:** Hoàn tất "Data Handling" đúng DOD đã cam kết trong sprint (pipeline ingest chạy với Qdrant, có test, retriever trả đúng chunk). Dữ liệu tồn kho + batdongsan.com.vn đã nằm bền trong Qdrant, sẵn sàng cho "Build RAG" (PhucCH) và "AI Agent" (HuyDQ) sử dụng.
+
+---
+
+## 2026-08-03
+
+| Member | Task | Status | Output | Time |
+|--------|------|--------|--------|------|
+| Viet | Khảo sát thêm nguồn crawl cho Vinhomes Ocean Park 1/2/3 Gia Lâm | ✅ Done | Kiểm tra robots.txt + thử fetch thật 6 trang BĐS phổ biến; xác nhận alonhadat.com.vn và meeyland.com không chặn bot (khác batdongsan.com.vn) | — |
+| Viet | Viết crawler tự động cho meeyland.com | ✅ Done | `src/data/crawling/meeyland.py` — crawl trực tiếp category Ocean Park (không cần thu thập thủ công), loại SĐT môi giới; 3 test mới. (Thử thêm alonhadat.com.vn nhưng site rate-limit liên tục khi crawl thật — bỏ, chỉ giữ meeyland) | — |
+| Viet | Crawl toàn bộ danh mục Vinhomes Ocean Park trên meeyland.com | ✅ Done | Dò trước quy mô (13 trang thật, dừng đúng lúc hết tin, không bị chặn) rồi crawl full — 333/333 tin lấy được nội dung | — |
+| Viet | Ingest toàn bộ dữ liệu meeyland vào Qdrant | ✅ Done | 333 tài liệu → 480 chunk, ingest thành công, verify qua `GET /collections/documents_chunks`. Qdrant hiện có 638 chunk (100 tồn kho + 58 batdongsan + 480 meeyland) | — |
+| Viet | Cập nhật mục 1 Data Handling — "Khảo sát và thống kê nguồn dữ liệu" | ✅ Done | Bản viết 2026-08-01 (chỉ có batdongsan + tồn kho) đã lỗi thời — cập nhật thêm meeyland.com (333 tin) và ghi rõ alonhadat.com.vn là "đã khảo sát, chủ động không dùng" chứ không phải chưa làm. Số liệu chốt: 466 tài liệu → 638 chunk, verify qua Qdrant API | — |
+| Viet | Mục 2 Data Handling — Xây dựng cấu trúc dữ liệu chung (metadata schema) | ✅ Done | `src/data/metadata_schema.py` định nghĩa 5 khoá bắt buộc (`visibility`, `section`, `project`, `source_site`, `image_urls`) + `validate_metadata()`. Phát hiện & sửa lệch giữa 3 nguồn: tồn kho thiếu `source_site`/`image_urls` (ảnh local chưa có URL public — để rỗng, không bịa), batdongsan/meeyland thiếu `project` (khiến lọc theo dự án ở Qdrant trả None). 5 test conformance mới; ingest lại cả 3 nguồn, crawl sạch lại meeyland sau khi mạng ổn định (331/333 tin, 2 hao hụt tự nhiên: 1 lỗi mạng thoáng qua, 1 tin có thể đã gỡ) — verify trực tiếp qua Qdrant API rằng cả 3 nguồn đã có đủ 5 khoá trong payload thật, không chỉ trong code | — |
+| Viet | Mục 6 Data Handling — Quản lý phiên bản tài liệu | ✅ Done (phần khả thi solo) | (1) Kích hoạt `Chunk.version` = ngày crawl/ingest thật. (2) **Nâng cấp active/expired:** thêm `QdrantVectorStore.list_active_doc_ids()` + `.mark_inactive()` (2 method mở rộng ngoài `VectorStore` Protocol — không đụng contracts.py đóng băng). Nối vào `ingest_more_sources.py`: sau mỗi lần crawl, so tin hiện có với tin đang active trong Qdrant, tin nào bị gỡ khỏi site thì đánh `is_active=False` (giữ text cũ làm lịch sử, không xoá). Test bằng fake Qdrant client (3 test) + **test thật trên Qdrant sống**: đánh dấu 1 tin thật inactive → verify bị loại khỏi `list_active_doc_ids` và khỏi kết quả `search()` (đúng `RetrievalFilter` mặc định) → khôi phục lại đúng trạng thái ban đầu. **Còn thiếu, có lý do rõ ràng, cố tình không làm vội:** (a) không giữ lịch sử nhiều phiên bản của tin CÒN hiệu lực nhưng đổi nội dung — cần đổi cách đặt chunk id, ảnh hưởng retrieval, phải bàn với team; (b) không cảnh báo mâu thuẫn giữa batdongsan/meeyland — không có mã căn chung giữa 2 site bên thứ ba, ghép sai địa chỉ/đặc điểm sẽ tạo ra "mâu thuẫn giả", vi phạm nguyên tắc không bịa mà việc này định phục vụ | — |
+| Viet | Mục 10 Data Handling — Tạo bộ câu hỏi kiểm thử (eval dataset) | ✅ Done | `eval/golden_dataset.json` — 10 câu hỏi, mỗi câu gắn `expected_doc_id` lấy từ dữ liệu THẬT đã ingest (không bịa). `scripts/eval_retrieval.py` chạy Retriever thật (OpenAI embed → Qdrant search → rerank), đo hit@5 + coverage, ghi `eval/results/retrieval_eval.json` và cập nhật `eval/results/report.md`. Kết quả thật: hit@5 = 7/9 (78%). **Phát hiện quan trọng cần báo agents:** câu hỏi ngoài phạm vi dữ liệu vẫn có coverage=0.46, cao hơn `coverage_threshold=0.35` hiện tại — rủi ro guardrail không từ chối đúng lúc | — |
+| Viet | Mục 4 Data Handling — rà lại "Làm sạch dữ liệu", phát hiện & sửa lỗ hổng PII thật | ✅ Done | Bản cũ chỉ nói batdongsan loại SĐT môi giới, **kiểm tra thật thì meeyland chưa loại** — quét Qdrant phát hiện 31/50 chunk mẫu (62%) và 15 tiêu đề lộ SĐT thật của người đăng tin. Thêm `_PHONE_RE` (10 số liên tục, không nhầm với giá tiền có dấu chấm/phẩy) vào `meeyland.py`, áp cho cả `title` và mô tả — trước đây chỉ lọc phần mô tả, bỏ sót tiêu đề dễ hiển thị ra ngoài hơn. 1 test mới. Crawl + ingest lại toàn bộ (335/335 tin) — verify qua Qdrant: **0/481 chunk còn lộ SĐT** | — |
+| Viet | Mục 5 Data Handling — rà lại "Chunking", phát hiện & sửa bug cắt chunk sai | ✅ Done | Quét độ dài chunk thật trong Qdrant: **186 tài liệu có chunk vượt target 900 ký tự, dài nhất tới 3293** (gấp 3.6 lần). Root cause: `ParagraphChunker` chỉ hard-split đoạn quá dài khi nó là đoạn ĐẦU TIÊN (buffer rỗng) — đoạn dài đứng sau một đoạn ngắn (rất phổ biến: title/meta ngắn rồi "Mô tả:" dài) bị ghép nguyên vào buffer, không cắt. Sửa `chunkers.py` để luôn kiểm tra và hard-split đúng target dù buffer có tail overlap hay không. Thêm test regression. Ingest lại cả 3 nguồn — batdongsan 58→75 chunk, meeyland 481→591 chunk (nhiều hơn vì chunk khổng lồ giờ cắt đúng thành nhiều chunk nhỏ). Verify toàn bộ 766 chunk trong Qdrant: **0 chunk vượt 900, max=900 chính xác** | — |
+| Viet | Phân quyền dữ liệu (mục 6 theo sprint tracker chính thức) | ✅ Done | Đọc lại sprint tracker của cả team (ảnh chụp Đạt/Phúc/Huy) phát hiện: Đạt đang build màn hình Admin/Sale riêng biệt — nghĩa là sản phẩm KHÔNG hoàn toàn public như đánh giá trước đó (đã sửa lại memory). Xác nhận với user: tồn kho nội bộ (100 căn) → `visibility: "internal"` (trước đó gắn nhầm "public"), batdongsan/meeyland (tin bên thứ 3, vốn công khai) → giữ "public". Cơ chế lọc (`RetrievalFilter`, `Chunk.visibility`) đã có sẵn trong contracts.py từ trước — verify lại bằng test end-to-end dùng đúng hàm nguồn thật (`unit_to_document`, `parse_listing_detail`, không phải Chunk dựng tay). Ingest lại tồn kho, **verify thật trên Qdrant sống theo cả 2 chiều**: filter mặc định (public) → 0 kết quả tồn kho dù câu hỏi rất chung ("căn có view hồ"), chỉ ra đúng 5 tin meeyland; filter gồm internal → tồn kho xuất hiện đúng | — |
+| Viet | Chuyển hạ tầng sang Qdrant Cloud + cấu hình Supabase | ✅ Done | User cấp credentials thật (Qdrant Cloud cluster mới, Supabase Postgres+Storage) — cập nhật `.env` (không commit, đã gitignore). Phát hiện & sửa 2 lỗi thật khi đổi hạ tầng: (1) cả 5 script ingest thiếu tham số `api_key` khi tạo `QdrantVectorStore` — chạy được với Docker local (không cần auth) nhưng sẽ vỡ hoàn toàn với Cloud; (2) Qdrant Cloud từ chối filter trên field chưa có index (400 Bad Request) cho `metadata.source_site` — local Docker không bắt buộc nên lỗi này ẩn từ trước, chỉ lộ ra khi đổi hạ tầng; thêm index vào `ensure_collection()` + tạo bù cho collection đã tồn tại. Crawl+ingest lại cả 3 nguồn vào Qdrant Cloud (100 tồn kho + 75 batdongsan + 610 meeyland = 785 chunk, khớp đúng). Verify lại phân quyền 2 chiều trên Cloud — kết quả giống hệt local. Supabase Postgres/Storage mới dừng ở mức cấu hình `.env`, chưa có code nào dùng (PortalRepository vẫn InMemory) — bucket `apartment-images` là cơ hội giải quyết gap "ảnh tồn kho chưa có URL public" đã ghi nhận ở mục 2, nhưng cần quyết định thêm trước khi code | — |
+| Viet | Thêm nguồn dữ liệu mới: tài liệu kiến thức chung (chính sách/pháp lý/tiện ích) | ✅ Done (6/6 nhóm nội dung + hạ tầng) | Xây `src/data/sources/knowledge_docs.py` — loader file `.md` bắt buộc front-matter `title/section/visibility`, raise lỗi sớm nếu thiếu/sai (tránh gắn nhầm quyền cho nội dung nhạy cảm). `scripts/ingest_knowledge_docs.py` nối vào `IngestPipeline` có sẵn. 6 test mới. Viết đủ 6/6 tài liệu, mọi số liệu đều tra cứu thật qua web search kèm trích nguồn — không bịa: 2 nhóm public (tiện ích: Vinschool/VinUni/Vinmec/Vành đai 3.5; pháp lý: lệ phí trước bạ 0,5%, thuế TNCN 2%) và 4 nhóm internal (chính sách bán hàng, tiến độ thanh toán, bảng giá phí dịch vụ theo khu, tiến độ xây dựng từng toà) — 4 nhóm internal có ghi rõ trong chính văn bản là số liệu broker/CĐT công khai tham khảo, thời hạn/theo toà cụ thể, **phải xác nhận lại với CĐT/sale trước khi cam kết với khách** (chiết khấu/tiến độ đổi theo đợt, không phải giá cố định). Ingest 6 tài liệu → 18 chunk, Qdrant tổng 803. Verify phân quyền: câu hỏi "chính sách chiết khấu và tiến độ thanh toán" — filter public không lộ 2 tài liệu internal, filter public+internal thấy đúng | — |
+
+| Viet | Mục 8 Data Handling — Đưa dữ liệu vào hệ thống RAG (verify end-to-end thật) | ✅ Done | Xác nhận collection Qdrant Cloud dim=1536 khớp `settings.embedding_dim` — về kiến trúc Qdrant từ chối vector sai chiều nên loại được rủi ro trộn FakeEmbedder/OpenAIEmbedder. Chạy `scripts/chat_demo_rag.py` (agent thật, LLM thật, đọc thẳng Qdrant Cloud) — **cả 5 câu demo đều đúng:** 2 câu tìm tin đăng/tài liệu kiến thức trả lời chính xác kèm trích nguồn đúng, 2 câu (1 internal-only, 1 hoàn toàn không có dữ liệu) đều bị guardrail từ chối đúng thay vì bịa. **Phát hiện 2 bug thật ở `agents/nodes/router.py` (báo Huy, KHÔNG tự sửa — ngoài phạm vi module data):** (1) từ khoá "căn hộ"/"tìm nhà" bị phân vào intent LISTING nhưng `needs_retrieval` chỉ bật cho {document, legal, price} — toàn bộ tìm kiếm tin đăng qua chat hiện không chạy dù dữ liệu đầy đủ; (2) câu hỏi tiện ích đôi khi bị LLM router phân sai thành LISTING thay vì DOCUMENT dù prompt của chính router đã liệt kê "tiện ích" thuộc DOCUMENT. Cũng ghi nhận 2 lần Qdrant Cloud timeout thoáng qua khi test dồn dập — retry ngay sau đó thành công 3/3, kết luận là chập chờn mạng ngẫu nhiên chứ không phải lỗi hệ thống lặp lại; `UpstreamError` (kế thừa `SalesMateError`) đã đúng thiết kế lan lên tầng API, không phải bug | — |
+| Viet | Mục 9 Data Handling — Xử lý dữ liệu tồn kho theo thời gian thực | ✅ Done (phần khả thi solo) | **Phát hiện nghiêm trọng hơn đánh giá cũ:** `InventoryLookupTool` (`src/agents/tools/inventory.py`) không chỉ "dùng mock" — dữ liệu hoàn toàn hư cấu, không liên quan Vinhomes Ocean Park ("Lakeside Metropole", "The Origin Riverside"), hoàn toàn tách biệt khỏi 100 căn thật đã xử lý từ đầu dự án. File có header xác nhận "Chủ sở hữu: viet (src/agents/**)" (`agents/contracts.py` dòng 6) nên sửa trực tiếp đúng thẩm quyền, không phải vượt ranh giới module. Đã sửa: đọc thẳng `load_inventory_csv()` thật ở mỗi lần gọi (gần nhất với "thời gian thực" khi chưa có DB/ERP), giữ đúng kiến trúc cũ (giá/tình trạng qua tool, không vào RAG). Đổi schema tham số (`unit_code`/`building`/`unit_type` thay vì `project` — dữ liệu thật chỉ có 1 dự án, không có khái niệm nhiều "project" như mock cũ). Viết lại 9 test (dùng `monkeypatch` giả lập, không phụ thuộc file CSV thật vì bị gitignore). Verify thật với CSV thật trên máy: tra `VOP237` trả đúng giá 2,26 tỷ, trạng thái "Còn trống", khớp đúng dữ liệu gốc. **Còn thiếu, đúng như đánh giá cũ, không đổi:** chưa nối API doanh nghiệp thật vì chưa có hệ thống ERP để nối — ngoài khả năng solo, cần team quyết định. **Phát hiện liên quan, KHÔNG sửa vì khác phạm vi (thuộc listings công khai, không phải tồn kho):** `src/services/portal.py` (`InMemoryPortalRepository`) cũng dùng data hư cấu tương tự ("Lakeside Metropole") cho trang portal tìm kiếm — nếu Đạt/Phúc cần dữ liệu portal thật thì đây là việc cần làm riêng, đã ghi nhận để báo | — |
+| Viet | Mục 10 Data Handling — rà lại "Tạo bộ câu hỏi kiểm thử", cập nhật cho khớp hạ tầng mới | ✅ Done | Đã làm từ trước (golden dataset + script + report.md) nhưng phát hiện 2 vấn đề khiến số liệu sai lệch cần sửa trước khi tin: (1) 1 câu trong golden set từng dùng làm "case không có dữ liệu" (thủ tục sổ đỏ) nay ĐÃ có dữ liệu thật (do mục Data Handling khác thêm `phap-ly-thu-tuc.md`) — sửa lại đúng nghĩa negative case bằng câu "lãi suất vay ngân hàng" (cố tình không viết vào tài liệu); (2) script `eval_retrieval.py` dùng filter mặc định (chỉ public) nên 3 câu hỏi tồn kho (visibility=internal sau khi sửa mục 7) luôn báo MISS dù dữ liệu đúng — sửa script dùng filter `[public, internal]` để đo đúng năng lực retrieval, tách biệt khỏi bài toán phân quyền (đã test riêng). Mở rộng golden set 10→12 câu (thêm 2 câu tài liệu kiến thức chung). Chạy lại trên Qdrant Cloud hiện tại: **hit@5 = 9/11 (82%)**. **Phát hiện quan trọng:** câu hỏi hoàn toàn không có dữ liệu vẫn cho coverage=0.77 (rất cao, vượt xa ngưỡng guardrail 0.35) — chứng minh coverage tầng retrieval một mình không đủ tin cậy làm rào chắn, hệ thống chỉ từ chối đúng nhờ LLM tự nhận ra ở tầng generate (mục 8), không phải nhờ ngưỡng coverage — đã ghi rõ vào `eval/results/report.md` để báo agents | — |
+
+**Tổng kết ngày:** Thêm nguồn crawl tự động thật từ meeyland.com (không cần thu thập thủ công như batdongsan) — crawl toàn bộ ~346 tin đăng Vinhomes Ocean Park Gia Lâm. **Hoàn thành 10/10 mục Data Handling** (9 mục sprint tracker chính thức + mục "Khảo sát nguồn" ban đầu), tất cả verify bằng dữ liệu/kết quả thật: metadata schema, trích xuất nội dung, làm sạch (sửa lỗ hổng PII thật), chunking (sửa bug cắt chunk sai ảnh hưởng 186 tài liệu), quản lý phiên bản (version + active/expired thật), phân quyền dữ liệu (tồn kho internal, verify 2 chiều), đưa dữ liệu vào RAG (demo agent thật end-to-end, phát hiện 2 bug router cần báo Huy), xử lý tồn kho real-time (phát hiện tool tồn kho dùng data hư cấu, đã nối vào CSV thật — phần nối ERP vẫn ngoài khả năng solo), tạo bộ câu hỏi kiểm thử (golden eval set 12 câu, hit@5=82%, phát hiện coverage một mình không đủ tin cậy làm guardrail — báo agents). Hạ tầng đã chuyển từ Docker local sang Qdrant Cloud + Supabase thật. Thêm luồng ingest cho loại dữ liệu mới (tài liệu kiến thức .md, khác CSV/HTML) — đủ 6/6 nhóm nội dung (2 public + 4 internal), mọi số liệu tra cứu thật có trích nguồn. Qdrant hiện có 803 chunk. 92/92 test pass.
+
+---
+
+## 2026-08-05
+
+| Member | Task | Status | Output | Time |
+|--------|------|--------|--------|------|
+| Viet | Nâng cấp tồn kho từ CSV lên Postgres (Supabase) thật — đúng kiến trúc "có cấu trúc → Postgres/SQL, văn bản dài → Qdrant/RAG" | ✅ Done | Trước đó `InventoryLookupTool` đọc CSV mỗi lần gọi (bản vá tạm hôm 2026-08-04) — giờ chuyển hẳn sang query SQL thật. Xây `src/data/stores/inventory_db.py` (SQLAlchemy Core, bảng `inventory_units`, upsert bằng DELETE+INSERT — portable giữa SQLite test và Postgres thật, không dùng cú pháp `ON CONFLICT` riêng của Postgres). `scripts/migrate_inventory_to_postgres.py` nạp 100 căn từ CSV vào Postgres, idempotent. Sửa `InventoryLookupTool` query qua `asyncio.to_thread` (SQLAlchemy đồng bộ, không chặn event loop). Phát hiện & sửa 1 bug thật khi viết test: `asyncio.to_thread` chạy ở thread khác thread tạo engine — SQLite `:memory:` mặc định chỉ tồn tại trong đúng connection tạo ra nó, phải dùng `StaticPool` để giữ 1 connection dùng chung xuyên thread, nếu không test luôn trả rỗng dù đã upsert. 16 test mới/sửa (7 test `InventoryDB` qua SQLite in-memory, 9 test tool cập nhật). **Verify thật trên Supabase Postgres:** chạy migration thành công (100/100 căn), tool tra `VOP834` trả đúng dữ liệu thật (`source: inventory:postgres`, giá 3,4 tỷ, "Còn trống", đúng ảnh) | — |
+
+**Tổng kết ngày:** Tồn kho giờ đã đúng 100% kiến trúc "hai loại dữ liệu, hai đường đi" — dữ liệu có cấu trúc (100 căn) nằm trong Postgres/Supabase thật, truy vấn bằng SQL qua tool; văn bản dài (chính sách, tiện ích, pháp lý) nằm trong Qdrant, truy vấn bằng vector search/RAG. Supabase không còn "chỉ có credentials rỗng" — đã có dữ liệu thật, verify được. 99/99 test pass.
+
+---
+
+<!--
+Mẫu cho ngày làm việc tiếp theo:
+
+## YYYY-MM-DD
+
+| Member | Task | Status | Output | Time |
+|--------|------|--------|--------|------|
+| Tên | Mô tả công việc | 🔄 WIP | Tiến độ hoặc kết quả | 1.5h |
+
+**Tổng kết ngày:** Tóm tắt tiến độ chung trong 1–2 câu.
+
+---
+-->

@@ -91,6 +91,28 @@ make infra-down
 
 Mặc định hệ thống dùng vector store trong bộ nhớ nên **không cần Docker** để dev.
 
+### 4. Nạp dữ liệu RAG thật vào Qdrant (tuỳ chọn)
+
+Qdrant (local hoặc Cloud — xem `QDRANT_URL`/`QDRANT_API_KEY` trong `.env`) lúc
+mới bật là **rỗng** — mỗi máy phải tự nạp dữ liệu, `git pull` code không tự có
+sẵn data. Có 4 nguồn, chạy theo thứ tự:
+
+```bash
+PYTHONUTF8=1 PYTHONPATH=. python scripts/ingest_inventory.py       # tồn kho căn hộ (CSV + ảnh) — internal
+PYTHONUTF8=1 PYTHONPATH=. python scripts/ingest_batdongsan.py      # tin batdongsan.com.vn (lưu tay) — public
+PYTHONUTF8=1 PYTHONPATH=. python scripts/ingest_more_sources.py    # tin meeyland.com (crawl trực tiếp) — public
+PYTHONUTF8=1 PYTHONPATH=. python scripts/ingest_knowledge_docs.py  # chính sách/pháp lý/tiện ích (.md) — internal hoặc public tuỳ file
+```
+
+`ingest_more_sources.py` (meeyland) crawl thẳng từ web nên chạy được ngay, không
+cần gì thêm. `ingest_inventory.py`/`ingest_batdongsan.py` đọc file trong
+`data/raw/` — thư mục này nằm trong `.gitignore` nên **không có trong repo**,
+cần xin Viet file CSV/ảnh (Drive) và bộ HTML batdongsan đã lưu tay để bỏ vào
+đúng chỗ trước khi chạy. `ingest_knowledge_docs.py` đọc file `.md` trong
+`data/raw/knowledge/` (cũng gitignore) — mỗi file bắt buộc front-matter
+`title`/`section`/`visibility: internal|public` ở đầu, xem
+`src/data/sources/knowledge_docs.py` để biết định dạng.
+
 ---
 
 ## Lệnh hay dùng

@@ -1,0 +1,62 @@
+[
+  {
+    "question": "Căn hộ nào có view biển hồ siêu đẹp?",
+    "expected_doc_id": "inventory:VOP237",
+    "source": "tồn kho nội bộ"
+  },
+  {
+    "question": "Có căn nào view đỉnh nóc kịch trần không?",
+    "expected_doc_id": "inventory:VOP834",
+    "source": "tồn kho nội bộ"
+  },
+  {
+    "question": "Căn 2 phòng ngủ 2 vệ sinh hướng Đông Bắc view đường nội khu?",
+    "expected_doc_id": "inventory:VOP315",
+    "source": "tồn kho nội bộ"
+  },
+  {
+    "question": "Shophouse 92,4m2 góc chân đế đang bán giá bao nhiêu?",
+    "expected_doc_id": "batdongsan:46070090",
+    "source": "batdongsan.com.vn"
+  },
+  {
+    "question": "Căn 3 phòng ngủ 95,1m2 view thành phố Hà Nội giá bao nhiêu?",
+    "expected_doc_id": "batdongsan:45212995",
+    "source": "batdongsan.com.vn"
+  },
+  {
+    "question": "Căn 2PN 2WC tại The Beverly đang giảm giá sốc?",
+    "expected_doc_id": "batdongsan:46106708",
+    "source": "batdongsan.com.vn"
+  },
+  {
+    "question": "Căn 1PN tại toà R105 Vinhomes Ocean Park giá bao nhiêu?",
+    "expected_doc_id": "meeyland:307514797",
+    "source": "meeyland.com"
+  },
+  {
+    "question": "Có căn nào cắt lỗ 600 triệu, view trực diện hồ và trường học không?",
+    "expected_doc_id": "meeyland:307525206",
+    "source": "meeyland.com"
+  },
+  {
+    "question": "Căn studio toà PR6 Vinhomes Ocean Park giá bao nhiêu?",
+    "expected_doc_id": "meeyland:307498575",
+    "source": "meeyland.com"
+  },
+  {
+    "question": "Dự án có những tiện ích nội khu nào, ví dụ trường học bệnh viện?",
+    "expected_doc_id": "knowledge:tien-ich-noi-khu",
+    "source": "tài liệu kiến thức chung — public"
+  },
+  {
+    "question": "Thủ tục sang tên sổ đỏ và các khoản thuế phí gồm những gì?",
+    "expected_doc_id": "knowledge:phap-ly-thu-tuc",
+    "source": "tài liệu kiến thức chung — public"
+  },
+  {
+    "question": "Lãi suất vay ngân hàng mua nhà năm nay là bao nhiêu?",
+    "expected_doc_id": null,
+    "source": "câu hỏi không có trong dữ liệu (cố tình không viết vào phap-ly-thu-tuc.md) — kiểm tra hệ thống không bịa nguồn"
+  }
+]
