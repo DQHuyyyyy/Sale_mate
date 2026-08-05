@@ -46,17 +46,22 @@ class QdrantVectorStore:
                     distance=models.Distance.COSINE,
                 ),
             )
-            # Index cho các trường lọc phân quyền và lọc cấu trúc bất động sản.
+# Index cho các trường lọc phân quyền, lọc cấu trúc bất động sản,
+            # và metadata.source_site — bắt buộc để filter nhanh. Qdrant Cloud
+            # (khác local Docker) từ chối filter trên field chưa có index với
+            # lỗi 400 — cần cho list_active_doc_ids() (mục 6 active/expired).
             for field, schema in (
                 ("visibility", models.PayloadSchemaType.KEYWORD),
                 ("is_active", models.PayloadSchemaType.BOOL),
                 ("doc_id", models.PayloadSchemaType.KEYWORD),
+                ("project", models.PayloadSchemaType.KEYWORD),
                 ("project", models.PayloadSchemaType.KEYWORD),
                 ("price", models.PayloadSchemaType.FLOAT),
                 ("area", models.PayloadSchemaType.FLOAT),
                 ("num_bedrooms", models.PayloadSchemaType.INTEGER),
                 ("building", models.PayloadSchemaType.KEYWORD),
                 ("property_type", models.PayloadSchemaType.KEYWORD),
+                ("metadata.source_site", models.PayloadSchemaType.KEYWORD),
             ):
                 await self._client.create_payload_index(
                     collection_name=self._collection,
@@ -124,6 +129,56 @@ class QdrantVectorStore:
         except Exception as exc:  # noqa: BLE001
             raise UpstreamError("Đếm điểm trên Qdrant thất bại.") from exc
         return result.count
+
+    async def list_active_doc_ids(self, source_site: str) -> set[str]:
+        """Liệt kê doc_id đang active của một nguồn — dùng để so sánh với lần
+        crawl mới nhất, phát hiện tin đã bị gỡ khỏi nguồn (mục 6 Data
+        Handling: trạng thái active/expired). KHÔNG thuộc `VectorStore`
+        Protocol (contracts.py đóng băng) — chỉ dùng nội bộ trong scripts
+        ingest của module data, module khác không được gọi trực tiếp.
+        """
+        doc_ids: set[str] = set()
+        offset = None
+        query_filter = models.Filter(
+            must=[
+                models.FieldCondition(key="metadata.source_site", match=models.MatchValue(value=source_site)),
+                models.FieldCondition(key="is_active", match=models.MatchValue(value=True)),
+            ]
+        )
+        try:
+            while True:
+                points, offset = await self._client.scroll(
+                    collection_name=self._collection,
+                    scroll_filter=query_filter,
+                    limit=200,
+                    offset=offset,
+                    with_payload=["doc_id"],
+                )
+                # pyrefly: ignore [unsupported-operation]
+                doc_ids.update(point.payload["doc_id"] for point in points)
+                if offset is None:
+                    break
+        except Exception as exc:  # noqa: BLE001
+            raise UpstreamError("Liệt kê doc_id trên Qdrant thất bại.") from exc
+        return doc_ids
+
+    async def mark_inactive(self, doc_ids: list[str]) -> int:
+        """Đánh dấu is_active=False cho các doc_id — dùng khi tin đã bị gỡ
+        khỏi nguồn. Chỉ sửa payload (không cần vector), giữ nguyên text cũ
+        làm lịch sử thay vì xoá hẳn như `delete_by_doc`. Không thuộc
+        `VectorStore` Protocol, cùng lý do như `list_active_doc_ids`.
+        """
+        if not doc_ids:
+            return 0
+        try:
+            await self._client.set_payload(
+                collection_name=self._collection,
+                payload={"is_active": False},
+                points=models.Filter(must=[models.FieldCondition(key="doc_id", match=models.MatchAny(any=doc_ids))]),
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise UpstreamError("Đánh dấu is_active=False trên Qdrant thất bại.") from exc
+        return len(doc_ids)
 
 
 def _point_id(chunk_id: str) -> str:
