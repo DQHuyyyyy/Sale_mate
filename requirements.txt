@@ -42,3 +42,9 @@ soupsieve==2.9.1
 # Embedding tiếng Việt (BGE-M3) cần torch + sentence-transformers (~2GB).
 # KHÔNG đưa vào đây để Docker image nhỏ và CI chạy nhanh.
 # Xem requirements-ml.txt — chỉ cài khi chạy ingestion local.
+
+# ---- Nạp dữ liệu (script một lần, không dùng lúc chạy app) ----
+openpyxl==3.1.5
+supabase==2.31.0
+google-api-python-client==2.198.0
+google-auth==2.56.2
