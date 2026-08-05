@@ -244,4 +244,4 @@ git status --ignored --short src/ | grep '!!'   # bắt file bị .gitignore nu�
 2. **Luôn trích nguồn** cho khẳng định lấy từ tài liệu.
 3. **Phân quyền lọc tại tầng truy hồi**, không lọc ở giao diện.
 4. Không `git push --no-verify`, không sửa/xoá `.ai-log/`.
-5. Không merge PR khi CI đỏ.
+5. Không merge PR khi CI đỏ
