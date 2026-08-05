@@ -1,0 +1,12 @@
+# Chốt cận dưới thay vì ghim cứng — bản wheel của psycopg thay đổi theo phiên
+# bản Python, ghim cứng là máy khác cài không được.
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.34
+pydantic>=2.10,<3.0
+pydantic-settings>=2.7
+psycopg[binary]>=3.2.10
+psycopg-pool>=3.2
+PyJWT>=2.10
+bcrypt>=4.2
+python-multipart>=0.0.20
+httpx>=0.28
