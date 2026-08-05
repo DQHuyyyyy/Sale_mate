@@ -17,6 +17,13 @@ env/
 .env.local
 .env.production
 
+# Khoá dịch vụ — KHÔNG BAO GIỜ commit
+service_account.json
+*-service-account*.json
+*credentials*.json
+*.pem
+*.key
+
 # IDE
 .vscode/
 .idea/

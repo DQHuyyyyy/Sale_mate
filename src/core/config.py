@@ -59,6 +59,14 @@ class Settings(BaseSettings):
     # ---------- Database ----------
     database_url: str = "sqlite:///./data/app.db"
 
+    # ---------- Supabase ----------
+    # anon_key dùng được ở phía trình duyệt (bị RLS chặn).
+    # service_role_key BỎ QUA MỌI RLS — chỉ dùng ở server, không bao giờ gửi ra FE.
+    supabase_url: str = ""
+    supabase_anon_key: str = ""
+    supabase_service_role_key: str = ""
+    supabase_bucket: str = "apartment-images"
+
     # ---------- Chat ----------
     chat_max_chars: int = Field(default=2000, gt=0)
     chat_history_limit: int = Field(default=10, ge=0)
@@ -75,6 +83,14 @@ class Settings(BaseSettings):
     @property
     def is_test(self) -> bool:
         return self.app_env == "test"
+
+    @property
+    def uses_supabase(self) -> bool:
+        return "supabase" in self.database_url
+
+    @property
+    def uses_qdrant_cloud(self) -> bool:
+        return "cloud.qdrant.io" in self.qdrant_url
 
     @property
     def has_openai_key(self) -> bool:
