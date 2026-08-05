@@ -66,6 +66,16 @@
 
 ---
 
+## 2026-08-05
+
+| Member | Task | Status | Output | Time |
+|--------|------|--------|--------|------|
+| Viet | Nâng cấp tồn kho từ CSV lên Postgres (Supabase) thật — đúng kiến trúc "có cấu trúc → Postgres/SQL, văn bản dài → Qdrant/RAG" | ✅ Done | Trước đó `InventoryLookupTool` đọc CSV mỗi lần gọi (bản vá tạm hôm 2026-08-04) — giờ chuyển hẳn sang query SQL thật. Xây `src/data/stores/inventory_db.py` (SQLAlchemy Core, bảng `inventory_units`, upsert bằng DELETE+INSERT — portable giữa SQLite test và Postgres thật, không dùng cú pháp `ON CONFLICT` riêng của Postgres). `scripts/migrate_inventory_to_postgres.py` nạp 100 căn từ CSV vào Postgres, idempotent. Sửa `InventoryLookupTool` query qua `asyncio.to_thread` (SQLAlchemy đồng bộ, không chặn event loop). Phát hiện & sửa 1 bug thật khi viết test: `asyncio.to_thread` chạy ở thread khác thread tạo engine — SQLite `:memory:` mặc định chỉ tồn tại trong đúng connection tạo ra nó, phải dùng `StaticPool` để giữ 1 connection dùng chung xuyên thread, nếu không test luôn trả rỗng dù đã upsert. 16 test mới/sửa (7 test `InventoryDB` qua SQLite in-memory, 9 test tool cập nhật). **Verify thật trên Supabase Postgres:** chạy migration thành công (100/100 căn), tool tra `VOP834` trả đúng dữ liệu thật (`source: inventory:postgres`, giá 3,4 tỷ, "Còn trống", đúng ảnh) | — |
+
+**Tổng kết ngày:** Tồn kho giờ đã đúng 100% kiến trúc "hai loại dữ liệu, hai đường đi" — dữ liệu có cấu trúc (100 căn) nằm trong Postgres/Supabase thật, truy vấn bằng SQL qua tool; văn bản dài (chính sách, tiện ích, pháp lý) nằm trong Qdrant, truy vấn bằng vector search/RAG. Supabase không còn "chỉ có credentials rỗng" — đã có dữ liệu thật, verify được. 99/99 test pass.
+
+---
+
 <!--
 Mẫu cho ngày làm việc tiếp theo:
 

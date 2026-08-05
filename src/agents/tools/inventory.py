@@ -1,29 +1,27 @@
-"""Tool tra tồn kho căn hộ — đọc dữ liệu tồn kho THẬT từ data/raw/inventory.csv.
+"""Tool tra tồn kho căn hộ — query bảng `inventory_units` trong Postgres thật.
 
-Tồn kho là dữ liệu ĐỘNG (giá/tình trạng đổi theo phút), nên đi qua tool chứ
-không nhét vào vector store (RAG luôn là bản chụp cũ — xem
-src/data/sources/inventory.py, phần view/nội thất/pháp lý mới vào RAG, giá và
-tình trạng cố tình KHÔNG vào RAG để tránh hai nguồn số liệu lệch nhau).
+Tồn kho là dữ liệu CÓ CẤU TRÚC (giá, diện tích, tình trạng...) nên đi qua
+Postgres + SQL, KHÁC văn bản dài (chính sách, tiện ích, pháp lý...) đi qua
+Qdrant + vector search — xem src/data/stores/inventory_db.py để biết vì sao
+tách hai đường đi này. Không nhét giá/tình trạng vào RAG — hai trường đó chỉ
+có ở đây, tránh hai nguồn số liệu lệch nhau theo thời gian.
 
-Đọc lại CSV ở MỖI lần gọi (không cache trong tiến trình) — gần nhất với "thời
-gian thực" khi hệ thống chưa có DB/ERP thật kết nối trực tiếp (mục 9 Data
-Handling — phần nối API doanh nghiệp thật vẫn cần team quyết định, ngoài khả
-năng solo vì chưa có ERP để nối).
-
-Trước đây tool này trả dữ liệu mock hoàn toàn hư cấu ("Lakeside Metropole",
-"The Origin Riverside") không liên quan gì tới tồn kho Vinhomes Ocean Park
-thật — đã phát hiện và sửa.
+Trước đây tool này đọc thẳng CSV mỗi lần gọi (không có DB); giờ query SQL
+thật. Nạp/cập nhật dữ liệu vào bảng qua scripts/migrate_inventory_to_postgres.py
+— gần nhất với "thời gian thực" khi hệ thống chưa có ERP ghi trực tiếp vào
+bảng này.
 """
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 from src.agents.contracts import AgentTool, ToolResult
 from src.agents.tools.registry import register_tool
-from src.data.sources.inventory import InventoryUnit, load_inventory_csv
+from src.data.stores.inventory_db import get_inventory_db
 
 _STATUS_LABEL = {
     "available": "Còn trống",
@@ -38,18 +36,8 @@ class InventoryArgs(BaseModel):
     unit_type: str | None = Field(default=None, description="Loại căn, ví dụ '2PN' (khớp gần đúng)")
 
 
-def _to_row(unit: InventoryUnit) -> dict[str, Any]:
-    return {
-        "unit_code": unit.unit_code,
-        "building": unit.building,
-        "floor": unit.floor,
-        "unit_type": unit.unit_type,
-        "area_m2": unit.area_m2,
-        "direction": unit.direction,
-        "status": unit.status,
-        "status_label": _STATUS_LABEL.get(unit.status, unit.status),
-        "price_label": unit.price_label,
-    }
+def _to_row(record: dict[str, Any]) -> dict[str, Any]:
+    return {**record, "status_label": _STATUS_LABEL.get(record["status"], record["status"])}
 
 
 @register_tool
@@ -71,27 +59,21 @@ class InventoryLookupTool(AgentTool):
             return ToolResult.failure(f"Tham số không hợp lệ: {exc}")
 
         try:
-            units = load_inventory_csv()
-        except FileNotFoundError:
-            return ToolResult.failure(
-                "Chưa có dữ liệu tồn kho (data/raw/inventory.csv) trên máy này — "
-                "cần tải file từ Drive về trước khi tra cứu."
+            records = await asyncio.to_thread(
+                get_inventory_db().query_units,
+                unit_code=args.unit_code,
+                building=args.building,
+                unit_type=args.unit_type,
             )
+        except Exception as exc:  # noqa: BLE001 - lỗi kết nối DB, không làm đứt luồng agent
+            return ToolResult.failure(f"Không truy vấn được cơ sở dữ liệu tồn kho: {exc}")
 
-        matches = [
-            unit
-            for unit in units
-            if (args.unit_code is None or unit.unit_code.lower() == args.unit_code.lower())
-            and (args.building is None or unit.building.lower() == args.building.lower())
-            and (args.unit_type is None or args.unit_type.lower() in unit.unit_type.lower())
-        ]
-
-        if not matches:
+        if not records:
             return ToolResult(
                 ok=True,
                 data=[],
-                source="inventory:csv",
+                source="inventory:postgres",
                 error="Không tìm thấy căn nào khớp điều kiện.",
             )
 
-        return ToolResult(ok=True, data=[_to_row(unit) for unit in matches], source="inventory:csv")
+        return ToolResult(ok=True, data=[_to_row(r) for r in records], source="inventory:postgres")

@@ -1,12 +1,36 @@
-# Data Handling — Tổng hợp thay đổi (Viet, 2026-08-04)
+# Data Handling — Tổng hợp thay đổi (Viet, cập nhật 2026-08-05)
 
 > Ghi lại toàn bộ thay đổi thuộc module **Data Handling** để leader review và
 > team tiếp tục triển khai. Đối chiếu trực tiếp với `git log`/`git diff` lúc
 > viết — không dựa vào trí nhớ, nên số liệu ở đây đảm bảo khớp code thật.
 
 **Kết quả cuối:** 10/10 mục Data Handling xong (9 mục chính thức trong sprint
-tracker + khảo sát nguồn). 92/92 test pass. Qdrant Cloud có **803 chunk** từ
+tracker + khảo sát nguồn). 99/99 test pass. Qdrant Cloud có **803 chunk** từ
 **485 tài liệu**, **6/6 nhóm tài liệu kiến thức chung** đã có nội dung thật.
+**Đúng kiến trúc "hai loại dữ liệu, hai đường đi":** dữ liệu có cấu trúc (100
+căn tồn kho) nằm trong **Postgres/Supabase thật** (query SQL), văn bản dài
+(chính sách, tiện ích, pháp lý) nằm trong **Qdrant** (vector search/RAG).
+
+## 2026-08-05 — Nâng tồn kho từ CSV lên Postgres thật
+
+Trước đó `InventoryLookupTool` đọc trực tiếp CSV mỗi lần gọi (bản vá tạm) —
+giờ chuyển hẳn sang query SQL trên bảng `inventory_units` trong Supabase
+Postgres, đúng kiến trúc "có cấu trúc → Postgres" mà leader yêu cầu.
+
+| File | Tác dụng |
+|---|---|
+| `src/data/stores/inventory_db.py` (mới) | `InventoryDB` — SQLAlchemy Core, upsert bằng DELETE+INSERT (portable giữa SQLite test và Postgres thật, không dùng cú pháp riêng của Postgres) |
+| `scripts/migrate_inventory_to_postgres.py` (mới) | Nạp 100 căn từ CSV vào Postgres — idempotent, chạy lại an toàn |
+| `src/agents/tools/inventory.py` (sửa) | Query Postgres qua `asyncio.to_thread` thay vì đọc CSV |
+| `src/data/sources/inventory.py` (không đổi) | Vẫn là nguồn CSV gốc — chỉ dùng để migrate, không còn được tool gọi trực tiếp |
+
+**Verify thật:** migration nạp đúng 100/100 căn; tool tra `VOP834` trả đúng dữ
+liệu thật từ Postgres (`source: inventory:postgres`, giá 3,4 tỷ, "Còn trống").
+16 test mới/sửa, không test nào gọi Postgres thật (SQLite in-memory +
+`StaticPool` để tương thích với `asyncio.to_thread`).
+
+**Supabase Storage** (ảnh) vẫn CHƯA dùng — cơ hội còn để ngỏ nếu cần ảnh có
+URL public cho tồn kho.
 
 ---
 

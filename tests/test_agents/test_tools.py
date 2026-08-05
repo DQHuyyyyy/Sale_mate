@@ -1,12 +1,16 @@
-"""Test registry và tool tồn kho (đọc dữ liệu tồn kho thật, không phải mock)."""
+"""Test registry và tool tồn kho (query InventoryDB thật qua SQLite in-memory,
+không phải mock cứng — chỉ không gọi Postgres thật đúng quy ước dự án)."""
 
 from __future__ import annotations
 
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
 
 from src.agents.tools import registry
 from src.agents.tools.inventory import InventoryLookupTool
 from src.data.sources.inventory import InventoryUnit
+from src.data.stores.inventory_db import InventoryDB
 
 _FAKE_UNITS = [
     InventoryUnit(
@@ -41,9 +45,17 @@ _FAKE_UNITS = [
 
 
 @pytest.fixture(autouse=True)
-def _fake_inventory(monkeypatch):
-    """Không đọc data/raw/inventory.csv thật (bị gitignore, máy khác không có)."""
-    monkeypatch.setattr("src.agents.tools.inventory.load_inventory_csv", lambda: _FAKE_UNITS)
+def _fake_inventory_db(monkeypatch):
+    """SQLite in-memory nạp sẵn 2 căn — không gọi Postgres thật.
+
+    `run()` gọi query qua `asyncio.to_thread` (thread khác thread tạo engine)
+    — SQLite `:memory:` mặc định chỉ tồn tại trong đúng connection tạo ra nó,
+    nên bắt buộc `StaticPool` để giữ một connection dùng chung xuyên thread.
+    """
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    db = InventoryDB("sqlite:///:memory:", engine=engine)
+    db.upsert_units(_FAKE_UNITS)
+    monkeypatch.setattr("src.agents.tools.inventory.get_inventory_db", lambda: db)
 
 
 def test_tool_tu_dang_ky_vao_registry():
@@ -69,7 +81,7 @@ async def test_tra_ton_kho_theo_toa():
 
     assert result.ok
     assert len(result.data) == 2
-    assert result.source == "inventory:csv"
+    assert result.source == "inventory:postgres"
 
 
 @pytest.mark.asyncio
@@ -110,13 +122,14 @@ async def test_tham_so_sai_thi_tra_failure_khong_raise():
 
 
 @pytest.mark.asyncio
-async def test_chua_co_file_csv_thi_tra_failure_ro_rang(monkeypatch):
-    def _raise_not_found():
-        raise FileNotFoundError
+async def test_loi_ket_noi_db_thi_tra_failure_ro_rang(monkeypatch):
+    class _BrokenDB:
+        def query_units(self, **kwargs):
+            raise ConnectionError("không kết nối được")
 
-    monkeypatch.setattr("src.agents.tools.inventory.load_inventory_csv", _raise_not_found)
+    monkeypatch.setattr("src.agents.tools.inventory.get_inventory_db", lambda: _BrokenDB())
 
     result = await InventoryLookupTool().run()
 
     assert result.ok is False
-    assert "data/raw/inventory.csv" in result.error
+    assert "không truy vấn được" in result.error.lower()
