@@ -126,6 +126,16 @@ Commit nhỏ và đều — BTC xem git history để đánh giá tiến độ.
 Không `git push --no-verify`, không sửa/xoá `.ai-log/` — hook ghi log AI là yêu
 cầu bắt buộc của BTC.
 
+**Ghi log AI — hai loại file, hai luật khác nhau:**
+
+| | File | Luật |
+|---|---|---|
+| Cấu hình từng AI tool | `.claude/settings.json` · `.codex/hooks.json` · `.cursor/hooks.json` · `.gemini/settings.json` · `.github/hooks/hooks.json` | **Không commit.** Đã gitignore. Mỗi máy tự tạo theo mẫu trong [`.agents/rules/ai-log-hook.md`](.agents/rules/ai-log-hook.md) |
+| Script hạ tầng | `scripts/_pyrun.*` · `scripts/log_*.py` · `scripts/submit_log.py` · `scripts/setup_hooks.*` | Vẫn commit, nhưng **đóng băng** — không sửa trong PR tính năng, muốn sửa thì PR riêng |
+
+Nội dung log (`.ai-log/*.jsonl`) chưa bao giờ nằm trong repo — nó bắn thẳng lên
+server BTC. Repo chỉ giữ phần cơ khí để clone mới dựng lại được.
+
 ## Definition of Done
 
 Có test · `make check` xanh · đã review · đã merge vào `develop` · tài liệu liên
