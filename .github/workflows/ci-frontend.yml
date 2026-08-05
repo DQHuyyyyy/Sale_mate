@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   frontend:
-    name: Frontend — lint & build
+    name: Frontend — build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
@@ -36,10 +36,9 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Lint
-        working-directory: frontend
-        run: npm run lint
-
+      # Chưa có bước lint: frontend Vite hiện không cấu hình ESLint (package.json
+      # không có script `lint`, đã bỏ eslint.config.mjs khi chuyển từ Next.js).
+      # Thêm ESLint lại là việc riêng, đừng để CI đỏ vì thiếu script.
       - name: Build
         working-directory: frontend
         run: npm run build

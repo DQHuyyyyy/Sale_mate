@@ -23,7 +23,5 @@ async def chat(
     try:
         reply = await generate_reply(payload.message, payload.history)
     except ChatError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     return ChatResponse(reply=reply)

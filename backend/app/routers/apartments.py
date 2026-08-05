@@ -40,6 +40,7 @@ router = APIRouter(prefix="/api/apartments", tags=["apartments"])
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
+
 def apartment_columns() -> str:
     """Danh sách cột cho SELECT, map tên cột tiếng Việt sang field của response.
 
@@ -142,7 +143,7 @@ def search_apartments(
             ORDER BY i.sort_order NULLS LAST, i.id
             LIMIT 1
         ) img ON TRUE
-        WHERE {' AND '.join(where)}
+        WHERE {" AND ".join(where)}
         ORDER BY {order_by}
         LIMIT %s OFFSET %s
     """
@@ -288,9 +289,7 @@ async def upload_apartment_images(
         try:
             url = upload_bytes(storage_path, content, upload.content_type)
         except StorageError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)
-            ) from exc
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
         with get_conn() as conn, conn.cursor() as cur:
             cur.execute(

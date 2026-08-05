@@ -39,10 +39,7 @@ def _build_payload(message: str, history: list[ChatMessage]) -> dict[str, object
 
 async def generate_reply(message: str, history: list[ChatMessage]) -> str:
     if not settings.chat_enabled:
-        raise ChatError(
-            "Chatbot chưa được cấu hình. Điền AI_CORE_URL trong backend/.env "
-            "rồi khởi động lại backend."
-        )
+        raise ChatError("Chatbot chưa được cấu hình. Điền AI_CORE_URL trong backend/.env rồi khởi động lại backend.")
 
     url = f"{settings.ai_core_url.rstrip('/')}/api/v1/chat"
 
@@ -52,8 +49,7 @@ async def generate_reply(message: str, history: list[ChatMessage]) -> str:
     except httpx.HTTPError as exc:
         logger.exception("Không gọi được lõi AI tại %s", url)
         raise ChatError(
-            "Trợ lý S đang không kết nối được. Kiểm tra lõi AI đã chạy chưa "
-            "(make run-ai), rồi thử lại."
+            "Trợ lý S đang không kết nối được. Kiểm tra lõi AI đã chạy chưa (make run-ai), rồi thử lại."
         ) from exc
 
     if response.status_code >= 400:

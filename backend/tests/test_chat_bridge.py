@@ -39,9 +39,7 @@ def goi_loi_ai(monkeypatch: pytest.MonkeyPatch):
             ghi_nhan["body"] = request.content.decode()
             return httpx.Response(status_code, json=body)
 
-        monkeypatch.setattr(
-            chat_service.httpx, "AsyncClient", _fake_client(httpx.MockTransport(handler))
-        )
+        monkeypatch.setattr(chat_service.httpx, "AsyncClient", _fake_client(httpx.MockTransport(handler)))
 
     dung.ghi_nhan = ghi_nhan  # type: ignore[attr-defined]
     return dung
@@ -85,9 +83,7 @@ class TestGenerateReply:
             await chat_service.generate_reply("Hỏi gì đó", [])
 
     @pytest.mark.asyncio
-    async def test_chua_cau_hinh_ai_core_url_thi_bao_ro_cach_khac_phuc(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_chua_cau_hinh_ai_core_url_thi_bao_ro_cach_khac_phuc(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(chat_service.settings, "ai_core_url", "")
 
         with pytest.raises(chat_service.ChatError) as loi:

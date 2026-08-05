@@ -59,9 +59,7 @@ async def create_document(
         try:
             file_url = upload_bytes(storage_path, content, file.content_type)
         except StorageError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)
-            ) from exc
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
         file_name = file.filename
 
     with get_conn() as conn, conn.cursor() as cur:

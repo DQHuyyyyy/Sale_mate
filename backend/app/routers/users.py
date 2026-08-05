@@ -103,10 +103,7 @@ def set_user_active(
     if target["role"] != "sale":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                "Chỉ bật/tắt được tài khoản sale. Tài khoản quản trị phải sửa trực tiếp "
-                "trong database."
-            ),
+            detail=("Chỉ bật/tắt được tài khoản sale. Tài khoản quản trị phải sửa trực tiếp trong database."),
         )
 
     if target["is_active"] == payload.is_active:

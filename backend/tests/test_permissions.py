@@ -12,13 +12,12 @@ os.environ.setdefault("JWT_SECRET", "test-secret-chi-dung-trong-test-0123456789a
 os.environ.setdefault("DATABASE_URL", "postgresql://user:pass@localhost:5432/test")
 
 import pytest  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-
 from app.core.deps import get_current_user  # noqa: E402
 from app.main import app  # noqa: E402
 from app.routers import sales as sales_router  # noqa: E402
 from app.routers import users as users_router  # noqa: E402
 from app.schemas.auth import CurrentUser  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 
 SALE = CurrentUser(id=7, username="sale01", full_name="Nguyễn Văn Sale", role="sale")
 ADMIN = CurrentUser(id=1, username="admin", full_name="Trần Quản Trị", role="admin")
@@ -122,9 +121,7 @@ class TestMyHistory:
         assert as_user(SALE).get("/api/sales/my-history").status_code == 200
         assert captured["params"] == (SALE.id,)
 
-    def test_sua_query_param_khong_doi_duoc_nguoi_xem(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_sua_query_param_khong_doi_duoc_nguoi_xem(self, monkeypatch: pytest.MonkeyPatch) -> None:
         captured: dict = {}
 
         def fake_fetch_all(sql: str, params=None):

@@ -1,7 +1,7 @@
-name: CI Backend
+name: CI AI core
 
-# Chỉ chạy khi PR thực sự đụng tới backend. PR chỉ sửa frontend hoặc tài liệu
-# không cần đốt Actions minutes của org cho job này.
+# Lõi AI ở src/: agent graph + RAG. Chỉ chạy khi PR thực sự đụng tới nó —
+# PR chỉ sửa frontend, backend/ hay tài liệu không cần đốt Actions minutes.
 on:
   push:
     branches: [main]
@@ -13,17 +13,17 @@ on:
       - "requirements*.txt"
       - "pyproject.toml"
       - "ruff.toml"
-      - ".github/workflows/ci-backend.yml"
+      - ".github/workflows/ci-ai-core.yml"
 
 # Mỗi người làm trên nhánh riêng và push nhiều lần trong ngày. Huỷ run cũ khi
 # có commit mới trên cùng PR để không đốt Actions minutes vào kết quả đã lỗi thời.
 concurrency:
-  group: ci-backend-${{ github.ref }}
+  group: ci-ai-core-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  backend:
-    name: Backend — lint & test
+  ai-core:
+    name: AI core — lint & test
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # PR nháp chưa cần kiểm tra — mở sẵn để bàn bạc, không phải để merge.
