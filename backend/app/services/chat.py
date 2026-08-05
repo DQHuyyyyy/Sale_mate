@@ -1,8 +1,12 @@
-"""Lõi chatbot — hiện là proxy sang OpenAI.
+"""Lõi chatbot — gọi sang lõi AI ở `src/`.
 
-Giai đoạn 7 sẽ thay hàm `generate_reply` bằng AI Agent Python. Chỉ hàm này đổi;
-contract `{message, history} -> {reply}` ở router giữ nguyên nên frontend không
-phải sửa gì.
+Trước đây hàm này proxy thẳng sang OpenAI. Nay nó gọi service lõi AI
+(`src/`, cổng 8001) để câu trả lời đi qua agent graph: router → retrieve
+(RAG trên Qdrant) → generate → guardrail. Nhờ vậy trợ lý trả lời dựa trên
+tài liệu thật và kèm trích nguồn, thay vì kiến thức chung của model.
+
+Contract `{message, history} -> {reply}` ở router **không đổi**, nên frontend
+không phải sửa gì — đúng như thiết kế ban đầu của file này.
 """
 
 from __future__ import annotations
@@ -16,63 +20,48 @@ from app.schemas.chat import ChatMessage
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = (
-    "Bạn là 'Trợ lý S' của SalesMate — trợ lý cho nhân viên sale bán căn hộ trong "
-    "một khu đô thị.\n"
-    "Quy tắc:\n"
-    "1. KHÔNG bịa số. Giá, diện tích, tình trạng căn chỉ nêu khi người dùng đã "
-    "cung cấp trong hội thoại. Nếu chưa có, hướng dẫn họ dùng bộ lọc 'Tìm kiếm "
-    "căn hộ' trên trang chủ để lấy dữ liệu thật.\n"
-    "2. Nếu không chắc, nói thẳng là chưa có dữ liệu — đừng suy đoán.\n"
-    "3. Trả lời bằng tiếng Việt, ngắn gọn, câu chủ động, giọng đồng nghiệp.\n"
-    "4. Được phép tư vấn kỹ năng bán hàng, cách xử lý câu hỏi của khách, so sánh "
-    "hướng nhà/view theo hiểu biết chung."
-)
-
 
 class ChatError(RuntimeError):
-    """Gọi model thất bại — router bắt lại và trả lỗi có nội dung cho người dùng."""
+    """Gọi lõi AI thất bại — router bắt lại và trả lỗi có nội dung cho người dùng."""
 
 
-def _build_messages(message: str, history: list[ChatMessage]) -> list[dict[str, str]]:
-    messages: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
-    messages.extend({"role": item.role, "content": item.content} for item in history)
-    messages.append({"role": "user", "content": message})
-    return messages
+def _build_payload(message: str, history: list[ChatMessage]) -> dict[str, object]:
+    """Ghép body theo `ChatRequest` của lõi AI (src/models/chat.py).
+
+    Hai contract gần như trùng nhau; lõi AI có thêm `session_id` tuỳ chọn nên
+    bỏ trống để nó tự sinh.
+    """
+    return {
+        "message": message,
+        "history": [{"role": item.role, "content": item.content} for item in history],
+    }
 
 
 async def generate_reply(message: str, history: list[ChatMessage]) -> str:
     if not settings.chat_enabled:
         raise ChatError(
-            "Chatbot chưa được cấu hình. Điền OPENAI_API_KEY trong backend/.env "
+            "Chatbot chưa được cấu hình. Điền AI_CORE_URL trong backend/.env "
             "rồi khởi động lại backend."
         )
 
-    payload = {
-        "model": settings.openai_model,
-        "messages": _build_messages(message, history),
-        "temperature": 0.3,
-        "max_tokens": 800,
-    }
-    headers = {
-        "Authorization": f"Bearer {settings.openai_api_key}",
-        "Content-Type": "application/json",
-    }
-    url = f"{settings.openai_base_url.rstrip('/')}/chat/completions"
+    url = f"{settings.ai_core_url.rstrip('/')}/api/v1/chat"
 
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(url, json=payload, headers=headers)
+        async with httpx.AsyncClient(timeout=settings.ai_core_timeout) as client:
+            response = await client.post(url, json=_build_payload(message, history))
     except httpx.HTTPError as exc:
-        logger.exception("Không gọi được OpenAI")
-        raise ChatError("Trợ lý S đang không kết nối được. Thử lại sau ít phút.") from exc
+        logger.exception("Không gọi được lõi AI tại %s", url)
+        raise ChatError(
+            "Trợ lý S đang không kết nối được. Kiểm tra lõi AI đã chạy chưa "
+            "(make run-ai), rồi thử lại."
+        ) from exc
 
     if response.status_code >= 400:
-        logger.error("OpenAI trả %s: %s", response.status_code, response.text[:500])
+        logger.error("Lõi AI trả %s: %s", response.status_code, response.text[:500])
         raise ChatError("Trợ lý S đang bận. Thử lại sau ít phút.")
 
     try:
-        return response.json()["choices"][0]["message"]["content"].strip()
-    except (KeyError, IndexError, ValueError) as exc:
-        logger.exception("Phản hồi OpenAI sai định dạng")
+        return str(response.json()["message"]).strip()
+    except (KeyError, TypeError, ValueError) as exc:
+        logger.exception("Phản hồi của lõi AI sai định dạng")
         raise ChatError("Trợ lý S trả về dữ liệu không đọc được. Thử lại.") from exc

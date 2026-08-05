@@ -34,9 +34,10 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 480
 
     # ---- Chatbot ----
-    openai_api_key: str = ""
-    openai_model: str = "gpt-4o-mini"
-    openai_base_url: str = "https://api.openai.com/v1"
+    # Lõi AI nằm ở src/ (agent graph + RAG + trích nguồn), chạy như một service
+    # riêng. backend/ không gọi thẳng OpenAI nữa — OPENAI_API_KEY thuộc về lõi AI.
+    ai_core_url: str = "http://localhost:8001"
+    ai_core_timeout: float = 60.0
 
     # ---- App ----
     app_host: str = "0.0.0.0"
@@ -53,7 +54,7 @@ class Settings(BaseSettings):
 
     @property
     def chat_enabled(self) -> bool:
-        return bool(self.openai_api_key)
+        return bool(self.ai_core_url)
 
     def config_problems(self) -> list[str]:
         """Vấn đề cấu hình chặn khởi động. Rỗng nghĩa là chạy được."""

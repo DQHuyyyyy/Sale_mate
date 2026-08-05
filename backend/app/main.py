@@ -39,7 +39,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     if not settings.storage_enabled:
         logger.warning("Chưa cấu hình Supabase Storage — chức năng upload file sẽ báo lỗi.")
     if not settings.chat_enabled:
-        logger.warning("Chưa có OPENAI_API_KEY — /api/chat sẽ báo lỗi.")
+        logger.warning("Chưa có AI_CORE_URL — /api/chat sẽ báo lỗi.")
+    else:
+        logger.info("Chat sẽ đi qua lõi AI tại %s", settings.ai_core_url)
     try:
         yield
     finally:
