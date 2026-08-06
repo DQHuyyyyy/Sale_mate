@@ -119,7 +119,7 @@ def main():
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=60) as resp:
             print(f"[ai-log] Submitted {len(entries)} entries → {resp.status}", file=sys.stderr)
     except urllib.error.URLError as e:
         # Failure: restore the whole pending (including leftover) for next push.

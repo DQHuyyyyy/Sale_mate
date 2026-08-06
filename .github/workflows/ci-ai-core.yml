@@ -1,0 +1,54 @@
+name: CI AI core
+
+# Lõi AI ở src/: agent graph + RAG. Chỉ chạy khi PR thực sự đụng tới nó —
+# PR chỉ sửa frontend, backend/ hay tài liệu không cần đốt Actions minutes.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "requirements*.txt"
+      - "pyproject.toml"
+      - "ruff.toml"
+      - ".github/workflows/ci-ai-core.yml"
+
+# Mỗi người làm trên nhánh riêng và push nhiều lần trong ngày. Huỷ run cũ khi
+# có commit mới trên cùng PR để không đốt Actions minutes vào kết quả đã lỗi thời.
+concurrency:
+  group: ci-ai-core-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ai-core:
+    name: AI core — lint & test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # PR nháp chưa cần kiểm tra — mở sẵn để bàn bạc, không phải để merge.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Lint with ruff
+        run: ruff check src/ tests/
+
+      - name: Check formatting
+        run: ruff format --check src/ tests/
+
+      - name: Run tests with coverage
+        run: pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=60
+        env:
+          APP_ENV: test
+          OPENAI_API_KEY: ""

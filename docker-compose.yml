@@ -2,20 +2,28 @@
 # SalesMate — hạ tầng local
 #
 #   docker compose up -d              chạy cả stack
-#   docker compose up -d qdrant db    chỉ chạy hạ tầng, backend chạy bằng uvicorn
-#   docker compose logs -f backend    xem log
+#   docker compose up -d qdrant db    chỉ chạy hạ tầng, app chạy bằng uvicorn
+#   docker compose logs -f ai-core    xem log
+#
+# Ba tầng sau khi gộp nhánh dat:
+#   frontend/  Vite + React   :5173  proxy /api -> :8000
+#   backend/   API sản phẩm   :8000  auth · apartments · zones · sales · chat
+#   src/       lõi AI + RAG   :8001  backend/ gọi vào qua AI_CORE_URL
 #   docker compose down               dừng (giữ dữ liệu)
 #   docker compose down -v            dừng và XOÁ dữ liệu
 # ============================================
 
 services:
-  backend:
+  # Lõi AI: agent graph + RAG. backend/ gọi vào đây qua AI_CORE_URL.
+  # Cổng 8000 vẫn là cổng trong container; ra ngoài đổi sang 8001 để nhường
+  # 8000 cho API sản phẩm ở backend/ (frontend proxy /api thẳng vào đó).
+  ai-core:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: salesmate-api
+    container_name: salesmate-ai-core
     ports:
-      - "8000:8000"
+      - "8001:8000"
     env_file:
       - .env
     environment:

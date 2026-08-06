@@ -1,4 +1,5 @@
-.PHONY: help install run test cov lint format typecheck check infra infra-down fe fe-install clean
+.PHONY: help install install-api install-fe run-ai run-api fe test test-api cov \
+        lint format typecheck check check-all infra infra-down clean
 
 # Windows dùng .venv/Scripts, Linux/macOS dùng .venv/bin
 PY := .venv/bin/python
@@ -6,23 +7,67 @@ ifeq ($(OS),Windows_NT)
 	PY := .venv/Scripts/python.exe
 endif
 
+# .venv tạo bằng uv thì bên trong KHÔNG có pip — `python -m pip` sẽ báo
+# "No module named pip". Dùng uv khi có, không thì rơi về pip.
+PIP_INSTALL := $(PY) -m pip install
+ifneq (,$(shell command -v uv 2>/dev/null))
+	PIP_INSTALL := uv pip install --python $(PY)
+endif
+
 help:
-	@echo "install     Cai dependencies backend (can .venv Python 3.11)"
-	@echo "run         Chay backend  -> http://localhost:8000/docs"
-	@echo "fe          Chay frontend -> http://localhost:3000"
-	@echo "infra       Bat Qdrant + Postgres bang Docker"
-	@echo "test        Chay test"
-	@echo "cov         Chay test kem bao cao coverage"
-	@echo "check       lint + format + test (chay truoc khi push)"
+	@echo "--- Cai dat ---"
+	@echo "install      Dependencies cho loi AI (src/)"
+	@echo "install-api  Dependencies cho API san pham (backend/)"
+	@echo "install-fe   Dependencies frontend"
+	@echo "--- Chay ---"
+	@echo "run-api      API san pham  -> http://localhost:8000/docs"
+	@echo "run-ai       Loi AI + RAG  -> http://localhost:8001/docs"
+	@echo "fe           Frontend      -> http://localhost:5173"
+	@echo "infra        Bat Qdrant + Postgres bang Docker"
+	@echo "--- Kiem tra ---"
+	@echo "test         Test loi AI (tests/)"
+	@echo "test-api     Test API san pham (backend/tests/)"
+	@echo "check        lint + format + test cho src/  (chay truoc khi push)"
+	@echo "check-all    check + test-api"
+
+# ---------- Cài đặt ----------
 
 install:
-	$(PY) -m pip install -r requirements.txt -r requirements-dev.txt
+	$(PIP_INSTALL) -r requirements.txt -r requirements-dev.txt
 
-run:
-	$(PY) -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+install-api:
+	$(PIP_INSTALL) -r backend/requirements.txt -r backend/requirements-dev.txt
+
+install-fe:
+	cd frontend && npm install
+
+# ---------- Chạy ----------
+
+# API sản phẩm: auth, apartments, zones, sales, documents, chat.
+# Frontend proxy /api thẳng vào cổng này.
+run-api:
+	cd backend && ../$(PY) -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Lõi AI: agent graph + RAG. backend/ gọi vào đây qua AI_CORE_URL.
+run-ai:
+	$(PY) -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8001
+
+fe:
+	cd frontend && npm run dev
+
+infra:
+	docker compose up -d qdrant db
+
+infra-down:
+	docker compose down
+
+# ---------- Kiểm tra ----------
 
 test:
 	$(PY) -m pytest tests/
+
+test-api:
+	cd backend && ../$(PY) -m pytest tests/
 
 cov:
 	$(PY) -m pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=60
@@ -38,17 +83,7 @@ typecheck:
 
 check: lint format test
 
-infra:
-	docker compose up -d qdrant db
-
-infra-down:
-	docker compose down
-
-fe-install:
-	cd frontend && npm install
-
-fe:
-	cd frontend && npm run dev
+check-all: check test-api
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
