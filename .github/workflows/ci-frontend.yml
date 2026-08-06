@@ -18,7 +18,8 @@ concurrency:
 jobs:
   frontend:
     name: Frontend — build
-    runs-on: ubuntu-latest
+    # Runner của BTC, dùng chung cho mọi team. Xem chú thích ở ci-ai-core.yml.
+    runs-on: self-hosted
     timeout-minutes: 15
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
 
