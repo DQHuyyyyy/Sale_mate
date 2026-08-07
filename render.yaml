@@ -1,12 +1,17 @@
 # ============================================
 # SalesMate — Render Blueprint
 #
-# Dán repo này vào Render → New → Blueprint. Render đọc file này và tạo cả ba
-# service một lượt, khỏi bấm tay từng cái.
+# Dán repo này vào Render → New → Blueprint. Render đọc file này và tạo service
+# một lượt, khỏi bấm tay từng cái.
 #
-#   salesmate-api        API sản phẩm, nhánh main      → user test
-#   salesmate-api-dev    API sản phẩm, nhánh develop   → team phát triển
-#   salesmate-ai-core    lõi AI, nhánh main            → DÙNG CHUNG cả hai
+#   salesmate-api-dev    API sản phẩm, nhánh develop
+#   salesmate-ai-core    lõi AI, nhánh develop
+#
+# HIỆN TẠI CHỈ DEPLOY NHÁNH develop.
+# Nhánh main đang là bản 05/08, chưa có thư mục interface/ — trỏ service vào đó
+# là build hỏng ngay. Khi nào merge develop -> main xong thì thêm môi trường
+# production: copy khối salesmate-api-dev, đổi tên thành salesmate-api, đổi
+# `branch: develop` thành `branch: main`. Xem DEPLOY.md.
 #
 # Lõi AI chỉ có một bản vì nó không giữ trạng thái (RAG đang tắt, lịch sử chat
 # do API gửi kèm mỗi request). Bớt một service là bớt một lần chờ cold start.
@@ -16,6 +21,7 @@
 # ============================================
 
 services:
+<<<<<<< HEAD
   # ---- API sản phẩm — production (user test) ----
   - type: web
     name: salesmate-api
@@ -59,6 +65,8 @@ services:
       - key: AI_CORE_TIMEOUT
         value: "60"
 
+=======
+>>>>>>> huy
   # ---- API sản phẩm — development (team) ----
   - type: web
     name: salesmate-api-dev
@@ -67,6 +75,11 @@ services:
     region: singapore
     branch: develop
     rootDir: interface/backend
+<<<<<<< HEAD
+=======
+    # requirements.txt thôi, KHÔNG cài requirements-dev.txt — server không cần
+    # pytest và ruff. Đây là lý do hai file đó tách nhau.
+>>>>>>> huy
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
@@ -74,8 +87,13 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
+<<<<<<< HEAD
       # Supabase project DEV — phải là project KHÁC production, nếu không team
       # test hàng ngày sẽ sửa đúng dữ liệu mà user đang xem.
+=======
+      # Một Supabase project dùng chung cho mọi môi trường — quyết định của
+      # team. Hệ quả: sửa dữ liệu ở đây là người dùng thấy ngay. Xem DEPLOY.md.
+>>>>>>> huy
       - key: DATABASE_URL
         sync: false
       - key: SUPABASE_URL
@@ -97,13 +115,23 @@ services:
       - key: AI_CORE_TIMEOUT
         value: "60"
 
+<<<<<<< HEAD
   # ---- Lõi AI — dùng chung cho cả prod lẫn dev ----
+=======
+  # ---- Lõi AI ----
+  # Cũng theo develop. Để branch main thì nó chạy src/ của bản 05/08, lệch 13
+  # file so với develop — API mới nói chuyện với lõi AI cũ, sai lệch rất khó lần.
+>>>>>>> huy
   - type: web
     name: salesmate-ai-core
     runtime: docker
     plan: free
     region: singapore
+<<<<<<< HEAD
     branch: main
+=======
+    branch: develop
+>>>>>>> huy
     dockerfilePath: ./Dockerfile
     dockerContext: .
     # Dockerfile ghim cứng --port 8000; Render cấp cổng qua $PORT nên phải ghi đè.
