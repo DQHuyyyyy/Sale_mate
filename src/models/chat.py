@@ -96,9 +96,28 @@ class ChatEvent(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    """Trả lời một lần (không stream) — dùng cho test và client đơn giản."""
+    """Trả lời một lần (không stream) — tách riêng answer và sources[] cho FE."""
 
     message: str
     session_id: str
     citations: list[Citation] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @property
+    def answer(self) -> str:
+        """Alias cho message giúp FE đọc trực tiếp answer."""
+        return self.message
+
+    @property
+    def sources(self) -> list[Citation]:
+        """Alias cho citations giúp FE đọc mảng sources[]."""
+        return self.citations
+
+    def to_formatted_dict(self) -> dict[str, Any]:
+        """Format output tách riêng 'answer' và 'sources[]' chuẩn FE."""
+        return {
+            "answer": self.message,
+            "sources": [c.model_dump() for c in self.citations],
+            "session_id": self.session_id,
+            "created_at": self.created_at.isoformat(),
+        }

@@ -46,15 +46,21 @@ class QdrantVectorStore:
                     distance=models.Distance.COSINE,
                 ),
             )
-            # Index cho các trường lọc phân quyền — bắt buộc để filter nhanh.
-            # Qdrant Cloud (khác local Docker) từ chối filter trên field chưa
-            # có index với lỗi 400 — "metadata.source_site" cần cho
-            # list_active_doc_ids() (mục 6 active/expired).
+            # Index cho các trường lọc phân quyền, lọc cấu trúc bất động sản,
+            # và metadata.source_site — bắt buộc để filter nhanh. Qdrant Cloud
+            # (khác local Docker) từ chối filter trên field chưa có index với
+            # lỗi 400 — cần cho list_active_doc_ids() (mục 6 active/expired).
             for field, schema in (
                 ("visibility", models.PayloadSchemaType.KEYWORD),
                 ("is_active", models.PayloadSchemaType.BOOL),
                 ("doc_id", models.PayloadSchemaType.KEYWORD),
                 ("project", models.PayloadSchemaType.KEYWORD),
+                ("price", models.PayloadSchemaType.FLOAT),
+                ("area", models.PayloadSchemaType.FLOAT),
+                ("num_bedrooms", models.PayloadSchemaType.INTEGER),
+                ("building", models.PayloadSchemaType.KEYWORD),
+                ("property_type", models.PayloadSchemaType.KEYWORD),
+                ("doc_kind", models.PayloadSchemaType.KEYWORD),
                 ("metadata.source_site", models.PayloadSchemaType.KEYWORD),
             ):
                 await self._client.create_payload_index(
@@ -148,6 +154,7 @@ class QdrantVectorStore:
                     offset=offset,
                     with_payload=["doc_id"],
                 )
+                # pyrefly: ignore [unsupported-operation]
                 doc_ids.update(point.payload["doc_id"] for point in points)
                 if offset is None:
                     break
@@ -179,23 +186,29 @@ def _point_id(chunk_id: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, chunk_id))
 
 
+_STRUCTURED_KEYS = ("project", "price", "area", "num_bedrooms", "building", "property_type", "doc_kind")
+
+
 def _to_payload(chunk: Chunk) -> dict[str, Any]:
     payload = chunk.model_dump(exclude={"score"})
-    # Đưa project lên payload gốc để index lọc được.
-    payload["project"] = chunk.metadata.get("project")
+    # Đưa các trường cấu trúc lên payload gốc để Qdrant index và lọc trực tiếp.
+    for key in _STRUCTURED_KEYS:
+        if key in chunk.metadata:
+            payload[key] = chunk.metadata[key]
     return payload
 
 
 def _from_payload(payload: dict[str, Any], score: float) -> Chunk:
-    data = {key: value for key, value in payload.items() if key != "project"}
+    data = {key: value for key, value in payload.items() if key not in _STRUCTURED_KEYS}
     data.setdefault("metadata", {})
-    if payload.get("project") is not None:
-        data["metadata"] = {**data["metadata"], "project": payload["project"]}
+    for key in _STRUCTURED_KEYS:
+        if payload.get(key) is not None:
+            data["metadata"][key] = payload[key]
     return Chunk(**data, score=score)
 
 
 def _to_qdrant_filter(filters: RetrievalFilter) -> models.Filter:
-    """Dịch RetrievalFilter sang filter Qdrant — nơi phân quyền thực sự xảy ra."""
+    """Dịch RetrievalFilter sang filter Qdrant — phân quyền và lọc cấu trúc bất động sản."""
     must: list[models.Condition] = [
         models.FieldCondition(
             key="visibility",
@@ -208,6 +221,39 @@ def _to_qdrant_filter(filters: RetrievalFilter) -> models.Filter:
         must.append(models.FieldCondition(key="project", match=models.MatchValue(value=filters.project)))
     if filters.doc_ids is not None:
         must.append(models.FieldCondition(key="doc_id", match=models.MatchAny(any=filters.doc_ids)))
+    if filters.doc_kind is not None:
+        must.append(models.FieldCondition(key="doc_kind", match=models.MatchValue(value=filters.doc_kind)))
+
+    # Lọc khoảng giá
+    if filters.min_price is not None or filters.max_price is not None:
+        must.append(
+            models.FieldCondition(
+                key="price",
+                range=models.Range(gte=filters.min_price, lte=filters.max_price),
+            )
+        )
+
+    # Lọc khoảng diện tích
+    if filters.min_area is not None or filters.max_area is not None:
+        must.append(
+            models.FieldCondition(
+                key="area",
+                range=models.Range(gte=filters.min_area, lte=filters.max_area),
+            )
+        )
+
+    # Lọc số phòng
+    if filters.num_bedrooms is not None:
+        must.append(models.FieldCondition(key="num_bedrooms", match=models.MatchValue(value=filters.num_bedrooms)))
+
+    # Lọc Tòa
+    if filters.building is not None:
+        must.append(models.FieldCondition(key="building", match=models.MatchValue(value=filters.building)))
+
+    # Lọc Loại căn
+    if filters.property_type is not None:
+        must.append(models.FieldCondition(key="property_type", match=models.MatchValue(value=filters.property_type)))
+
     for key, value in filters.extra.items():
         must.append(models.FieldCondition(key=key, match=models.MatchValue(value=value)))
     return models.Filter(must=must)

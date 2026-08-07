@@ -15,7 +15,8 @@ from src.agents.state import AgentState
 from src.models.chat import ChatMessage, MessageRole
 
 _GROUNDED_TEMPLATE = """Dựa DUY NHẤT vào ngữ cảnh dưới đây để trả lời. \
-Nếu ngữ cảnh không chứa thông tin cần thiết, nói rõ là chưa có dữ liệu.
+Nếu ngữ cảnh không chứa thông tin cần thiết hoặc thông tin chưa đủ, tuyệt đối không tự suy đoán hay bịa đặt số liệu (giá, diện tích, vị trí, pháp lý), hãy nói rõ là chưa có đủ dữ liệu. \
+Mọi thông tin về căn hộ hoặc chính sách ĐỀU BẮT BUỘC phải trích dẫn nguồn bằng định dạng [Mã căn] hoặc [Tên tài liệu] ngay sau khẳng định đó.
 
 <ngu_canh>
 {context}

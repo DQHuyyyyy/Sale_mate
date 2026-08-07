@@ -1,0 +1,490 @@
+{
+  "summary": {
+    "total_test_cases": 18,
+    "positive_cases": 14,
+    "negative_cases": 4,
+    "hit_rate_at_3_pct": 100.0,
+    "hit_rate_at_5_pct": 100.0,
+    "refusal_accuracy_pct": 100.0,
+    "latency_ms": {
+      "mean_total": 0.22,
+      "p90_total": 0.36,
+      "min_total": 0.08,
+      "max_total": 0.5,
+      "mean_retrieval": 0.22,
+      "mean_generation": 0.0
+    },
+    "category_breakdown": {
+      "tra_cuu_don": {
+        "name": "Tra cứu đơn",
+        "total": 5,
+        "passed": 5,
+        "accuracy_pct": 100.0,
+        "mean_latency_ms": 0.32
+      },
+      "rang_buoc_so": {
+        "name": "Có ràng buộc số",
+        "total": 5,
+        "passed": 5,
+        "accuracy_pct": 100.0,
+        "mean_latency_ms": 0.1
+      },
+      "so_sanh_nhieu_can": {
+        "name": "So sánh nhiều căn & Chính sách",
+        "total": 4,
+        "passed": 4,
+        "accuracy_pct": 100.0,
+        "mean_latency_ms": 0.23
+      },
+      "cau_hoi_bay_out_of_context": {
+        "name": "Câu hỏi bẫy (Out-of-context)",
+        "total": 4,
+        "passed": 4,
+        "accuracy_pct": 100.0,
+        "mean_latency_ms": 0.24
+      }
+    }
+  },
+  "details": [
+    {
+      "id": "EV-001",
+      "category": "tra_cuu_don",
+      "category_name": "Tra cứu đơn",
+      "question": "Căn hộ VOP398 tại tòa R103 có giá bán bao nhiêu tiền?",
+      "expected_doc_id": "VOP398",
+      "top_3_retrieved": [
+        "knowledge:tien-ich-noi-khu",
+        "VOP398",
+        "POL-002"
+      ],
+      "top_5_retrieved": [
+        "knowledge:tien-ich-noi-khu",
+        "VOP398",
+        "POL-002",
+        "VOP315",
+        "POL-004"
+      ],
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "refused_correctly": false,
+      "passed": true,
+      "retrieval_latency_ms": 0.49,
+      "generation_latency_ms": 0.0,
+      "total_latency_ms": 0.5
+    },
+    {
+      "id": "EV-002",
+      "category": "tra_cuu_don",
+      "category_name": "Tra cứu đơn",
+      "question": "Căn studio diện tích nhỏ nhất có view đẹp là căn nào?",
+      "expected_doc_id": "VOP315",
+      "top_3_retrieved": [
+        "VOP315",
+        "VOP639",
+        "VOP398"
+      ],
+      "top_5_retrieved": [
+        "VOP315",
+        "VOP639",
+        "VOP398",
+        "batdongsan:45212995",
+        "POL-001"
+      ],
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "refused_correctly": false,
+      "passed": true,
+      "retrieval_latency_ms": 0.26,
+      "generation_latency_ms": 0.0,
+      "total_latency_ms": 0.26
+    },
+    {
+      "id": "EV-003",
+      "category": "tra_cuu_don",
+      "category_name": "Tra cứu đơn",
+      "question": "Căn 2 phòng ngủ tòa S2 tầng 21 có view biển hồ không?",
+      "expected_doc_id": "VOP639",
+      "top_3_retrieved": [
+        "VOP639",
+        "VOP315",
+        "POL-004"
+      ],
+      "top_5_retrieved": [
+        "VOP639",
+        "VOP315",
+        "POL-004",
+        "batdongsan:45212995",
+        "knowledge:tien-ich-noi-khu"
+      ],
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "refused_correctly": false,
+      "passed": true,
+      "retrieval_latency_ms": 0.24,
+      "generation_latency_ms": 0.0,
+      "total_latency_ms": 0.24
+    },
+    {
+      "id": "EV-004",
+      "category": "tra_cuu_don",
+      "category_name": "Tra cứu đơn",
+      "question": "Căn hộ 3 phòng ngủ 95,1m2 view thành phố Hà Nội giá bao nhiêu?",
+      "expected_doc_id": "batdongsan:45212995",
+      "top_3_retrieved": [
+        "batdongsan:45212995",
+        "VOP398",
+        "VOP315"
+      ],
+      "top_5_retrieved": [
+        "batdongsan:45212995",
+        "VOP398",
+        "VOP315",
+        "knowledge:tien-ich-noi-khu",
+        "VOP639"
+      ],
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "refused_correctly": false,
+      "passed": true,
+      "retrieval_latency_ms": 0.25,
+      "generation_latency_ms": 0.0,
+      "total_latency_ms": 0.25
+    },
+    {
+      "id": "EV-005",
+      "category": "tra_cuu_don",
+      "category_name": "Tra cứu đơn",
+      "question": "Dự án Vinhomes Ocean Park có những tiện ích nội khu nổi bật nào?",
+      "expected_doc_id": "knowledge:tien-ich-noi-khu",
+      "top_3_retrieved": [
+        "batdongsan:46070090",
+        "knowledge:tien-ich-noi-khu",
+        "batdongsan:45212995"
+      ],
+      "top_5_retrieved": [
+        "batdongsan:46070090",
+        "knowledge:tien-ich-noi-khu",
+        "batdongsan:45212995",
+        "POL-004",
+        "VOP315"
+      ],
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "refused_correctly": false,
+      "passed": true,
+      "retrieval_latency_ms": 0.36,
+      "generation_latency_ms": 0.0,
+      "total_latency_ms": 0.36
+    },
+    {
+      "id": "EV-006",
+      "category": "rang_buoc_so",
+      "category_name": "Có ràng buộc số",
+      "question": "Tìm căn hộ 2 phòng ngủ giá từ 3.0 tỷ đến 3.6 tỷ tại tòa S2",
+      "expected_doc_id": "VOP639",
+      "top_3_retrieved": [
+        "VOP639"
+      ],
+      "top_5_retrieved": [
+        "VOP639"
+      ],
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "refused_correctly": false,
+      "passed": true,
+      "retrieval_latency_ms": 0.11,
+      "generation_latency_ms": 0.0,
+      "total_latency_ms": 0.12
+    },
+    {
+      "id": "EV-007",
+      "category": "rang_buoc_so",
+      "category_name": "Có ràng buộc số",
+      "question": "Căn 1 phòng ngủ diện tích từ 40m2 đến 55m2 giá dưới 3.5 tỷ",
+      "expected_doc_id": "VOP398",
+      "top_3_retrieved": [
+        "VOP398"
+      ],
+      "top_5_retrieved": [
+        "VOP398"
+      ],
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "refused_correctly": false,
+      "passed": true,
+      "retrieval_latency_ms": 0.1,
+      "generation_latency_ms": 0.0,
+      "total_latency_ms": 0.1
+    },
+    {
+      "id": "EV-008",
+      "category": "rang_buoc_so",
+      "category_name": "Có ràng buộc số",
+      "question": "Căn studio tòa S1.01 diện tích khoảng 35m2 giá tối đa 2.2 tỷ",
+      "expected_doc_id": "VOP315",
+      "top_3_retrieved": [
+        "VOP315"
+      ],
+      "top_5_retrieved": [
+        "VOP315"
+      ],
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "refused_correctly": false,
+      "passed": true,
+      "retrieval_latency_ms": 0.1,
+      "generation_latency_ms": 0.0,
+      "total_latency_ms": 0.1
+    },
+    {
+      "id": "EV-009",
+      "category": "rang_buoc_so",
+      "category_name": "Có ràng buộc số",
+      "question": "Shophouse diện tích trên 80m2 có giá bán bao nhiêu?",
+      "expected_doc_id": "batdongsan:46070090",
+      "top_3_retrieved": [
+        "batdongsan:45212995",
+        "batdongsan:46070090"
+      ],
+      "top_5_retrieved": [
+        "batdongsan:45212995",
+        "batdongsan:46070090"
+      ],
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "refused_correctly": false,
+      "passed": true,
+      "retrieval_latency_ms": 0.1,
+      "generation_latency_ms": 0.0,
+      "total_latency_ms": 0.1
+    },
+    {
+      "id": "EV-010",
+      "category": "rang_buoc_so",
+      "category_name": "Có ràng buộc số",
+      "question": "Căn hộ 3 phòng ngủ diện tích từ 70m2 đến 100m2",
+      "expected_doc_id": "batdongsan:45212995",
+      "top_3_retrieved": [
+        "batdongsan:45212995"
+      ],
+      "top_5_retrieved": [
+        "batdongsan:45212995"
+      ],
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "refused_correctly": false,
+      "passed": true,
+      "retrieval_latency_ms": 0.08,
+      "generation_latency_ms": 0.0,
+      "total_latency_ms": 0.08
+    },
+    {
+      "id": "EV-011",
+      "category": "so_sanh_nhieu_can",
+      "category_name": "So sánh nhiều căn & Chính sách",
+      "question": "So sánh căn 1PN VOP398 và căn 2PN VOP639 về giá và diện tích",
+      "expected_doc_id": "VOP398",
+      "top_3_retrieved": [
+        "VOP398",
+        "VOP639",
+        "VOP315"
+      ],
+      "top_5_retrieved": [
+        "VOP398",
+        "VOP639",
+        "VOP315",
+        "knowledge:tien-ich-noi-khu",
+        "POL-004"
+      ],
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "refused_correctly": false,
+      "passed": true,
+      "retrieval_latency_ms": 0.22,
+      "generation_latency_ms": 0.0,
+      "total_latency_ms": 0.22
+    },
+    {
+      "id": "EV-012",
+      "category": "so_sanh_nhieu_can",
+      "category_name": "So sánh nhiều căn & Chính sách",
+      "question": "Chính sách chiết khấu 8% thanh toán sớm áp dụng cho căn hộ nào?",
+      "expected_doc_id": "POL-001",
+      "top_3_retrieved": [
+        "POL-001",
+        "batdongsan:45212995",
+        "knowledge:tien-ich-noi-khu"
+      ],
+      "top_5_retrieved": [
+        "POL-001",
+        "batdongsan:45212995",
+        "knowledge:tien-ich-noi-khu",
+        "POL-004",
+        "VOP315"
+      ],
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "refused_correctly": false,
+      "passed": true,
+      "retrieval_latency_ms": 0.24,
+      "generation_latency_ms": 0.0,
+      "total_latency_ms": 0.24
+    },
+    {
+      "id": "EV-013",
+      "category": "so_sanh_nhieu_can",
+      "category_name": "So sánh nhiều căn & Chính sách",
+      "question": "Nên chọn gói chiết khấu 8% hay gói hỗ trợ vay ngân hàng 0% lãi suất?",
+      "expected_doc_id": "POL-002",
+      "top_3_retrieved": [
+        "POL-002",
+        "VOP398",
+        "POL-004"
+      ],
+      "top_5_retrieved": [
+        "POL-002",
+        "VOP398",
+        "POL-004",
+        "POL-001",
+        "VOP315"
+      ],
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "refused_correctly": false,
+      "passed": true,
+      "retrieval_latency_ms": 0.23,
+      "generation_latency_ms": 0.0,
+      "total_latency_ms": 0.23
+    },
+    {
+      "id": "EV-014",
+      "category": "so_sanh_nhieu_can",
+      "category_name": "So sánh nhiều căn & Chính sách",
+      "question": "Thủ tục sang tên sổ đỏ và khoản thuế phí hết bao nhiêu tiền?",
+      "expected_doc_id": "POL-004",
+      "top_3_retrieved": [
+        "POL-004",
+        "knowledge:tien-ich-noi-khu",
+        "VOP315"
+      ],
+      "top_5_retrieved": [
+        "POL-004",
+        "knowledge:tien-ich-noi-khu",
+        "VOP315",
+        "VOP398",
+        "VOP639"
+      ],
+      "hit_at_3": true,
+      "hit_at_5": true,
+      "refused_correctly": false,
+      "passed": true,
+      "retrieval_latency_ms": 0.22,
+      "generation_latency_ms": 0.0,
+      "total_latency_ms": 0.22
+    },
+    {
+      "id": "EV-015",
+      "category": "cau_hoi_bay_out_of_context",
+      "category_name": "Câu hỏi bẫy (Out-of-context)",
+      "question": "Giá căn hộ 3 phòng ngủ Landmark 81 TP Hồ Chí Minh bao nhiêu tiền?",
+      "expected_doc_id": null,
+      "top_3_retrieved": [
+        "knowledge:tien-ich-noi-khu",
+        "POL-004",
+        "batdongsan:45212995"
+      ],
+      "top_5_retrieved": [
+        "knowledge:tien-ich-noi-khu",
+        "POL-004",
+        "batdongsan:45212995",
+        "VOP398",
+        "VOP315"
+      ],
+      "hit_at_3": false,
+      "hit_at_5": false,
+      "refused_correctly": true,
+      "passed": true,
+      "retrieval_latency_ms": 0.24,
+      "generation_latency_ms": 0.0,
+      "total_latency_ms": 0.24
+    },
+    {
+      "id": "EV-016",
+      "category": "cau_hoi_bay_out_of_context",
+      "category_name": "Câu hỏi bẫy (Out-of-context)",
+      "question": "Căn biệt thự mã VOP9999 dự án Vinhomes Hải Phòng có giá bao nhiêu?",
+      "expected_doc_id": null,
+      "top_3_retrieved": [
+        "knowledge:tien-ich-noi-khu",
+        "VOP315",
+        "batdongsan:45212995"
+      ],
+      "top_5_retrieved": [
+        "knowledge:tien-ich-noi-khu",
+        "VOP315",
+        "batdongsan:45212995",
+        "batdongsan:46070090",
+        "VOP398"
+      ],
+      "hit_at_3": false,
+      "hit_at_5": false,
+      "refused_correctly": true,
+      "passed": true,
+      "retrieval_latency_ms": 0.24,
+      "generation_latency_ms": 0.0,
+      "total_latency_ms": 0.24
+    },
+    {
+      "id": "EV-017",
+      "category": "cau_hoi_bay_out_of_context",
+      "category_name": "Câu hỏi bẫy (Out-of-context)",
+      "question": "Lãi suất tiền gửi tiết kiệm ngân hàng Vietcombank hôm nay là bao nhiêu %?",
+      "expected_doc_id": null,
+      "top_3_retrieved": [
+        "POL-002",
+        "POL-004",
+        "batdongsan:45212995"
+      ],
+      "top_5_retrieved": [
+        "POL-002",
+        "POL-004",
+        "batdongsan:45212995",
+        "VOP398",
+        "VOP639"
+      ],
+      "hit_at_3": false,
+      "hit_at_5": false,
+      "refused_correctly": true,
+      "passed": true,
+      "retrieval_latency_ms": 0.24,
+      "generation_latency_ms": 0.0,
+      "total_latency_ms": 0.24
+    },
+    {
+      "id": "EV-018",
+      "category": "cau_hoi_bay_out_of_context",
+      "category_name": "Câu hỏi bẫy (Out-of-context)",
+      "question": "Dự án Ecopark Hưng Yên căn 2 phòng ngủ giá bao nhiêu?",
+      "expected_doc_id": null,
+      "top_3_retrieved": [
+        "VOP315",
+        "knowledge:tien-ich-noi-khu",
+        "batdongsan:45212995"
+      ],
+      "top_5_retrieved": [
+        "VOP315",
+        "knowledge:tien-ich-noi-khu",
+        "batdongsan:45212995",
+        "VOP639",
+        "batdongsan:46070090"
+      ],
+      "hit_at_3": false,
+      "hit_at_5": false,
+      "refused_correctly": true,
+      "passed": true,
+      "retrieval_latency_ms": 0.23,
+      "generation_latency_ms": 0.0,
+      "total_latency_ms": 0.23
+    }
+  ]
+}

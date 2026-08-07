@@ -10,7 +10,7 @@ Chủ sở hữu: dat (src/data/**)
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, cast, runtime_checkable
 
 from pydantic import BaseModel, Field
 
@@ -44,16 +44,24 @@ class LoadedDocument(BaseModel):
 
 
 class RetrievalFilter(BaseModel):
-    """Điều kiện lọc áp NGAY tại truy vấn vector.
+    """Điều kiện lọc áp NGAY tại truy vấn vector (Hybrid filtering).
 
-    Phân quyền phải lọc ở đây, không lọc ở tầng UI — tài liệu nội bộ không được
-    lọt vào context của người không có quyền.
+    Phân quyền và bộ lọc cấu trúc (bất động sản) phải lọc ở đây trước khi rank vector.
     """
 
-    visibility: list[Visibility] = Field(default_factory=lambda: ["public"])
+    visibility: list[Visibility] = Field(default_factory=lambda: [cast(Visibility, "public")])
     is_active: bool = True
     project: str | None = None
     doc_ids: list[str] | None = None
+    # Lọc cấu trúc bất động sản (phân biệt với tìm kiếm ngữ nghĩa)
+    min_price: float | None = Field(default=None, description="Giá tối thiểu (VNĐ hoặc tỷ)")
+    max_price: float | None = Field(default=None, description="Giá tối đa (VNĐ hoặc tỷ)")
+    min_area: float | None = Field(default=None, description="Diện tích tối thiểu (m²)")
+    max_area: float | None = Field(default=None, description="Diện tích tối đa (m²)")
+    num_bedrooms: int | None = Field(default=None, description="Số phòng ngủ / phòng")
+    building: str | None = Field(default=None, description="Tòa (ví dụ: S1.01, Tòa A)")
+    property_type: str | None = Field(default=None, description="Loại căn (ví dụ: 1PN+, Studio, Chung cư)")
+    doc_kind: str | None = Field(default=None, description="Loại tài liệu: 'listing' hoặc 'policy'")
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -69,8 +77,24 @@ class RetrievalResult(BaseModel):
         return bool(self.chunks) and self.coverage >= threshold
 
     def as_context(self, separator: str = "\n---\n") -> str:
-        """Ghép các chunk thành context đưa vào prompt."""
-        return separator.join(chunk.text for chunk in self.chunks)
+        """Ghép các chunk Reranked thành context giàu metadata đưa vào LLM Prompt."""
+        pieces: list[str] = []
+        for chunk in self.chunks:
+            meta = chunk.metadata
+            piece = chunk.text
+            extra_details: list[str] = []
+            if "ma_can" in meta and meta["ma_can"]:
+                extra_details.append(f"Mã căn: [{meta['ma_can']}]")
+            if "image_url" in meta and meta["image_url"]:
+                extra_details.append(f"Link Ảnh: {meta['image_url']}")
+            if "price" in meta and meta["price"]:
+                orig = meta["price"]
+                disc = round(orig * 0.92, 3)
+                extra_details.append(f"Giá gốc: {orig} tỷ (Giá sau chiết khấu 8%: {disc} tỷ)")
+            if extra_details:
+                piece += "\n[Chi tiết bổ sung: " + " | ".join(extra_details) + "]"
+            pieces.append(piece)
+        return separator.join(pieces)
 
 
 # --------------------------------------------------------------------------

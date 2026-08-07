@@ -24,9 +24,14 @@ service_account.json
 *.pem
 *.key
 
-# IDE
+# IDE & AI Tool Configs
 .vscode/
 .idea/
+.claude/
+.codex/
+.cursor/
+.gemini/
+.github/
 *.swp
 *.swo
 *~
