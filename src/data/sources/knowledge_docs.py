@@ -56,16 +56,23 @@ def _parse_frontmatter(raw: str, filename: str) -> tuple[dict[str, str], str]:
 def load_knowledge_file(path: Path) -> LoadedDocument:
     """Đọc 1 file .md kiến thức chung thành LoadedDocument.
 
-    Raise ValueError nếu thiếu/sai front-matter — thà báo lỗi sớm còn hơn
-    ingest một tài liệu gắn nhầm quyền truy cập.
+    Raise ValueError nếu thiếu/sai front-matter, hoặc nếu nội dung không mở
+    đầu bằng heading H1 đúng `title` khai trong front-matter — thà báo lỗi
+    sớm còn hơn ingest một tài liệu gắn nhầm quyền truy cập, hoặc thiếu
+    heading chuẩn (yêu cầu bắt buộc của luồng xử lý dữ liệu).
     """
     raw = path.read_text(encoding="utf-8")
     meta, body = _parse_frontmatter(raw, path.name)
 
+    expected_heading = f"# {meta['title']}"
+    first_line = body.splitlines()[0] if body else ""
+    if first_line != expected_heading:
+        raise ValueError(f"{path.name}: nội dung phải mở đầu bằng '{expected_heading}' (heading H1 khớp title)")
+
     return LoadedDocument(
         doc_id=f"knowledge:{path.stem}",
         title=meta["title"],
-        text=f"{meta['title']}\n\n{body}",
+        text=body,
         source_path=str(path),
         metadata={
             "visibility": meta["visibility"],

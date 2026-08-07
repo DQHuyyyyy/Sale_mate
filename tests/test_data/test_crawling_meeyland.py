@@ -2,7 +2,17 @@
 
 from __future__ import annotations
 
+import pytest
+
+from src.data.crawling import meeyland
 from src.data.crawling.meeyland import _extract_listing_paths, parse_listing_detail
+
+
+@pytest.fixture(autouse=True)
+def _redirect_raw_text_dir(tmp_path, monkeypatch):
+    """Không ghi text thô vào data/ thật khi chạy test."""
+    monkeypatch.setattr(meeyland, "RAW_TEXT_DIR", tmp_path / "meeyland_crawl_raw")
+
 
 _DETAIL_HTML = """
 <html><head>
@@ -59,6 +69,27 @@ def test_loai_bo_so_dien_thoai_moi_gioi_khoi_tieu_de_va_mo_ta():
     assert "0908823226" not in doc.text
     # Giá tiền có dấu chấm ngăn nhóm số không được coi là SĐT, phải giữ nguyên.
     assert "4.200.000.000" in doc.text
+
+
+def test_text_la_markdown_co_heading_chuan():
+    doc = parse_listing_detail(_DETAIL_HTML, "https://meeyland.com/test/306086850")
+
+    assert doc is not None
+    assert doc.text.startswith("# Vinhomes Ocean Park")
+    assert "## Thông tin tóm tắt" in doc.text
+    assert "## Mô tả chi tiết" in doc.text
+
+
+def test_luu_text_tho_ra_file_truoc_khi_dung_markdown(tmp_path, monkeypatch):
+    raw_dir = tmp_path / "raw_out"
+    monkeypatch.setattr(meeyland, "RAW_TEXT_DIR", raw_dir)
+
+    doc = parse_listing_detail(_DETAIL_HTML, "https://meeyland.com/test/306086850")
+
+    assert doc is not None
+    raw_file = raw_dir / "306086850.txt"
+    assert raw_file.exists()
+    assert "Căn góc thoáng sáng" in raw_file.read_text(encoding="utf-8")
 
 
 def test_extract_listing_paths_loc_dung_va_bo_trung():

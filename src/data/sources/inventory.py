@@ -127,10 +127,15 @@ def unit_to_document(unit: InventoryUnit) -> LoadedDocument:
     án muốn tránh. Xem Context Product/Kientruc.md mục 6.
     """
     text = (
-        f"Căn {unit.unit_code}, toà {unit.building}, tầng {unit.floor}, loại {unit.unit_type}.\n"
-        f"Hướng {unit.direction}. {unit.view}.\n"
-        f"Pháp lý: {unit.legal_status}.\n"
-        f"Nội thất: {unit.furniture}."
+        f"# Căn {unit.unit_code} ({unit.building})\n\n"
+        f"## Thông tin cơ bản\n"
+        f"- Toà: {unit.building}\n"
+        f"- Tầng: {unit.floor}\n"
+        f"- Loại căn: {unit.unit_type}\n"
+        f"- Hướng: {unit.direction}\n\n"
+        f"## Tầm nhìn\n{unit.view}\n\n"
+        f"## Pháp lý\n{unit.legal_status}\n\n"
+        f"## Nội thất\n{unit.furniture}"
     )
     return LoadedDocument(
         doc_id=f"inventory:{unit.unit_code}",

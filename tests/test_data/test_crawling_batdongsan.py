@@ -4,7 +4,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
+from src.data.crawling import batdongsan
 from src.data.crawling.batdongsan import _extract_listing_paths, load_saved_detail_pages, parse_listing_detail
+
+
+@pytest.fixture(autouse=True)
+def _redirect_raw_text_dir(tmp_path, monkeypatch):
+    """Không ghi text thô vào data/ thật khi chạy test."""
+    monkeypatch.setattr(batdongsan, "RAW_TEXT_DIR", tmp_path / "batdongsan_crawl_raw")
+
 
 _DETAIL_HTML = """
 <html><head>
@@ -70,6 +80,28 @@ def test_lay_dung_url_anh_khong_trung_lap():
         "https://file4.batdongsan.com.vn/anh1.jpg",
         "https://file4.batdongsan.com.vn/anh2.jpg",
     ]
+
+
+def test_text_la_markdown_co_heading_chuan():
+    doc = parse_listing_detail(_DETAIL_HTML, "https://batdongsan.com.vn/test-pr123")
+
+    assert doc is not None
+    assert doc.text.startswith("# Bán căn hộ 2PN Vinhomes Ocean Park")
+    assert "## Địa chỉ" in doc.text
+    assert "## Thông số" in doc.text
+    assert "## Mô tả" in doc.text
+
+
+def test_luu_text_tho_ra_file_truoc_khi_dung_markdown(tmp_path: Path, monkeypatch):
+    raw_dir = tmp_path / "raw_out"
+    monkeypatch.setattr(batdongsan, "RAW_TEXT_DIR", raw_dir)
+
+    doc = parse_listing_detail(_DETAIL_HTML, "https://batdongsan.com.vn/test-pr123")
+
+    assert doc is not None
+    raw_file = raw_dir / "123.txt"
+    assert raw_file.exists()
+    assert "Căn góc view hồ" in raw_file.read_text(encoding="utf-8")
 
 
 def test_trang_khong_co_tieu_de_thi_tra_none():

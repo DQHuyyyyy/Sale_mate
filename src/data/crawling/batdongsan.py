@@ -14,6 +14,10 @@ Tuân thủ:
 - Nghỉ `REQUEST_DELAY_S` giữa mỗi request.
 - Loại số điện thoại môi giới khỏi mô tả trước khi embed — không cần cho việc
   trả lời câu hỏi và tránh phát tán thông tin liên hệ cá nhân.
+
+Đúng luồng Parsing -> text thô -> Markdown: mỗi tin lấy được ghi 1 file text
+thô vào data/raw/batdongsan_crawl_raw/ (gitignore, chỉ để đối chiếu/audit)
+TRƯỚC khi dựng thành Markdown có heading. Ảnh (image_urls) vẫn lấy đủ như cũ.
 """
 
 from __future__ import annotations
@@ -31,6 +35,9 @@ from src.core.logging import get_logger
 from src.data.contracts import LoadedDocument
 
 logger = get_logger(__name__)
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+RAW_TEXT_DIR = REPO_ROOT / "data" / "raw" / "batdongsan_crawl_raw"
 
 BASE_URL = "https://batdongsan.com.vn"
 DEFAULT_SEARCH_PATH = "/nha-dat-ban-vinhomes-ocean-park-gia-lam"
@@ -73,6 +80,25 @@ def _extract_listing_id(path: str) -> str:
     return match.group(1) if match else path
 
 
+def _save_raw_text(
+    listing_id: str, url: str, title: str, address: str, specs: dict[str, str], description: str
+) -> None:
+    """Lưu text thô (trước khi dựng Markdown) — bước 'PDF/Word -> text thô'."""
+    try:
+        RAW_TEXT_DIR.mkdir(parents=True, exist_ok=True)
+        specs_raw = "\n".join(f"{label}: {value}" for label, value in specs.items())
+        raw = f"Nguồn: {url}\nTiêu đề: {title}\nĐịa chỉ: {address}\n{specs_raw}\nMô tả: {description}\n"
+        (RAW_TEXT_DIR / f"{listing_id}.txt").write_text(raw, encoding="utf-8")
+    except OSError as exc:  # không chặn crawl nếu máy hết dung lượng/quyền ghi
+        logger.warning("Không lưu được text thô cho %s: %s", listing_id, exc)
+
+
+def _to_markdown(title: str, address: str, specs: dict[str, str], description: str) -> str:
+    """Dựng Markdown có heading rõ ràng từ dữ liệu đã trích xuất."""
+    specs_block = "\n".join(f"- {label}: {value}" for label, value in specs.items())
+    return (f"# {title}\n\n## Địa chỉ\n{address}\n\n## Thông số\n{specs_block}\n\n## Mô tả\n{description}").strip()
+
+
 def parse_listing_detail(html: str, url: str) -> LoadedDocument | None:
     """Chuyển HTML trang chi tiết thành LoadedDocument.
 
@@ -112,10 +138,10 @@ def parse_listing_detail(html: str, url: str) -> LoadedDocument | None:
         if src and src not in image_urls:
             image_urls.append(src)
 
-    specs_block = "\n".join(f"- {label}: {value}" for label, value in specs.items())
-    text = f"{title}\nĐịa chỉ: {address}\n{specs_block}\n\nMô tả:\n{description}".strip()
-
     listing_id = _extract_listing_id(url)
+    _save_raw_text(listing_id, url, title, address, specs, description)
+    text = _to_markdown(title, address, specs, description)
+
     return LoadedDocument(
         doc_id=f"batdongsan:{listing_id}",
         title=title,

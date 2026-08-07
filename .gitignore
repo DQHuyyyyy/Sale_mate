@@ -46,6 +46,10 @@ Thumbs.db
 # nhiễu git history. Số liệu quan trọng đã tóm tắt có phân tích trong
 # eval/results/report.md (file đó VẪN track bình thường).
 /eval/results/retrieval_eval.json
+/eval/results/knowledge_chunks.json
+/eval/results/meeyland_chunks.json
+/eval/results/batdongsan_chunks.json
+/eval/results/inventory_chunks.json
 
 # Logs
 logs/

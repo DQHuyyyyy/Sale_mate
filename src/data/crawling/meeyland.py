@@ -11,6 +11,12 @@ mà không cần chạy JS:
 
 Trang không bị chặn bot (không có cf-mitigated: challenge như batdongsan).
 Có category riêng cho Vinhomes Ocean Park nên không cần lọc từ khoá thủ công.
+
+Đúng luồng Parsing -> text thô -> Markdown: mỗi tin lấy được ghi 1 file text
+thô vào data/raw/meeyland_crawl_raw/ (gitignore, chỉ để đối chiếu/audit)
+TRƯỚC khi dựng thành Markdown có heading — không chỉ nối chuỗi phẳng như
+trước. Ảnh (image_urls) vẫn lấy đủ như cũ, giữ trong metadata, không chèn
+vào text (RAG chỉ cần mô tả bằng chữ).
 """
 
 from __future__ import annotations
@@ -19,6 +25,7 @@ import asyncio
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 
 import httpx
 from bs4 import BeautifulSoup, Tag
@@ -27,6 +34,9 @@ from src.core.logging import get_logger
 from src.data.contracts import LoadedDocument
 
 logger = get_logger(__name__)
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+RAW_TEXT_DIR = REPO_ROOT / "data" / "raw" / "meeyland_crawl_raw"
 
 BASE_URL = "https://meeyland.com"
 SEARCH_PATH = "/ban-can-ho-chung-cu-vinhomes-ocean-park-100000004-gia-lam-ha-noi-l14422"
@@ -74,6 +84,21 @@ def _extract_listing_id(url: str) -> str:
     return match.group(1) if match else url
 
 
+def _save_raw_text(listing_id: str, title: str, meta_desc: str, description: str) -> None:
+    """Lưu text thô (trước khi dựng Markdown) — bước 'PDF/Word -> text thô'."""
+    try:
+        RAW_TEXT_DIR.mkdir(parents=True, exist_ok=True)
+        raw = f"Nguồn: {BASE_URL}\nTiêu đề: {title}\nMeta: {meta_desc}\nMô tả: {description}\n"
+        (RAW_TEXT_DIR / f"{listing_id}.txt").write_text(raw, encoding="utf-8")
+    except OSError as exc:  # không chặn crawl nếu máy hết dung lượng/quyền ghi
+        logger.warning("Không lưu được text thô cho %s: %s", listing_id, exc)
+
+
+def _to_markdown(title: str, meta_desc: str, description: str) -> str:
+    """Dựng Markdown có heading rõ ràng từ dữ liệu đã trích xuất."""
+    return (f"# {title}\n\n## Thông tin tóm tắt\n{meta_desc}\n\n## Mô tả chi tiết\n{description}").strip()
+
+
 def parse_listing_detail(html: str, url: str) -> LoadedDocument | None:
     """Chuyển HTML trang chi tiết thành LoadedDocument.
 
@@ -95,7 +120,8 @@ def parse_listing_detail(html: str, url: str) -> LoadedDocument | None:
     image_urls = sorted(set(_IMAGE_RE.findall(html)))
 
     listing_id = _extract_listing_id(url)
-    text = f"{title}\n{meta_desc}\n\nMô tả:\n{description}".strip()
+    _save_raw_text(listing_id, title, meta_desc, description)
+    text = _to_markdown(title, meta_desc, description)
 
     return LoadedDocument(
         doc_id=f"meeyland:{listing_id}",
