@@ -226,6 +226,8 @@ Commit theo chuẩn `feat:` `fix:` `docs:` `test:` `refactor:`.
 | Tài liệu | Nội dung |
 |---|---|
 | [`CLAUDE.md`](CLAUDE.md) | Điểm vào cho cả team và AI coding assistant |
+| [`RUN.md`](RUN.md) | Chạy trên máy mình |
+| [`DEPLOY.md`](DEPLOY.md) | Đưa lên Vercel + Render, hai môi trường, chi phí 0đ |
 | [`docs/architecture_diagram.md`](docs/architecture_diagram.md) | Sơ đồ kiến trúc, luồng agent, luồng dữ liệu |
 | [`docs/adr/`](docs/adr/README.md) | Quyết định kiến trúc và lý do |
 | [`Context Product/`](Context%20Product/) | Đặc tả sản phẩm: giao diện · lõi AI · data · API |

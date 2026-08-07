@@ -1,8 +1,11 @@
 # SalesMate — Backend (FastAPI)
 
-Backend cho web hỗ trợ sale bán căn hộ. Database chạy trên Supabase, ảnh/tài liệu
-lưu ở Supabase Storage, auth bằng JWT.
-
+cd E:\VSCSTD\VIN\P-055
+.venv\Scripts\activate
+cd interface\backend
+uvicorn app.main:app --reload --port 8000
+# nếu ai đó đang bật thì dùng lệnh để tắt: 
+Stop-Process -Id <PID> -Force
 ## Chạy lần đầu
 
 ```bash

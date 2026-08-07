@@ -1,0 +1,125 @@
+# ============================================
+# SalesMate — Render Blueprint
+#
+# Dán repo này vào Render → New → Blueprint. Render đọc file này và tạo cả ba
+# service một lượt, khỏi bấm tay từng cái.
+#
+#   salesmate-api        API sản phẩm, nhánh main      → user test
+#   salesmate-api-dev    API sản phẩm, nhánh develop   → team phát triển
+#   salesmate-ai-core    lõi AI, nhánh main            → DÙNG CHUNG cả hai
+#
+# Lõi AI chỉ có một bản vì nó không giữ trạng thái (RAG đang tắt, lịch sử chat
+# do API gửi kèm mỗi request). Bớt một service là bớt một lần chờ cold start.
+#
+# Biến `sync: false` = Render KHÔNG lấy từ file này, bạn tự dán trong dashboard.
+# Secret không bao giờ nằm trong git.
+# ============================================
+
+services:
+  # ---- API sản phẩm — production (user test) ----
+  - type: web
+    name: salesmate-api
+    runtime: python
+    plan: free
+    region: singapore
+    branch: main
+    rootDir: interface/backend
+    # requirements.txt thôi, KHÔNG cài requirements-dev.txt — production không
+    # cần pytest và ruff. Đây là lý do hai file đó tách nhau.
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      # Supabase project PRODUCTION
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: apartment-images
+      # Render tự sinh chuỗi ngẫu nhiên, mỗi service một giá trị khác nhau.
+      # Nhờ vậy token cấp ở dev không dùng được trên production.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_EXPIRE_MINUTES
+        value: "480"
+      # Dán URL Vercel vào đây SAU KHI deploy frontend. Thiếu là trình duyệt
+      # chặn sạch mọi request, dù backend vẫn khoẻ.
+      - key: CORS_ORIGINS
+        sync: false
+      - key: AI_CORE_URL
+        sync: false
+      - key: AI_CORE_TIMEOUT
+        value: "60"
+
+  # ---- API sản phẩm — development (team) ----
+  - type: web
+    name: salesmate-api-dev
+    runtime: python
+    plan: free
+    region: singapore
+    branch: develop
+    rootDir: interface/backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      # Supabase project DEV — phải là project KHÁC production, nếu không team
+      # test hàng ngày sẽ sửa đúng dữ liệu mà user đang xem.
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: apartment-images
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_EXPIRE_MINUTES
+        value: "480"
+      - key: CORS_ORIGINS
+        sync: false
+      - key: AI_CORE_URL
+        sync: false
+      - key: AI_CORE_TIMEOUT
+        value: "60"
+
+  # ---- Lõi AI — dùng chung cho cả prod lẫn dev ----
+  - type: web
+    name: salesmate-ai-core
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # Dockerfile ghim cứng --port 8000; Render cấp cổng qua $PORT nên phải ghi đè.
+    dockerCommand: uvicorn src.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: APP_ENV
+        value: production
+      # Bỏ trống cũng chạy: bootstrap.py rơi về ScriptedProvider, chat trả lời
+      # theo kịch bản sẵn thay vì gọi model thật.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: LLM_MODEL_FAST
+        value: gpt-4o-mini
+      - key: LLM_MODEL_ANSWER
+        value: gpt-4o-mini
+      - key: LOG_LEVEL
+        value: INFO
