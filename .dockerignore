@@ -9,6 +9,9 @@ __pycache__
 docs/
 presentation/
 eval/
+# Image này chỉ chạy lõi AI (src.main:app). FE/BE sản phẩm ở interface/ không
+# cần vào image — bỏ ra để không nuốt node_modules và build output.
+interface/
 *.md
 !requirements.txt
 .dockerignore

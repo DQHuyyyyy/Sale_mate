@@ -39,7 +39,7 @@ def _build_payload(message: str, history: list[ChatMessage]) -> dict[str, object
 
 async def generate_reply(message: str, history: list[ChatMessage]) -> str:
     if not settings.chat_enabled:
-        raise ChatError("Chatbot chưa được cấu hình. Điền AI_CORE_URL trong backend/.env rồi khởi động lại backend.")
+        raise ChatError("Chatbot chưa được cấu hình. Điền AI_CORE_URL trong .env ở gốc repo rồi khởi động lại backend.")
 
     url = f"{settings.ai_core_url.rstrip('/')}/api/v1/chat"
 

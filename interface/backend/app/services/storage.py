@@ -45,7 +45,7 @@ def upload_bytes(storage_path: str, content: bytes, content_type: str | None) ->
     if not settings.storage_enabled:
         raise StorageError(
             "Chưa cấu hình Supabase Storage. Điền SUPABASE_URL và "
-            "SUPABASE_SERVICE_ROLE_KEY trong backend/.env rồi khởi động lại backend."
+            "SUPABASE_SERVICE_ROLE_KEY trong .env ở gốc repo rồi khởi động lại backend."
         )
 
     base = settings.supabase_url.rstrip("/")

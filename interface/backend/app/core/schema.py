@@ -34,6 +34,7 @@ def numeric_columns_ready() -> bool:
     if not ready:
         logger.warning(
             "salemate_v1 chưa có cột gia_tri/dien_tich_so — bộ lọc khoảng giá tắt. "
-            "Chạy backend/migrations/001_alter_salemate_v1.sql rồi khởi động lại backend."
+            "Chạy interface/backend/migrations/001_alter_salemate_v1.sql "
+            "rồi khởi động lại backend."
         )
     return ready

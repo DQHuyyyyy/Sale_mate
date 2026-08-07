@@ -63,5 +63,5 @@ không bao giờ import class cụ thể.
   giá phải trả để đổi lấy việc bốn người chạy song song.
 - Thêm một tầng gián tiếp: đọc code phải mở `bootstrap.py` mới biết Protocol nào
   đang chạy bằng class nào. Chấp nhận được vì chỉ có đúng một file cần đọc.
-- `frontend/src/lib/types.ts` là nửa FE của hợp đồng. Đổi `src/models/` mà quên
+- `interface/frontend/src/lib/types.ts` là nửa FE của hợp đồng. Đổi `src/models/` mà quên
   đổi file này thì FE và BE lệch nhau lặng lẽ — CI không bắt được, phải nhớ.

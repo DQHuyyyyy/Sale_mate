@@ -39,7 +39,9 @@ src/
 ├── services/     adapter ra ngoài: llm.py · portal.py
 ├── bootstrap.py  🔑 NƠI DUY NHẤT gắn Protocol ↔ implementation
 └── main.py
-frontend/         Next.js — portal + AIWidget                   → huy
+interface/        FE + API sản phẩm, gộp một chỗ cho dễ quản lý
+├── frontend/     Next.js — portal + AIWidget                   → huy
+└── backend/      API sản phẩm :8000, gọi lõi AI qua AI_CORE_URL
 ```
 
 **Quy tắc bắt buộc:**
@@ -48,7 +50,8 @@ frontend/         Next.js — portal + AIWidget                   → huy
   **Không bao giờ** import class cụ thể (`QdrantVectorStore`, `OpenAIProvider`…).
 - `src/models/` và mọi `contracts.py` **đóng băng**. Muốn sửa → PR riêng vào
   `develop`, cả team review, không lẫn vào PR tính năng.
-- Sửa `src/models/` thì phải sửa `frontend/src/lib/types.ts` trong **cùng một PR**.
+- Sửa `src/models/` thì phải sửa `interface/frontend/src/lib/types.ts` trong
+  **cùng một PR**.
 
 Lý do: [ADR-004](docs/adr/ADR-004-module-contracts.md).
 
@@ -108,7 +111,8 @@ không hardcode secret. Lỗi nghiệp vụ raise lớp trong `src/core/exceptio
 **TypeScript** — strict mode, component nhỏ, gọi API qua `src/lib/`.
 
 **Giao diện** — tiếng Việt, câu chủ động, sentence case. Màu/bo góc/font lấy từ
-token trong `frontend/src/app/globals.css`, không hardcode trong component.
+token trong `interface/frontend/src/app/globals.css`, không hardcode trong
+component.
 
 **Thông điệp lỗi** — nói rõ chuyện gì và cách khắc phục. Không xin lỗi sáo rỗng,
 không lộ stack trace ra ngoài.

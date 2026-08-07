@@ -1,4 +1,18 @@
-# winget install GnuWin32.Make cài lệnh make
+# Cài lệnh make trên Windows
+
+```powershell
+winget install GnuWin32.Make
+```
+
+Cài xong PowerShell **vẫn báo "make is not recognized"** — installer không thêm
+vào PATH. Chạy một lần nữa, rồi mở terminal mới:
+
+```powershell
+[Environment]::SetEnvironmentVariable('Path',
+  [Environment]::GetEnvironmentVariable('Path','User') + ';C:\Program Files (x86)\GnuWin32\bin',
+  'User')
+```
+
 
 #lệnh dài 
 Lệnh để tự chạy lần sau
@@ -13,6 +27,6 @@ uvicorn src.main:app --reload --port 8000
 Terminal 2 — Frontend:
 
 
-cd E:\VSCSTD\VIN\P-055\frontend
+cd E:\VSCSTD\VIN\P-055\interface\frontend
 npm run dev
 Dừng: Ctrl+C ở mỗi cửa sổ.

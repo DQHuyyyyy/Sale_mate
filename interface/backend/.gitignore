@@ -1,0 +1,8 @@
+# Backend dùng chung .env ở gốc repo. Vẫn chặn ở đây phòng ai đó lỡ tạo lại.
+.env
+.env.*
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/

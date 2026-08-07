@@ -1,4 +1,0 @@
--r requirements.txt
-pytest>=8.0
-# Cầu nối sang lõi AI là hàm async — cần plugin này mới chạy được test cho nó.
-pytest-asyncio>=0.24

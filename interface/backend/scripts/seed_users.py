@@ -4,7 +4,7 @@ Script KHÔNG kết nối database — nó chỉ in SQL ra màn hình để bạ
 Supabase → SQL Editor. Mật khẩu nhập bằng tay, không nằm trong repo.
 
 Chạy:
-    cd backend
+    cd interface/backend
     pip install bcrypt
     python scripts/seed_users.py
 """
