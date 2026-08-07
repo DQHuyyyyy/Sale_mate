@@ -155,6 +155,92 @@ async def test_loc_cau_truc_bat_dong_san(memory_store, fake_embedder):
     assert [c.id for c in found] == ["c3"]
 
 
+@pytest.mark.asyncio
+async def test_loc_doc_kind_va_image_url_va_policy(memory_store, fake_embedder):
+    """Test lọc theo doc_kind ('listing' vs 'policy') và giữ metadata image_url."""
+    listing_chunk = _chunk(
+        "c_listing",
+        "Căn hộ 2PN tòa R103",
+        metadata={
+            "doc_kind": "listing",
+            "price": 3.1,
+            "area": 49.0,
+            "image_url": "https://img.salesmate.vn/vop/r103_2702.jpg",
+        },
+    )
+    policy_chunk = _chunk(
+        "c_policy",
+        "Chính sách chiết khấu thanh toán sớm 8%",
+        metadata={
+            "doc_kind": "policy",
+            "policy_code": "DISCOUNT_8PCT",
+        },
+    )
+
+    chunks = [listing_chunk, policy_chunk]
+    vectors = await fake_embedder.embed_texts([c.text for c in chunks])
+    await memory_store.upsert(chunks, vectors)
+
+    query_vec = await fake_embedder.embed_query("chiết khấu căn hộ")
+
+    # 1. Chỉ tìm tài liệu tin đăng căn hộ
+    found_listings = await memory_store.search(query_vec, filters=RetrievalFilter(doc_kind="listing"), limit=10)
+    assert [c.id for c in found_listings] == ["c_listing"]
+    assert found_listings[0].metadata["image_url"] == "https://img.salesmate.vn/vop/r103_2702.jpg"
+
+    # 2. Chỉ tìm tài liệu chính sách bán hàng
+    found_policies = await memory_store.search(query_vec, filters=RetrievalFilter(doc_kind="policy"), limit=10)
+    assert [c.id for c in found_policies] == ["c_policy"]
+    assert found_policies[0].metadata["policy_code"] == "DISCOUNT_8PCT"
+
+
+@pytest.mark.asyncio
+async def test_fake_cross_encoder_reranker():
+    """Test FakeCrossEncoderReranker chấm điểm và cắt top-n=3 từ 10 ứng viên."""
+    from src.data.retrieval.rerankers import FakeCrossEncoderReranker
+
+    reranker = FakeCrossEncoderReranker()
+    chunks = [
+        _chunk(f"c{i}", f"Thông tin căn hộ {i} view biển hồ đẹp", score=0.5)
+        for i in range(1, 11)
+    ]
+    # Đưa một chunk phù hợp nhất lên từ từ
+    chunks[7] = _chunk("c8", "Căn biệt thự view biển hồ trực diện đẹp xuất sắc", score=0.4)
+
+    reranked = await reranker.rerank("view biển hồ trực diện", chunks, top_n=3)
+
+    assert len(reranked) == 3
+    # Chunk c8 có nhiều từ khóa nhất được đẩy lên top 1
+    assert reranked[0].id == "c8"
+
+
+@pytest.mark.asyncio
+async def test_two_stage_retriever_top_k_12_to_top_n_3(memory_store, fake_embedder):
+    """Test quy trình Retriever 2 giai đoạn: lấy 12 ứng viên -> rerank lấy top-3 tinh túy nhất."""
+    from src.data.retrieval.rerankers import FakeCrossEncoderReranker
+    from src.data.retrieval.retriever import DefaultRetriever
+
+    chunks = [
+        _chunk(f"c{i}", f"Căn hộ thứ {i} tòa S2", score=0.1 * i)
+        for i in range(1, 15)
+    ]
+    vectors = await fake_embedder.embed_texts([c.text for c in chunks])
+    await memory_store.upsert(chunks, vectors)
+
+    retriever = DefaultRetriever(
+        embedder=fake_embedder,
+        store=memory_store,
+        reranker=FakeCrossEncoderReranker(),
+        top_k=12,
+        top_n=3,
+    )
+
+    res = await retriever.retrieve("Căn hộ tòa S2")
+
+    assert len(res.chunks) == 3
+    assert res.coverage > 0.0
+
+
 def test_qdrant_filter_translation():
     """Kiểm tra việc chuyển đổi RetrievalFilter thành Qdrant Filter object."""
     from qdrant_client import models

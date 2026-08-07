@@ -87,6 +87,8 @@ def _matches(chunk: Chunk, filters: RetrievalFilter) -> bool:
         return False
     if filters.property_type is not None and chunk.metadata.get("property_type") != filters.property_type:
         return False
+    if filters.doc_kind is not None and chunk.metadata.get("doc_kind") != filters.doc_kind:
+        return False
 
     for key, expected in filters.extra.items():
         if chunk.metadata.get(key) != expected:

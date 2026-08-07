@@ -61,6 +61,7 @@ class RetrievalFilter(BaseModel):
     num_bedrooms: int | None = Field(default=None, description="Số phòng ngủ / phòng")
     building: str | None = Field(default=None, description="Tòa (ví dụ: S1.01, Tòa A)")
     property_type: str | None = Field(default=None, description="Loại căn (ví dụ: 1PN+, Studio, Chung cư)")
+    doc_kind: str | None = Field(default=None, description="Loại tài liệu: 'listing' hoặc 'policy'")
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -76,8 +77,24 @@ class RetrievalResult(BaseModel):
         return bool(self.chunks) and self.coverage >= threshold
 
     def as_context(self, separator: str = "\n---\n") -> str:
-        """Ghép các chunk thành context đưa vào prompt."""
-        return separator.join(chunk.text for chunk in self.chunks)
+        """Ghép các chunk Reranked thành context giàu metadata đưa vào LLM Prompt."""
+        pieces: list[str] = []
+        for chunk in self.chunks:
+            meta = chunk.metadata
+            piece = chunk.text
+            extra_details: list[str] = []
+            if "ma_can" in meta and meta["ma_can"]:
+                extra_details.append(f"Mã căn: [{meta['ma_can']}]")
+            if "image_url" in meta and meta["image_url"]:
+                extra_details.append(f"Link Ảnh: {meta['image_url']}")
+            if "price" in meta and meta["price"]:
+                orig = meta["price"]
+                disc = round(orig * 0.92, 3)
+                extra_details.append(f"Giá gốc: {orig} tỷ (Giá sau chiết khấu 8%: {disc} tỷ)")
+            if extra_details:
+                piece += "\n[Chi tiết bổ sung: " + " | ".join(extra_details) + "]"
+            pieces.append(piece)
+        return separator.join(pieces)
 
 
 # --------------------------------------------------------------------------

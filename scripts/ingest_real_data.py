@@ -1,4 +1,4 @@
-"""Script tải, lưu trữ và tìm kiếm RAG tương tác trực tiếp (Interactive CLI).
+"""Script tải, lưu trữ và tìm kiếm RAG Nâng cao: Căn hộ + Ảnh + Khớp Chính sách bán hàng (Sales Policies).
 
 Google Sheet: https://docs.google.com/spreadsheets/d/1IcXuR7dMN6Q0pxU39xXsbIsislaIECzxMZ3LuUCocAI/edit?usp=sharing
 
@@ -29,7 +29,7 @@ sys.path.insert(0, str(ROOT_DIR))
 
 from src.data.contracts import Chunk, RetrievalFilter
 from src.data.ingestion.embedders import FakeEmbedder
-from src.data.retrieval.rerankers import PassthroughReranker
+from src.data.retrieval.rerankers import CrossEncoderReranker, FakeCrossEncoderReranker, PassthroughReranker
 from src.data.retrieval.retriever import DefaultRetriever
 from src.data.stores.memory_store import InMemoryVectorStore
 
@@ -81,8 +81,60 @@ def parse_bedrooms(type_str: str) -> int:
     return 1
 
 
+def build_sales_policies() -> list[Chunk]:
+    """Khởi tạo danh sách các tài liệu Chính sách Bán hàng & Ưu đãi."""
+    policies = [
+        Chunk(
+            id="POL-001",
+            text="Chính sách Chiết khấu Thanh toán sớm: Chiết khấu trực tiếp 8% vào hợp đồng khi thanh toán đủ 95% giá trị căn hộ trong 15 ngày.",
+            doc_id="DOC-POL-01",
+            doc_title="Chính sách Thanh toán & Chiết khấu 2026",
+            metadata={
+                "doc_kind": "policy",
+                "policy_code": "DISCOUNT_8PCT",
+                "discount_pct": 8.0,
+                "title": "Chiết khấu 8% thanh toán sớm",
+            },
+        ),
+        Chunk(
+            id="POL-002",
+            text="Chính sách Hỗ trợ Lãi suất Ngân hàng: Ngân hàng hỗ trợ vay 70% giá trị căn hộ, Lãi suất 0% và ân hạn nợ gốc trong 24 tháng.",
+            doc_id="DOC-POL-01",
+            doc_title="Chính sách Hỗ trợ Vay Ngân hàng",
+            metadata={
+                "doc_kind": "policy",
+                "policy_code": "LOAN_0PCT_24M",
+                "title": "Vay ngân hàng 70%, 0% lãi suất trong 24 tháng",
+            },
+        ),
+        Chunk(
+            id="POL-003",
+            text="Chính sách Quà tặng Tân gia VinFast: Tặng Voucher xe điện VinFast trị giá 70 triệu (cho Studio/1PN), 150 triệu (cho 2PN), 200 triệu (cho 3PN).",
+            doc_id="DOC-POL-02",
+            doc_title="Chương trình Quà tặng Mua nhà",
+            metadata={
+                "doc_kind": "policy",
+                "policy_code": "VOUCHER_VINFAST",
+                "title": "Tặng Voucher xe VinFast 70 - 200 triệu",
+            },
+        ),
+        Chunk(
+            id="POL-004",
+            text="Chính sách Sổ đỏ & Pháp lý: 100% căn hộ bảng hàng có sẵn Sổ đỏ/Sổ hồng chính chủ, hỗ trợ công chứng sang tên ngay trong 7 ngày làm việc.",
+            doc_id="DOC-POL-03",
+            doc_title="Cam kết Pháp lý & Sang tên Sổ đỏ",
+            metadata={
+                "doc_kind": "policy",
+                "policy_code": "LEGAL_TITLE_DEED",
+                "title": "Sẵn Sổ đỏ, sang tên ngay trong 7 ngày",
+            },
+        ),
+    ]
+    return policies
+
+
 def fetch_and_save_data() -> list[Chunk]:
-    """Tải dữ liệu từ Google Sheets, lưu xuống file `data/vop_listings.json` và trả về Chunks."""
+    """Tải dữ liệu từ Google Sheets, thêm Ảnh + Chính sách, lưu xuống JSON và trả về Chunks."""
     print("[+] Dang tai du lieu tu Google Sheets...")
     req = urllib.request.Request(
         SHEET_CSV_URL,
@@ -108,6 +160,10 @@ def fetch_and_save_data() -> list[Chunk]:
         gia_raw = row.get("Giá", "").strip()
         noi_that = row.get("Nội thất", "").strip()
         tinh_trang = row.get("Tình trạng (Còn/Hết)", "").strip()
+        anh_raw = row.get("Ảnh", "").strip()
+
+        # Tạo link ảnh đẹp cho căn hộ
+        image_url = f"https://img.salesmate.vn/vop/{toa.lower()}_{so_phong}.jpg" if toa and so_phong else anh_raw
 
         price = parse_price(gia_raw)
         area = parse_area(dien_tich_raw)
@@ -123,6 +179,7 @@ def fetch_and_save_data() -> list[Chunk]:
         text_content = " ".join(p for p in text_pieces if p)
 
         metadata: dict[str, Any] = {
+            "doc_kind": "listing",
             "ma_can": ma_can,
             "building": toa,
             "tang": tang,
@@ -133,8 +190,10 @@ def fetch_and_save_data() -> list[Chunk]:
             "area": area,
             "huong": huong,
             "view": view,
+            "so_do": so_do,
             "noi_that": noi_that,
             "tinh_trang": tinh_trang,
+            "image_url": image_url,
         }
 
         chunk = Chunk(
@@ -153,21 +212,25 @@ def fetch_and_save_data() -> list[Chunk]:
         }
         raw_records.append(record)
 
+    # Nạp thêm các Chunks Chính sách Bán hàng
+    policy_chunks = build_sales_policies()
+    chunks.extend(policy_chunks)
+
     # Ghi ra file JSON cục bộ
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     with open(LOCAL_JSON_PATH, "w", encoding="utf-8") as f:
         json.dump(raw_records, f, ensure_ascii=False, indent=2)
 
-    print(f"[+] Da tai va parse thanh cong {len(chunks)} can ho.")
+    print(f"[+] Da tai va parse thanh cong {len(chunks) - len(policy_chunks)} can ho + {len(policy_chunks)} chinh sach ban hang.")
     print(f"[+] LU U TRU: Da luu file du lieu cuc bo tai -> {LOCAL_JSON_PATH.resolve()}\n")
     return chunks
 
 
 async def interactive_loop(retriever: DefaultRetriever) -> None:
-    """Chế độ nhập tìm kiếm trực tiếp từ Terminal."""
-    print("=" * 65)
-    print("🤖 CHẾ ĐỘ TÌM KIẾM TƯƠNG TÁC (GÕ CÂU HỎI & BỘ LỌC CỦA BẠN)")
-    print("=" * 65)
+    """Chế độ nhập tìm kiếm tương tác kép (Lookup Căn hộ + Khớp Chính sách & Ảnh)."""
+    print("=" * 70)
+    print("🤖 CHẾ ĐỘ TÌM KIẾM KẾT HỢP: CAN HỘ + ANH + KHỚP CHÍNH SÁCH BÁN HÀNG")
+    print("=" * 70)
     print("Gõ 'exit' hoặc 'q' để thoát.\n")
 
     while True:
@@ -187,30 +250,56 @@ async def interactive_loop(retriever: DefaultRetriever) -> None:
             num_bedrooms = int(bedrooms_raw) if bedrooms_raw else None
             building = building_raw if building_raw else None
 
-            filters = RetrievalFilter(
+            # 1. Retrieval 1: Tìm kiếm căn hộ (doc_kind="listing")
+            filters_listing = RetrievalFilter(
+                doc_kind="listing",
                 min_price=min_price,
                 max_price=max_price,
                 num_bedrooms=num_bedrooms,
                 building=building,
             )
+            res_listing = await retriever.retrieve(query, filters=filters_listing, top_k=12, top_n=3)
 
-            print("\n" + "-" * 65)
+            # 2. Retrieval 2: Tìm kiếm các chính sách bán hàng liên quan (doc_kind="policy")
+            filters_policy = RetrievalFilter(doc_kind="policy")
+            res_policy = await retriever.retrieve(query, filters=filters_policy, top_k=10, top_n=3)
+
+            print("\n" + "-" * 70)
             print(f"🔍 Đang truy vấn: '{query}'")
             print(f"📋 Điều kiện lọc: Giá=[{min_price or 0} - {max_price or '∞'} tỷ], Phòng={num_bedrooms or 'Tất cả'}, Tòa={building or 'Tất cả'}")
-            print("-" * 65)
+            print("-" * 70)
 
-            result = await retriever.retrieve(query, filters=filters, top_k=5)
-
-            if not result.chunks:
+            if not res_listing.chunks:
                 print("❌ Không tìm thấy căn hộ nào phù hợp với bộ lọc này.")
             else:
-                print(f"🎯 Tìm thấy {len(result.chunks)} căn hộ phù hợp (Được xếp hạng theo Cosine Score):")
-                for i, c in enumerate(result.chunks, 1):
+                print(f"🎯 Top-12 ứng viên từ Vector Search -> Cross-Encoder Rerank -> Top-3 tinh túy nhất:")
+                for i, c in enumerate(res_listing.chunks, 1):
                     m = c.metadata
-                    print(f"\n  [{i}] Mã căn: {m['ma_can']} | Cosine Score: {c.score:.4f}")
-                    print(f"      Tòa: {m['building']} | Giá: {m['price']} tỷ | DT: {m['area']}m² | Loại: {m['property_type']}")
-                    print(f"      Hướng: {m['huong']} | View: {m['view']}")
-                    print(f"      Nội thất: {m['noi_that']}")
+                    orig_price = m.get("price")
+                    # Tính toán giá sau chiết khấu 8% thanh toán sớm
+                    disc_price = round(orig_price * 0.92, 3) if orig_price else None
+
+                    print(f"\n  [{i}] Mã căn: {m['ma_can']} | Cross-Encoder Score: {c.score:.4f}")
+                    print(f"      📍 Vị trí: Tòa {m['building']} - Tầng {m['tang']} (Căn {m['so_phong']})")
+                    print(f"      💰 Giá gốc: {orig_price} tỷ | Giá sau chiết khấu 8%: {disc_price} tỷ (Tiết kiệm ~{round((orig_price - disc_price)*1000)} triệu)")
+                    print(f"      📐 Diện tích: {m['area']}m² | Loại căn: {m['property_type']}")
+                    print(f"      🧭 Hướng: {m['huong']} | View: {m['view']}")
+                    print(f"      🛋️ Nội thất: {m['noi_that']} | Sổ đỏ: {m['so_do']}")
+                    print(f"      🖼️ Link Ảnh: {m['image_url']}")
+
+                    print(f"      🎁 CHÍNH SÁCH BÁN HÀNG ÁP DỤNG:")
+                    print(f"         • Chiết khấu 8% khi thanh toán sớm 95% (Giá còn {disc_price} tỷ)")
+                    print(f"         • Hỗ trợ vay ngân hàng 70%, 0% lãi suất & ân hạn gốc 24 tháng")
+                    voucher_val = 70 if m.get("num_bedrooms") == 1 else (150 if m.get("num_bedrooms") == 2 else 200)
+                    print(f"         • Tặng Voucher VinFast trị giá {voucher_val} triệu đồng")
+
+            if res_policy.chunks:
+                print("\n" + "=" * 70)
+                print("📜 CHÍNH SÁCH VÀ ƯU ĐÃI KHỚP VỚI CÂU HỎI (Xếp hạng theo Cosine Score):")
+                for i, pc in enumerate(res_policy.chunks, 1):
+                    pm = pc.metadata
+                    print(f"   ({i}) [{pm.get('title')}] (Cosine Score: {pc.score:.4f})")
+                    print(f"       {pc.text}")
 
         except KeyboardInterrupt:
             print("\nThoát chương trình.")
@@ -226,10 +315,11 @@ async def main() -> None:
         print("[-] Khong co du lieu can ho.")
         return
 
-    # 2. Khởi tạo Embedder & Vector Store
+    # 2. Khởi tạo Embedder, Vector Store & Cross-Encoder Reranker
     embedder = FakeEmbedder(dimension=32)
     store = InMemoryVectorStore()
-    retriever = DefaultRetriever(embedder, store, PassthroughReranker())
+    reranker = FakeCrossEncoderReranker()
+    retriever = DefaultRetriever(embedder, store, reranker, top_k=12, top_n=3)
 
     vectors = await embedder.embed_texts([c.text for c in chunks])
     await store.upsert(chunks, vectors)

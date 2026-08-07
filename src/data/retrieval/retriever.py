@@ -27,8 +27,8 @@ class DefaultRetriever:
         store: VectorStore,
         reranker: Reranker,
         *,
-        top_k: int = 20,
-        top_n: int = 5,
+        top_k: int = 12,
+        top_n: int = 3,
     ) -> None:
         self._embedder = embedder
         self._store = store

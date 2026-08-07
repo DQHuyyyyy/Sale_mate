@@ -55,12 +55,12 @@ class QdrantVectorStore:
                 ("is_active", models.PayloadSchemaType.BOOL),
                 ("doc_id", models.PayloadSchemaType.KEYWORD),
                 ("project", models.PayloadSchemaType.KEYWORD),
-                ("project", models.PayloadSchemaType.KEYWORD),
                 ("price", models.PayloadSchemaType.FLOAT),
                 ("area", models.PayloadSchemaType.FLOAT),
                 ("num_bedrooms", models.PayloadSchemaType.INTEGER),
                 ("building", models.PayloadSchemaType.KEYWORD),
                 ("property_type", models.PayloadSchemaType.KEYWORD),
+                ("doc_kind", models.PayloadSchemaType.KEYWORD),
                 ("metadata.source_site", models.PayloadSchemaType.KEYWORD),
             ):
                 await self._client.create_payload_index(
@@ -186,7 +186,7 @@ def _point_id(chunk_id: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, chunk_id))
 
 
-_STRUCTURED_KEYS = ("project", "price", "area", "num_bedrooms", "building", "property_type")
+_STRUCTURED_KEYS = ("project", "price", "area", "num_bedrooms", "building", "property_type", "doc_kind")
 
 
 def _to_payload(chunk: Chunk) -> dict[str, Any]:
@@ -221,6 +221,8 @@ def _to_qdrant_filter(filters: RetrievalFilter) -> models.Filter:
         must.append(models.FieldCondition(key="project", match=models.MatchValue(value=filters.project)))
     if filters.doc_ids is not None:
         must.append(models.FieldCondition(key="doc_id", match=models.MatchAny(any=filters.doc_ids)))
+    if filters.doc_kind is not None:
+        must.append(models.FieldCondition(key="doc_kind", match=models.MatchValue(value=filters.doc_kind)))
 
     # Lọc khoảng giá
     if filters.min_price is not None or filters.max_price is not None:
