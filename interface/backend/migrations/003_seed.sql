@@ -3,7 +3,7 @@
 -- Chạy sau 002. Chạy lại nhiều lần vẫn an toàn (ON CONFLICT DO NOTHING).
 --
 -- Tài khoản đăng nhập KHÔNG seed ở đây vì mật khẩu phải hash.
--- Sinh SQL cho users bằng:  python backend/scripts/seed_users.py
+-- Sinh SQL cho users bằng:  python interface/backend/scripts/seed_users.py
 -- ============================================================
 
 -- Phân khu. Sửa lại tên/mô tả cho đúng dự án thật.

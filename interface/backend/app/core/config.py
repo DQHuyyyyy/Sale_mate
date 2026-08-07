@@ -7,14 +7,16 @@ from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
-REPO_DIR = BACKEND_DIR.parent
+# backend/ nằm trong interface/, nên gốc repo lùi thêm một cấp nữa.
+REPO_DIR = BACKEND_DIR.parents[1]
 
 
 class Settings(BaseSettings):
-    # Đọc REPO/.env trước, backend/.env sau — file sau ghi đè file trước,
-    # nên biến đặt riêng cho backend luôn thắng.
+    # Một file .env duy nhất cho cả repo. Trước đây còn đọc thêm backend/.env
+    # đè lên file này; bỏ đi vì file thứ hai chỉ chứa placeholder chưa ai điền
+    # và nó ghi đè mất giá trị thật ở .env gốc, khiến backend không khởi động.
     model_config = SettingsConfigDict(
-        env_file=(REPO_DIR / ".env", BACKEND_DIR / ".env"),
+        env_file=REPO_DIR / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,

@@ -1,7 +1,7 @@
 name: CI AI core
 
 # Lõi AI ở src/: agent graph + RAG. Chỉ chạy khi PR thực sự đụng tới nó —
-# PR chỉ sửa frontend, backend/ hay tài liệu không cần đốt Actions minutes.
+# PR chỉ sửa interface/ (frontend, backend) hay tài liệu không cần đốt minutes.
 on:
   push:
     branches: [main]
@@ -24,7 +24,10 @@ concurrency:
 jobs:
   ai-core:
     name: AI core — lint & test
-    runs-on: ubuntu-latest
+    # Runner của BTC, dùng chung cho mọi team trong cohort. Org đang bị chặn
+    # Actions vì lý do billing nên runner GitHub (ubuntu-latest) không chạy được.
+    # Khi org khôi phục billing, đổi lại thành ubuntu-latest.
+    runs-on: self-hosted
     timeout-minutes: 10
     # PR nháp chưa cần kiểm tra — mở sẵn để bàn bạc, không phải để merge.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false

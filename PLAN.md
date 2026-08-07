@@ -37,7 +37,7 @@
 | Data handling | **dat** | `src/data/**` | Chỉ export qua `contracts.py` |
 | AI core | **viet** | `src/agents/**` | Không import class cụ thể của Data |
 | Interface (BE) | **phuc** | `src/api/**` · `src/services/**` | Router không chứa business logic |
-| Interface (FE) | **huy** | `frontend/**` · `src/core/**` | Token màu ở `globals.css`, không hardcode |
+| Interface (FE) | **huy** | `interface/frontend/**` · `src/core/**` | Token màu ở `globals.css`, không hardcode |
 
 `src/models/` và mọi `contracts.py` **đóng băng** — sửa phải mở PR riêng vào `develop`.
 
@@ -181,7 +181,7 @@
 
 | # | Deliverable | Vị trí | Người | Hạn | Trạng thái |
 |---|---|---|---|---|---|
-| 1 | Source code | `src/` · `frontend/` | cả team | 05/09 | 🟢 Đang chạy |
+| 1 | Source code | `src/` · `interface/` | cả team | 05/09 | 🟢 Đang chạy |
 | 2 | README.md | `/README.md` | huy | 05/09 | 🟢 Xong, cập nhật dần |
 | 3 | Architecture diagram | `docs/architecture_diagram.md` | huy | 05/09 | 🟢 Xong |
 | 4 | AI Logs (LangSmith) | link + ảnh chụp | viet | 08/08 | 🔴 Chưa |

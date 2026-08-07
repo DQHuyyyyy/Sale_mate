@@ -62,7 +62,7 @@ graph LR
     D --> E
 ```
 
-### 4. Database
+### 4. Database Supabase
 - **Type:** [PostgreSQL / SQLite]
 - **Tables:** [danh sách]
 - **Migrations:** Alembic

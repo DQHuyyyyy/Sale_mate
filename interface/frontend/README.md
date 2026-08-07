@@ -7,7 +7,7 @@ chatbot "S" nổi góc dưới phải.
 ## Chạy
 
 ```bash
-cd frontend
+cd interface/frontend
 npm install
 npm run dev          # http://localhost:5173
 ```
