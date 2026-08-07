@@ -25,8 +25,6 @@ request. Hai bản chỉ tổ thêm một lần chờ khởi động.
 Toàn bộ khai báo Render nằm trong [render.yaml](render.yaml), không phải bấm tay
 từng service.
 
-<<<<<<< HEAD
-=======
 ### Database dùng chung — hệ quả cần biết
 
 Hai môi trường trỏ vào **cùng một Supabase project**. Đổi lại sự đơn giản, có ba
@@ -43,7 +41,6 @@ Hai môi trường trỏ vào **cùng một Supabase project**. Đổi lại s�
 Muốn thử thứ gì có thể hỏng dữ liệu thì tạo bản ghi riêng để test (mã căn đặt
 tiền tố dễ nhận, ví dụ `TEST-001`) rồi xoá sau, thay vì sửa dữ liệu thật.
 
->>>>>>> huy
 ## Vì sao có repo thứ hai
 
 Render không cài được GitHub App lên org `AI20K-Build-Phase-Cohort-3` — chủ sở
@@ -106,42 +103,11 @@ thường, không phải hỏng.
 
 ---
 
-<<<<<<< HEAD
-## Bước 1 — Supabase cho dev
-
-Tạo project thứ hai tên `salesmate-dev` (free tier cho 2 project). Chạy lại bốn
-file trong [interface/backend/migrations/](interface/backend/migrations/) theo
-đúng thứ tự 001 → 004, giống lần dựng production.
-
-Đừng dùng chung một database cho cả hai môi trường. Team sửa dữ liệu hàng ngày
-sẽ ghi đè đúng thứ mà người dùng đang xem.
-
-> Project free bị **tạm dừng sau 7 ngày không ai gọi**. Cái dev sẽ hay ngủ —
-> đánh thức bằng một nút trong dashboard Supabase, dữ liệu không mất.
-
-## Bước 2 — Render
-=======
 ## Bước 1 — Render
->>>>>>> huy
 
 Trước hết chạy `make sync-deploy` để mirror có sẵn `main` và `develop`, rồi cài
 Render GitHub App lên tài khoản `DQHuyyyyy` và cho nó quyền đọc `Sale_mate`.
 
-<<<<<<< HEAD
-**Dashboard → New → Blueprint → chọn repo `Sale_mate`.** Render đọc `render.yaml`
-và dựng cả ba service. Nó sẽ hỏi các biến `sync: false`:
-
-| Biến | `salesmate-api` | `salesmate-api-dev` |
-|---|---|---|
-| `DATABASE_URL` | Supabase **production** → Connection string → **Transaction pooler** | Supabase **dev** |
-| `SUPABASE_URL` | project production | project dev |
-| `SUPABASE_SERVICE_ROLE_KEY` | project production | project dev |
-| `CORS_ORIGINS` | *để trống, điền ở bước 4* | *để trống* |
-| `AI_CORE_URL` | `https://salesmate-ai-core.onrender.com` | cùng giá trị |
-
-`JWT_SECRET` Render tự sinh, mỗi service một chuỗi khác nhau — nhờ vậy token cấp
-ở dev không dùng được trên production.
-=======
 **Dashboard → New → Blueprint → chọn repo `Sale_mate`.** Ô **Branch** ở màn hình
 này chỉ nói cho Render biết *đọc file `render.yaml` ở nhánh nào* — chọn `develop`
 hay `main` đều được, miễn nhánh đó đã có file. Nhánh mà từng service deploy thì
@@ -159,7 +125,6 @@ Render dựng hai service, cả hai đều theo nhánh `develop`, và hỏi các
 | `AI_CORE_URL` | `https://salesmate-ai-core.onrender.com` |
 
 `JWT_SECRET` Render tự sinh, không phải nhập.
->>>>>>> huy
 
 Với `salesmate-ai-core`, `OPENAI_API_KEY` bỏ trống cũng chạy: hệ thống rơi về
 `ScriptedProvider`, chat trả lời theo kịch bản thay vì gọi model thật. Điền key
@@ -168,11 +133,7 @@ vào khi muốn chat thật.
 Deploy xong, kiểm tra từng cái:
 
 ```bash
-<<<<<<< HEAD
-curl https://salesmate-api.onrender.com/api/health
-=======
 curl https://salesmate-api-dev.onrender.com/api/health
->>>>>>> huy
 # {"status":"ok","storage_enabled":true,"chat_enabled":true}
 
 curl https://salesmate-ai-core.onrender.com/health
@@ -180,11 +141,7 @@ curl https://salesmate-ai-core.onrender.com/health
 
 Lần gọi đầu chờ khoảng 50 giây — service đang ngủ dậy. Xem mục cuối.
 
-<<<<<<< HEAD
-## Bước 3 — Vercel
-=======
 ## Bước 2 — Vercel
->>>>>>> huy
 
 **Add New → Project → chọn repo này**, rồi đặt:
 
@@ -192,57 +149,28 @@ Lần gọi đầu chờ khoảng 50 giây — service đang ngủ dậy. Xem m�
 |---|---|
 | Root Directory | `interface/frontend` ← quan trọng, repo là monorepo |
 | Framework Preset | Vite (Vercel tự nhận) |
-<<<<<<< HEAD
-| Production Branch | `main` |
-=======
 | Production Branch | **`develop`** ← không phải `main` |
 
 Production Branch phải là `develop` vì cùng lý do với Render: `main` không có
 `interface/frontend`, chỉ có `frontend/` ở gốc, nên build từ `main` sẽ hỏng. Đặt
 `develop` thì người test có một URL ngắn gọn (`salesmate.vercel.app`) thay vì URL
 preview dài loằng ngoằng.
->>>>>>> huy
 
 Build command và output directory đã khai trong
 [interface/frontend/vercel.json](interface/frontend/vercel.json), khỏi điền.
 
-<<<<<<< HEAD
-**Environment Variables** — đặt `VITE_API_BASE_URL` **hai lần, khác giá trị**:
-
-| Environment | Giá trị |
-|---|---|
-| Production | `https://salesmate-api.onrender.com` |
-| Preview | `https://salesmate-api-dev.onrender.com` |
-=======
 **Environment Variables** — đặt `VITE_API_BASE_URL` cho **cả Production lẫn
 Preview**, cùng một giá trị:
 
 ```
 https://salesmate-api-dev.onrender.com
 ```
->>>>>>> huy
 
 Đây là chỗ dùng đến biến khai trong
 [interface/frontend/.env.example](interface/frontend/.env.example). Ở máy mình
 nó để trống vì `vite.config.js` proxy hộ; trên Vercel **không có proxy** — chỉ
 có file tĩnh — nên phải trỏ tuyệt đối.
 
-<<<<<<< HEAD
-Không cần tạo project Vercel thứ hai: mọi nhánh không phải `main` tự có URL
-preview, và nhánh `develop` giữ nguyên một URL cố định dạng
-`salesmate-git-develop-<team>.vercel.app`. Đó là môi trường dev của bạn.
-
-## Bước 4 — Nối dây CORS
-
-Quay lại Render, điền `CORS_ORIGINS` rồi để nó tự deploy lại:
-
-| Service | `CORS_ORIGINS` |
-|---|---|
-| `salesmate-api` | `https://salesmate.vercel.app` |
-| `salesmate-api-dev` | `https://salesmate-git-develop-<team>.vercel.app` |
-
-Nhiều domain thì ngăn bằng dấu phẩy, không có khoảng trắng.
-=======
 ## Bước 3 — Nối dây CORS
 
 Quay lại Render, điền `CORS_ORIGINS` cho `salesmate-api-dev` rồi để nó tự deploy
@@ -254,27 +182,17 @@ https://salesmate.vercel.app
 
 Nhiều domain thì ngăn bằng dấu phẩy, không có khoảng trắng — hữu ích khi bạn
 muốn cho phép cả URL preview của các nhánh khác.
->>>>>>> huy
 [main.py](interface/backend/app/main.py#L60) đọc đúng danh sách này — sai một ký
 tự là trình duyệt chặn hết, trong khi `curl` vẫn chạy ngon. Gặp lỗi CORS thì
 kiểm tra biến này trước tiên.
 
-<<<<<<< HEAD
-## Bước 5 — Tài khoản cho người test
-=======
 ## Bước 4 — Tài khoản cho người test
->>>>>>> huy
 
 ```bash
 cd interface/backend
 python scripts/seed_users.py
 ```
 
-<<<<<<< HEAD
-Nhập username/mật khẩu, script in ra SQL — dán vào Supabase SQL Editor của
-**đúng project** (prod hay dev). Mật khẩu hash bằng bcrypt, không lưu ở đâu
-dạng thô, nên quên là phải tạo lại.
-=======
 Nhập username/mật khẩu, script in ra SQL — dán vào Supabase SQL Editor. Chỉ có
 một project nên không phải chọn. Mật khẩu hash bằng bcrypt, không lưu ở đâu dạng
 thô, nên quên là phải tạo lại.
@@ -293,7 +211,6 @@ trỏ `salesmate-api-dev`.
 Cân nhắc có nên tách luôn Supabase khi đó không. Lúc chỉ có một môi trường thì
 dùng chung một database không sao; khi người dùng thật ở production còn team vẫn
 nghịch ở dev thì rủi ro khác hẳn.
->>>>>>> huy
 
 ---
 
@@ -306,29 +223,18 @@ duy nhất họ sẽ phàn nàn.
 Cách xử lý thực tế:
 
 - **Trước buổi test, đánh thức thủ công** — mở
-<<<<<<< HEAD
-  `https://salesmate-api.onrender.com/api/health` trước 1 phút. Ba service thì
-  mở cả ba. Đơn giản nhất và không tốn gì.
-=======
   `https://salesmate-api-dev.onrender.com/api/health` và
   `https://salesmate-ai-core.onrender.com/health` trước 1 phút. Đơn giản nhất và
   không tốn gì.
->>>>>>> huy
 - **Nói trước với người test** rằng lần vào đầu tiên chờ khoảng một phút. Biết
   trước thì họ đợi; không biết thì họ tưởng web hỏng và đóng tab.
 - **Ping tự động thì bạn không làm được bằng GitHub Actions** — org đang bị chặn
   Actions vì billing, cả ba CI phải chạy nhờ self-hosted runner của BTC
   ([ci-ai-core.yml](.github/workflows/ci-ai-core.yml#L27-L29)). Dịch vụ ping bên
   ngoài như UptimeRobot thì được, nhưng đó là lách chính sách Render.
-<<<<<<< HEAD
-- **Hết chịu nổi thì nâng riêng `salesmate-api` lên Starter (~$7/tháng)** — chỉ
-  cần đổi `plan: free` thành `plan: starter` trong `render.yaml`. Dev và lõi AI
-  vẫn để free.
-=======
 - **Hết chịu nổi thì nâng riêng `salesmate-api-dev` lên Starter (~$7/tháng)** —
   chỉ cần đổi `plan: free` thành `plan: starter` trong `render.yaml`. Lõi AI vẫn
   để free, chỉ chat mới phải chờ.
->>>>>>> huy
 
 **Chuỗi đánh thức cộng dồn.** Người dùng mở chat lần đầu: API dậy (~50s) rồi mới
 gọi lõi AI, lõi AI lại dậy tiếp (~50s). Đánh thức trước cả hai là tránh được.
@@ -343,16 +249,6 @@ Vercel thì nhập trong dashboard.
 
 | Biến | Đặt ở đâu | Ghi chú |
 |---|---|---|
-<<<<<<< HEAD
-| `DATABASE_URL` | Render (2 API) | Transaction pooler của Supabase |
-| `SUPABASE_URL` · `SUPABASE_SERVICE_ROLE_KEY` | Render (2 API) | service role bỏ qua RLS — không bao giờ đưa ra frontend |
-| `SUPABASE_BUCKET` | Render (2 API) | đã có sẵn trong `render.yaml` |
-| `JWT_SECRET` | Render tự sinh | ≥32 ký tự, khác nhau giữa prod và dev |
-| `CORS_ORIGINS` | Render (2 API) | URL Vercel tương ứng |
-| `AI_CORE_URL` | Render (2 API) | trỏ về `salesmate-ai-core` |
-| `OPENAI_API_KEY` | Render (lõi AI) | bỏ trống → chat chạy kịch bản |
-| `VITE_API_BASE_URL` | Vercel | đặt riêng cho Production và Preview |
-=======
 | `DATABASE_URL` | `salesmate-api-dev` | Transaction pooler của Supabase |
 | `SUPABASE_URL` · `SUPABASE_SERVICE_ROLE_KEY` | `salesmate-api-dev` | service role bỏ qua RLS — không bao giờ đưa ra frontend |
 | `SUPABASE_BUCKET` | `salesmate-api-dev` | đã có sẵn trong `render.yaml` |
@@ -361,4 +257,3 @@ Vercel thì nhập trong dashboard.
 | `AI_CORE_URL` | `salesmate-api-dev` | trỏ về `salesmate-ai-core` |
 | `OPENAI_API_KEY` | `salesmate-ai-core` | bỏ trống → chat chạy kịch bản |
 | `VITE_API_BASE_URL` | Vercel | Production và Preview cùng giá trị |
->>>>>>> huy

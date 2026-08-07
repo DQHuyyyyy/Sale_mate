@@ -21,52 +21,6 @@
 # ============================================
 
 services:
-<<<<<<< HEAD
-  # ---- API sản phẩm — production (user test) ----
-  - type: web
-    name: salesmate-api
-    runtime: python
-    plan: free
-    region: singapore
-    branch: main
-    rootDir: interface/backend
-    # requirements.txt thôi, KHÔNG cài requirements-dev.txt — production không
-    # cần pytest và ruff. Đây là lý do hai file đó tách nhau.
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /api/health
-    autoDeploy: true
-    envVars:
-      - key: PYTHON_VERSION
-        value: "3.11"
-      # Supabase project PRODUCTION
-      - key: DATABASE_URL
-        sync: false
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
-      - key: SUPABASE_BUCKET
-        value: apartment-images
-      # Render tự sinh chuỗi ngẫu nhiên, mỗi service một giá trị khác nhau.
-      # Nhờ vậy token cấp ở dev không dùng được trên production.
-      - key: JWT_SECRET
-        generateValue: true
-      - key: JWT_ALGORITHM
-        value: HS256
-      - key: JWT_EXPIRE_MINUTES
-        value: "480"
-      # Dán URL Vercel vào đây SAU KHI deploy frontend. Thiếu là trình duyệt
-      # chặn sạch mọi request, dù backend vẫn khoẻ.
-      - key: CORS_ORIGINS
-        sync: false
-      - key: AI_CORE_URL
-        sync: false
-      - key: AI_CORE_TIMEOUT
-        value: "60"
-
-=======
->>>>>>> huy
   # ---- API sản phẩm — development (team) ----
   - type: web
     name: salesmate-api-dev
@@ -75,11 +29,8 @@ services:
     region: singapore
     branch: develop
     rootDir: interface/backend
-<<<<<<< HEAD
-=======
     # requirements.txt thôi, KHÔNG cài requirements-dev.txt — server không cần
     # pytest và ruff. Đây là lý do hai file đó tách nhau.
->>>>>>> huy
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
@@ -87,13 +38,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
-<<<<<<< HEAD
-      # Supabase project DEV — phải là project KHÁC production, nếu không team
-      # test hàng ngày sẽ sửa đúng dữ liệu mà user đang xem.
-=======
       # Một Supabase project dùng chung cho mọi môi trường — quyết định của
       # team. Hệ quả: sửa dữ liệu ở đây là người dùng thấy ngay. Xem DEPLOY.md.
->>>>>>> huy
       - key: DATABASE_URL
         sync: false
       - key: SUPABASE_URL
@@ -115,23 +61,15 @@ services:
       - key: AI_CORE_TIMEOUT
         value: "60"
 
-<<<<<<< HEAD
-  # ---- Lõi AI — dùng chung cho cả prod lẫn dev ----
-=======
   # ---- Lõi AI ----
   # Cũng theo develop. Để branch main thì nó chạy src/ của bản 05/08, lệch 13
   # file so với develop — API mới nói chuyện với lõi AI cũ, sai lệch rất khó lần.
->>>>>>> huy
   - type: web
     name: salesmate-ai-core
     runtime: docker
     plan: free
     region: singapore
-<<<<<<< HEAD
-    branch: main
-=======
     branch: develop
->>>>>>> huy
     dockerfilePath: ./Dockerfile
     dockerContext: .
     # Dockerfile ghim cứng --port 8000; Render cấp cổng qua $PORT nên phải ghi đè.
