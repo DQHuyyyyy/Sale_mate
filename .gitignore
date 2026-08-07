@@ -17,9 +17,21 @@ env/
 .env.local
 .env.production
 
-# IDE
+# Khoá dịch vụ — KHÔNG BAO GIỜ commit
+service_account.json
+*-service-account*.json
+*credentials*.json
+*.pem
+*.key
+
+# IDE & AI Tool Configs
 .vscode/
 .idea/
+.claude/
+.codex/
+.cursor/
+.gemini/
+.github/
 *.swp
 *.swo
 *~
@@ -34,6 +46,11 @@ Thumbs.db
 /data/
 *.db
 *.sqlite3
+
+# Output tự động của script eval — đổi mỗi lần chạy, không commit để tránh
+# nhiễu git history. Số liệu quan trọng đã tóm tắt có phân tích trong
+# eval/results/report.md (file đó VẪN track bình thường).
+/eval/results/retrieval_eval.json
 
 # Logs
 logs/
@@ -61,11 +78,23 @@ out/
 .ai-log/*.jsonl
 .ai-log/archive/
 
+# Cấu hình hook AI log của từng AI tool — MỖI MÁY MỖI KHÁC, không commit.
+# Mỗi người tự tạo theo mẫu trong .agents/rules/ai-log-hook.md. Trước đây các
+# file này được theo dõi và gây conflict ở gần như mọi PR vì bốn người vá cùng
+# một chỗ trên bốn máy khác nhau.
+.claude/settings.json
+.claude/settings.local.json
+.codex/hooks.json
+.cursor/hooks.json
+.gemini/settings.json
+.github/hooks/hooks.json
+
 # Frontend build output
 frontend/.next/
 frontend/out/
 frontend/node_modules/
 frontend/.env.local
+frontend/dist/
 
 # Coverage
 .coverage

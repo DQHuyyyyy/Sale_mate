@@ -1,0 +1,172 @@
+[
+  {
+    "id": "EV-001",
+    "category": "tra_cuu_don",
+    "category_name": "Tra cứu đơn",
+    "question": "Căn hộ VOP398 tại tòa R103 có giá bán bao nhiêu tiền?",
+    "expected_doc_id": "VOP398",
+    "source": "Google Sheet VOP Real Data"
+  },
+  {
+    "id": "EV-002",
+    "category": "tra_cuu_don",
+    "category_name": "Tra cứu đơn",
+    "question": "Căn studio diện tích nhỏ nhất có view đẹp là căn nào?",
+    "expected_doc_id": "VOP315",
+    "source": "Tồn kho nội bộ / Sheet VOP"
+  },
+  {
+    "id": "EV-003",
+    "category": "tra_cuu_don",
+    "category_name": "Tra cứu đơn",
+    "question": "Căn 2 phòng ngủ tòa S2 tầng 21 có view biển hồ không?",
+    "expected_doc_id": "VOP639",
+    "source": "Google Sheet VOP Real Data"
+  },
+  {
+    "id": "EV-004",
+    "category": "tra_cuu_don",
+    "category_name": "Tra cứu đơn",
+    "question": "Căn hộ 3 phòng ngủ 95,1m2 view thành phố Hà Nội giá bao nhiêu?",
+    "expected_doc_id": "batdongsan:45212995",
+    "source": "batdongsan.com.vn"
+  },
+  {
+    "id": "EV-005",
+    "category": "tra_cuu_don",
+    "category_name": "Tra cứu đơn",
+    "question": "Dự án Vinhomes Ocean Park có những tiện ích nội khu nổi bật nào?",
+    "expected_doc_id": "knowledge:tien-ich-noi-khu",
+    "source": "Tài liệu tiện ích nội khu"
+  },
+  {
+    "id": "EV-006",
+    "category": "rang_buoc_so",
+    "category_name": "Có ràng buộc số",
+    "question": "Tìm căn hộ 2 phòng ngủ giá từ 3.0 tỷ đến 3.6 tỷ tại tòa S2",
+    "expected_doc_id": "VOP639",
+    "filters": {
+      "min_price": 3.0,
+      "max_price": 3.6,
+      "num_bedrooms": 2,
+      "building": "S2"
+    },
+    "source": "Lọc giá & số phòng"
+  },
+  {
+    "id": "EV-007",
+    "category": "rang_buoc_so",
+    "category_name": "Có ràng buộc số",
+    "question": "Căn 1 phòng ngủ diện tích từ 40m2 đến 55m2 giá dưới 3.5 tỷ",
+    "expected_doc_id": "VOP398",
+    "filters": {
+      "min_price": 0.0,
+      "max_price": 3.5,
+      "min_area": 40.0,
+      "max_area": 55.0,
+      "num_bedrooms": 1
+    },
+    "source": "Lọc diện tích & giá"
+  },
+  {
+    "id": "EV-008",
+    "category": "rang_buoc_so",
+    "category_name": "Có ràng buộc số",
+    "question": "Căn studio tòa S1.01 diện tích khoảng 35m2 giá tối đa 2.2 tỷ",
+    "expected_doc_id": "VOP315",
+    "filters": {
+      "max_price": 2.2,
+      "max_area": 40.0,
+      "building": "S1.01"
+    },
+    "source": "Lọc Studio"
+  },
+  {
+    "id": "EV-009",
+    "category": "rang_buoc_so",
+    "category_name": "Có ràng buộc số",
+    "question": "Shophouse diện tích trên 80m2 có giá bán bao nhiêu?",
+    "expected_doc_id": "batdongsan:46070090",
+    "filters": {
+      "min_area": 80.0
+    },
+    "source": "Lọc Shophouse"
+  },
+  {
+    "id": "EV-010",
+    "category": "rang_buoc_so",
+    "category_name": "Có ràng buộc số",
+    "question": "Căn hộ 3 phòng ngủ diện tích từ 70m2 đến 100m2",
+    "expected_doc_id": "batdongsan:45212995",
+    "filters": {
+      "min_area": 70.0,
+      "max_area": 100.0,
+      "num_bedrooms": 3
+    },
+    "source": "Lọc 3PN"
+  },
+  {
+    "id": "EV-011",
+    "category": "so_sanh_nhieu_can",
+    "category_name": "So sánh nhiều căn & Chính sách",
+    "question": "So sánh căn 1PN VOP398 và căn 2PN VOP639 về giá và diện tích",
+    "expected_doc_id": "VOP398",
+    "source": "So sánh 2 căn"
+  },
+  {
+    "id": "EV-012",
+    "category": "so_sanh_nhieu_can",
+    "category_name": "So sánh nhiều căn & Chính sách",
+    "question": "Chính sách chiết khấu 8% thanh toán sớm áp dụng cho căn hộ nào?",
+    "expected_doc_id": "POL-001",
+    "source": "Chính sách chiết khấu"
+  },
+  {
+    "id": "EV-013",
+    "category": "so_sanh_nhieu_can",
+    "category_name": "So sánh nhiều căn & Chính sách",
+    "question": "Nên chọn gói chiết khấu 8% hay gói hỗ trợ vay ngân hàng 0% lãi suất?",
+    "expected_doc_id": "POL-002",
+    "source": "So sánh chính sách"
+  },
+  {
+    "id": "EV-014",
+    "category": "so_sanh_nhieu_can",
+    "category_name": "So sánh nhiều căn & Chính sách",
+    "question": "Thủ tục sang tên sổ đỏ và khoản thuế phí hết bao nhiêu tiền?",
+    "expected_doc_id": "POL-004",
+    "source": "Pháp lý & Sổ đỏ"
+  },
+  {
+    "id": "EV-015",
+    "category": "cau_hoi_bay_out_of_context",
+    "category_name": "Câu hỏi bẫy (Out-of-context)",
+    "question": "Giá căn hộ 3 phòng ngủ Landmark 81 TP Hồ Chí Minh bao nhiêu tiền?",
+    "expected_doc_id": null,
+    "source": "Dự án ngoài khu vực (Landmark 81 TP HCM)"
+  },
+  {
+    "id": "EV-016",
+    "category": "cau_hoi_bay_out_of_context",
+    "category_name": "Câu hỏi bẫy (Out-of-context)",
+    "question": "Căn biệt thự mã VOP9999 dự án Vinhomes Hải Phòng có giá bao nhiêu?",
+    "expected_doc_id": null,
+    "source": "Mã căn giả VOP9999"
+  },
+  {
+    "id": "EV-017",
+    "category": "cau_hoi_bay_out_of_context",
+    "category_name": "Câu hỏi bẫy (Out-of-context)",
+    "question": "Lãi suất tiền gửi tiết kiệm ngân hàng Vietcombank hôm nay là bao nhiêu %?",
+    "expected_doc_id": null,
+    "source": "Lĩnh vực ngân hàng ngoài BĐS"
+  },
+  {
+    "id": "EV-018",
+    "category": "cau_hoi_bay_out_of_context",
+    "category_name": "Câu hỏi bẫy (Out-of-context)",
+    "question": "Dự án Ecopark Hưng Yên căn 2 phòng ngủ giá bao nhiêu?",
+    "expected_doc_id": null,
+    "source": "Dự án ngoài Ecopark Hưng Yên"
+  }
+]

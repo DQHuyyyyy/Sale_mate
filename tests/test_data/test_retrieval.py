@@ -5,10 +5,12 @@ from __future__ import annotations
 import pytest
 
 from src.data.contracts import Chunk, LoadedDocument, RetrievalFilter
+from src.data.crawling.meeyland import parse_listing_detail
 from src.data.ingestion.chunkers import ParagraphChunker
 from src.data.pipelines import IngestPipeline
 from src.data.retrieval.rerankers import KeywordOverlapReranker, PassthroughReranker
 from src.data.retrieval.retriever import DefaultRetriever
+from src.data.sources.inventory import InventoryUnit, unit_to_document
 
 
 def _chunk(chunk_id: str, text: str, **kwargs) -> Chunk:
@@ -45,6 +47,58 @@ async def test_tai_lieu_noi_bo_khong_lot_ra_khi_chi_co_quyen_public(memory_store
 
 
 @pytest.mark.asyncio
+async def test_ton_kho_that_khong_lot_ra_portal_cong_khai_tin_dang_thi_co(memory_store, fake_embedder):
+    """Mục 6 Data Handling — phân quyền dữ liệu, kiểm tra bằng đúng nguồn thật
+    (không phải Chunk dựng tay): tồn kho nội bộ (visibility=internal) không
+    được lọt ra khi portal công khai tìm kiếm (filter mặc định chỉ public),
+    trong khi tin đăng bên thứ 3 (visibility=public) vẫn thấy bình thường.
+    """
+    inventory_doc = unit_to_document(
+        InventoryUnit(
+            unit_code="VOP999",
+            building="R199",
+            floor="9",
+            room_no="0909",
+            unit_type="2PN",
+            area_m2="60m2",
+            direction="Đông Nam",
+            view="View hồ trung tâm độc quyền",
+            legal_status="Sẵn sổ",
+            price_label="4 tỷ",
+            furniture="Full nội thất",
+            status="available",
+        )
+    )
+    listing_html = """
+<html><head>
+<meta property="og:title" content="Bán căn view hồ trung tâm độc quyền Vinhomes Ocean Park">
+<meta name="description" content="Diện tích 60m², giá 4.000.000.000 VNĐ.">
+</head><body><div class="article-description"><p>Căn đẹp, view hồ trung tâm độc quyền.</p></div></body></html>
+"""
+    listing_doc = parse_listing_detail(listing_html, "https://meeyland.com/test/999999")
+    assert listing_doc is not None
+
+    pipeline = IngestPipeline(ParagraphChunker(), fake_embedder, memory_store)
+    await pipeline.ingest_document(inventory_doc)
+    await pipeline.ingest_document(listing_doc)
+
+    retriever = DefaultRetriever(fake_embedder, memory_store, PassthroughReranker())
+
+    # Portal công khai: filter mặc định (chỉ public) — KHÔNG được thấy tồn kho.
+    public_result = await retriever.retrieve("view hồ trung tâm độc quyền", filters=RetrievalFilter())
+    public_doc_ids = {chunk.doc_id for chunk in public_result.chunks}
+    assert inventory_doc.doc_id not in public_doc_ids
+    assert listing_doc.doc_id in public_doc_ids
+
+    # Admin/Sale: filter gồm cả internal — PHẢI thấy tồn kho.
+    internal_result = await retriever.retrieve(
+        "view hồ trung tâm độc quyền", filters=RetrievalFilter(visibility=["public", "internal"])
+    )
+    internal_doc_ids = {chunk.doc_id for chunk in internal_result.chunks}
+    assert inventory_doc.doc_id in internal_doc_ids
+
+
+@pytest.mark.asyncio
 async def test_ban_het_hieu_luc_bi_loai(memory_store, fake_embedder):
     chunks = [
         _chunk("new", "bảng giá tháng bảy", is_active=True),
@@ -69,6 +123,159 @@ async def test_xoa_theo_doc_id(memory_store, fake_embedder):
 
     assert removed == 1
     assert await memory_store.count() == 1
+
+
+@pytest.mark.asyncio
+async def test_loc_cau_truc_bat_dong_san(memory_store, fake_embedder):
+    """Test bộ lọc cấu trúc (giá, diện tích, số phòng, tòa, loại căn) tách biệt khỏi ngữ nghĩa."""
+    c1 = _chunk(
+        "c1",
+        "Căn 2PN sang trọng",
+        metadata={"price": 3.5, "area": 65.0, "num_bedrooms": 2, "building": "S1.01", "property_type": "2PN"},
+    )
+    c2 = _chunk(
+        "c2",
+        "Căn 3PN rộng rãi",
+        metadata={"price": 5.0, "area": 90.0, "num_bedrooms": 3, "building": "S1.02", "property_type": "3PN"},
+    )
+    c3 = _chunk(
+        "c3",
+        "Căn Studio tiện nghi",
+        metadata={"price": 2.0, "area": 35.0, "num_bedrooms": 1, "building": "S1.01", "property_type": "Studio"},
+    )
+
+    chunks = [c1, c2, c3]
+    vectors = await fake_embedder.embed_texts([c.text for c in chunks])
+    await memory_store.upsert(chunks, vectors)
+
+    query_vec = await fake_embedder.embed_query("căn hộ")
+
+    # Lọc khoảng giá [3.0, 4.0] tỷ
+    found = await memory_store.search(query_vec, filters=RetrievalFilter(min_price=3.0, max_price=4.0), limit=10)
+    assert [c.id for c in found] == ["c1"]
+
+    # Lọc diện tích >= 80m²
+    found = await memory_store.search(query_vec, filters=RetrievalFilter(min_area=80.0), limit=10)
+    assert [c.id for c in found] == ["c2"]
+
+    # Lọc theo số phòng = 2
+    found = await memory_store.search(query_vec, filters=RetrievalFilter(num_bedrooms=2), limit=10)
+    assert [c.id for c in found] == ["c1"]
+
+    # Lọc kết hợp Tòa S1.01 & Loại căn Studio
+    found = await memory_store.search(
+        query_vec, filters=RetrievalFilter(building="S1.01", property_type="Studio"), limit=10
+    )
+    assert [c.id for c in found] == ["c3"]
+
+
+@pytest.mark.asyncio
+async def test_loc_doc_kind_va_image_url_va_policy(memory_store, fake_embedder):
+    """Test lọc theo doc_kind ('listing' vs 'policy') và giữ metadata image_url."""
+    listing_chunk = _chunk(
+        "c_listing",
+        "Căn hộ 2PN tòa R103",
+        metadata={
+            "doc_kind": "listing",
+            "price": 3.1,
+            "area": 49.0,
+            "image_url": "https://img.salesmate.vn/vop/r103_2702.jpg",
+        },
+    )
+    policy_chunk = _chunk(
+        "c_policy",
+        "Chính sách chiết khấu thanh toán sớm 8%",
+        metadata={
+            "doc_kind": "policy",
+            "policy_code": "DISCOUNT_8PCT",
+        },
+    )
+
+    chunks = [listing_chunk, policy_chunk]
+    vectors = await fake_embedder.embed_texts([c.text for c in chunks])
+    await memory_store.upsert(chunks, vectors)
+
+    query_vec = await fake_embedder.embed_query("chiết khấu căn hộ")
+
+    # 1. Chỉ tìm tài liệu tin đăng căn hộ
+    found_listings = await memory_store.search(query_vec, filters=RetrievalFilter(doc_kind="listing"), limit=10)
+    assert [c.id for c in found_listings] == ["c_listing"]
+    assert found_listings[0].metadata["image_url"] == "https://img.salesmate.vn/vop/r103_2702.jpg"
+
+    # 2. Chỉ tìm tài liệu chính sách bán hàng
+    found_policies = await memory_store.search(query_vec, filters=RetrievalFilter(doc_kind="policy"), limit=10)
+    assert [c.id for c in found_policies] == ["c_policy"]
+    assert found_policies[0].metadata["policy_code"] == "DISCOUNT_8PCT"
+
+
+@pytest.mark.asyncio
+async def test_fake_cross_encoder_reranker():
+    """Test FakeCrossEncoderReranker chấm điểm và cắt top-n=3 từ 10 ứng viên."""
+    from src.data.retrieval.rerankers import FakeCrossEncoderReranker
+
+    reranker = FakeCrossEncoderReranker()
+    chunks = [_chunk(f"c{i}", f"Thông tin căn hộ {i} view biển hồ đẹp", score=0.5) for i in range(1, 11)]
+    # Đưa một chunk phù hợp nhất lên từ từ
+    chunks[7] = _chunk("c8", "Căn biệt thự view biển hồ trực diện đẹp xuất sắc", score=0.4)
+
+    reranked = await reranker.rerank("view biển hồ trực diện", chunks, top_n=3)
+
+    assert len(reranked) == 3
+    # Chunk c8 có nhiều từ khóa nhất được đẩy lên top 1
+    assert reranked[0].id == "c8"
+
+
+@pytest.mark.asyncio
+async def test_two_stage_retriever_top_k_12_to_top_n_3(memory_store, fake_embedder):
+    """Test quy trình Retriever 2 giai đoạn: lấy 12 ứng viên -> rerank lấy top-3 tinh túy nhất."""
+    from src.data.retrieval.rerankers import FakeCrossEncoderReranker
+    from src.data.retrieval.retriever import DefaultRetriever
+
+    chunks = [_chunk(f"c{i}", f"Căn hộ thứ {i} tòa S2", score=0.1 * i) for i in range(1, 15)]
+    vectors = await fake_embedder.embed_texts([c.text for c in chunks])
+    await memory_store.upsert(chunks, vectors)
+
+    retriever = DefaultRetriever(
+        embedder=fake_embedder,
+        store=memory_store,
+        reranker=FakeCrossEncoderReranker(),
+        top_k=12,
+        top_n=3,
+    )
+
+    res = await retriever.retrieve("Căn hộ tòa S2")
+
+    assert len(res.chunks) == 3
+    assert res.coverage > 0.0
+
+
+def test_qdrant_filter_translation():
+    """Kiểm tra việc chuyển đổi RetrievalFilter thành Qdrant Filter object."""
+    from qdrant_client import models
+
+    from src.data.stores.qdrant_store import _to_qdrant_filter
+
+    f = RetrievalFilter(
+        min_price=3.0,
+        max_price=5.0,
+        min_area=50.0,
+        num_bedrooms=2,
+        building="S1.01",
+        property_type="2PN",
+    )
+    qdrant_filter = _to_qdrant_filter(f)
+
+    assert isinstance(qdrant_filter, models.Filter)
+    assert isinstance(qdrant_filter.must, list)
+    assert len(qdrant_filter.must) >= 6
+
+    # Verify presence of range and match conditions
+    keys_contained = [cond.key for cond in qdrant_filter.must if isinstance(cond, models.FieldCondition)]
+    assert "price" in keys_contained
+    assert "area" in keys_contained
+    assert "num_bedrooms" in keys_contained
+    assert "building" in keys_contained
+    assert "property_type" in keys_contained
 
 
 # ---------------- Chunker ----------------
@@ -100,6 +307,19 @@ def test_chunker_van_ban_rong_thi_khong_sinh_chunk():
     chunks = ParagraphChunker().split(LoadedDocument(doc_id="d1", title="T", text="   "))
 
     assert chunks == []
+
+
+def test_chunker_doan_dai_dung_sau_doan_ngan_van_bi_cat_dung_target():
+    """Bug thật gặp trên dữ liệu meeyland: đoạn đầu ngắn (title) chiếm buffer,
+    đoạn sau dài hơn target nhiều lần từng bị ghép nguyên vào buffer cũ thay vì
+    cắt cứng — sinh chunk tới 3293 ký tự dù target=900. Không được lặp lại.
+    """
+    text = "Tiêu đề ngắn.\n\n" + "Mô tả dài. " * 100  # đoạn 2 dài hơn 900 nhiều lần
+    document = LoadedDocument(doc_id="d1", title="T", text=text)
+
+    chunks = ParagraphChunker(target_chars=900, overlap_chars=120).split(document)
+
+    assert all(len(chunk.text) <= 900 for chunk in chunks), [len(c.text) for c in chunks]
 
 
 # ---------------- Reranker ----------------

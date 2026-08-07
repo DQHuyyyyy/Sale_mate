@@ -1,0 +1,11 @@
+# Máy Windows thường đặt core.autocrlf=true, nên mọi file được checkout ra đều
+# thành CRLF. Với shell script thì CRLF làm hỏng shebang: Git Bash còn chịu
+# được, WSL bash thì báo "syntax error near unexpected token $'{\r'" và hook
+# ghi log AI chết im lặng. Đây là gốc rễ của những lần "hook chạy trên máy này
+# nhưng hỏng trên máy kia" — ép EOL theo loại file để mọi máy giống nhau.
+*.sh text eol=lf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Script Python trong hook cũng chạy qua bash launcher.
+*.py text eol=lf

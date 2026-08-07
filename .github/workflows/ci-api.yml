@@ -1,0 +1,54 @@
+name: CI API
+
+# API sản phẩm ở backend/: auth, apartments, zones, sales, documents, chat.
+# Có requirements và pytest.ini riêng nên chạy thành job tách khỏi lõi AI.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "backend/**"
+      - ".github/workflows/ci-api.yml"
+
+concurrency:
+  group: ci-api-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API — test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          pip install -r requirements.txt -r requirements-dev.txt
+          pip install ruff
+
+      - name: Lint with ruff
+        run: ruff check backend/
+
+      - name: Check formatting
+        run: ruff format --check backend/
+
+      - name: Run tests
+        working-directory: backend
+        run: pytest tests/
+        env:
+          # Test không chạm database và không gọi mạng; hai biến này chỉ để
+          # Settings khởi tạo được mà không báo thiếu cấu hình.
+          JWT_SECRET: test-secret-chi-dung-trong-ci-0123456789abcdef
+          DATABASE_URL: postgresql://user:pass@localhost:5432/test
