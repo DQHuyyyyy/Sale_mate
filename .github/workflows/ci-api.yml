@@ -1,14 +1,14 @@
 name: CI API
 
-# API sản phẩm ở backend/: auth, apartments, zones, sales, documents, chat.
-# Có requirements và pytest.ini riêng nên chạy thành job tách khỏi lõi AI.
+# API sản phẩm ở interface/backend/: auth, apartments, zones, sales, documents,
+# chat. Có requirements và pytest.ini riêng nên chạy thành job tách khỏi lõi AI.
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main, develop]
     paths:
-      - "backend/**"
+      - "interface/backend/**"
       - ".github/workflows/ci-api.yml"
 
 concurrency:
@@ -31,22 +31,20 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: backend/requirements*.txt
+          cache-dependency-path: interface/backend/requirements*.txt
 
       - name: Install dependencies
-        working-directory: backend
-        run: |
-          pip install -r requirements.txt -r requirements-dev.txt
-          pip install ruff
+        working-directory: interface/backend
+        run: pip install -r requirements-dev.txt
 
       - name: Lint with ruff
-        run: ruff check backend/
+        run: ruff check interface/backend/
 
       - name: Check formatting
-        run: ruff format --check backend/
+        run: ruff format --check interface/backend/
 
       - name: Run tests
-        working-directory: backend
+        working-directory: interface/backend
         run: pytest tests/
         env:
           # Test không chạm database và không gọi mạng; hai biến này chỉ để

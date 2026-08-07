@@ -17,7 +17,7 @@ endif
 help:
 	@echo "--- Cai dat ---"
 	@echo "install      Dependencies cho loi AI (src/)"
-	@echo "install-api  Dependencies cho API san pham (backend/)"
+	@echo "install-api  Dependencies cho API san pham (interface/backend/)"
 	@echo "install-fe   Dependencies frontend"
 	@echo "--- Chay ---"
 	@echo "run-api      API san pham  -> http://localhost:8000/docs"
@@ -26,7 +26,7 @@ help:
 	@echo "infra        Bat Qdrant + Postgres bang Docker"
 	@echo "--- Kiem tra ---"
 	@echo "test         Test loi AI (tests/)"
-	@echo "test-api     Test API san pham (backend/tests/)"
+	@echo "test-api     Test API san pham (interface/backend/tests/)"
 	@echo "check        lint + format + test cho src/  (chay truoc khi push)"
 	@echo "check-all    check + test-api"
 
@@ -36,24 +36,24 @@ install:
 	$(PIP_INSTALL) -r requirements.txt -r requirements-dev.txt
 
 install-api:
-	$(PIP_INSTALL) -r backend/requirements.txt -r backend/requirements-dev.txt
+	$(PIP_INSTALL) -r interface/backend/requirements.txt -r interface/backend/requirements-dev.txt
 
 install-fe:
-	cd frontend && npm install
+	cd interface/frontend && npm install
 
 # ---------- Chạy ----------
 
 # API sản phẩm: auth, apartments, zones, sales, documents, chat.
 # Frontend proxy /api thẳng vào cổng này.
 run-api:
-	cd backend && ../$(PY) -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+	cd interface/backend && ../../$(PY) -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-# Lõi AI: agent graph + RAG. backend/ gọi vào đây qua AI_CORE_URL.
+# Lõi AI: agent graph + RAG. interface/backend/ gọi vào đây qua AI_CORE_URL.
 run-ai:
 	$(PY) -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8001
 
 fe:
-	cd frontend && npm run dev
+	cd interface/frontend && npm run dev
 
 infra:
 	docker compose up -d qdrant db
@@ -67,7 +67,7 @@ test:
 	$(PY) -m pytest tests/
 
 test-api:
-	cd backend && ../$(PY) -m pytest tests/
+	cd interface/backend && ../../$(PY) -m pytest tests/
 
 cov:
 	$(PY) -m pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=60

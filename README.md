@@ -174,7 +174,9 @@ P-055/
 │   ├── services/      Adapter ra ngoài: OpenAI · portal repo
 │   ├── bootstrap.py   NƠI DUY NHẤT gắn interface ↔ implementation
 │   └── main.py        FastAPI app
-├── frontend/          Next.js — portal + AIWidget
+├── interface/         FE + API sản phẩm gộp một chỗ
+│   ├── frontend/      Next.js — portal + AIWidget
+│   └── backend/       API sản phẩm :8000 — auth · apartments · zones · sales
 ├── tests/             57 test, không test nào gọi mạng
 ├── docs/
 │   ├── adr/           Architecture Decision Records
@@ -209,7 +211,7 @@ make cov
 
 | Thành viên | Phụ trách | Thư mục sở hữu |
 |---|---|---|
-| **huy** (lead) | Kiến trúc · Frontend | `frontend/` · `src/core/` |
+| **huy** (lead) | Kiến trúc · Frontend | `interface/frontend/` · `src/core/` |
 | **dat** | Data handling (RAG) | `src/data/` |
 | **viet** | AI core (agent) | `src/agents/` |
 | **phuc** | Interface (backend API) | `src/api/` |

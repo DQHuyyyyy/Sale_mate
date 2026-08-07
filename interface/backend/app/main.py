@@ -1,6 +1,6 @@
 """SalesMate backend — FastAPI.
 
-Chạy:  cd backend && uvicorn app.main:app --reload
+Chạy:  cd interface/backend && uvicorn app.main:app --reload
 Docs:  http://localhost:8000/docs
 """
 
@@ -32,7 +32,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         raise RuntimeError(
             "Cấu hình chưa hợp lệ:\n- "
             + "\n- ".join(problems)
-            + "\nCopy backend/.env.example thành backend/.env rồi điền giá trị."
+            + "\nCopy .env.example ở gốc repo thành .env rồi điền giá trị."
         )
 
     open_pool()

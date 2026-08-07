@@ -6,13 +6,10 @@ lưu ở Supabase Storage, auth bằng JWT.
 ## Chạy lần đầu
 
 ```bash
-cd backend
+cd interface/backend
 python -m venv .venv
 .venv\Scripts\activate          # Windows;  Linux/Mac: source .venv/bin/activate
 pip install -r requirements-dev.txt
-
-cp .env.example .env            # rồi điền giá trị thật
-python -c "import secrets; print(secrets.token_urlsafe(48))"   # sinh JWT_SECRET
 
 uvicorn app.main:app --reload
 ```
@@ -20,7 +17,21 @@ uvicorn app.main:app --reload
 Mở http://localhost:8000/docs — Swagger có sẵn nút **Authorize** để dán token.
 Kiểm tra nhanh: `GET /api/health`.
 
-Backend đọc `backend/.env` trước, thiếu biến nào thì lấy tiếp từ `.env` ở gốc repo.
+## Cấu hình
+
+Backend đọc **`.env` ở gốc repo**, không có file `.env` riêng. Thư mục này từng
+có một file như vậy nhưng nó chỉ chứa placeholder và ghi đè mất giá trị thật ở
+`.env` gốc, nên đã bỏ.
+
+Chưa có `.env` thì: `cp .env.example .env` ở gốc repo rồi điền. Riêng
+`JWT_SECRET` phải dài ≥32 ký tự, sinh bằng:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Thiếu biến bắt buộc thì backend **từ chối khởi động** và in ra thiếu cái gì —
+không chạy tiếp với cấu hình hỏng.
 
 ## Dựng database (chạy một lần, theo thứ tự)
 
