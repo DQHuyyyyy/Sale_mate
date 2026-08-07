@@ -1,5 +1,5 @@
 .PHONY: help install install-api install-fe run-ai run-api fe test test-api cov \
-        lint format typecheck check check-all infra infra-down clean
+        lint format typecheck check check-all infra infra-down clean sync-deploy
 
 # Windows dùng .venv/Scripts, Linux/macOS dùng .venv/bin
 PY := .venv/bin/python
@@ -9,8 +9,16 @@ endif
 
 # .venv tạo bằng uv thì bên trong KHÔNG có pip — `python -m pip` sẽ báo
 # "No module named pip". Dùng uv khi có, không thì rơi về pip.
+# Cách dò phải khác nhau theo hệ: trên Windows `make` chạy recipe bằng cmd.exe
+# khi không tìm thấy sh.exe, mà cmd không hiểu `command -v` lẫn `/dev/null`.
+ifeq ($(OS),Windows_NT)
+	UV_PATH := $(shell where uv 2>NUL)
+else
+	UV_PATH := $(shell command -v uv 2>/dev/null)
+endif
+
 PIP_INSTALL := $(PY) -m pip install
-ifneq (,$(shell command -v uv 2>/dev/null))
+ifneq (,$(UV_PATH))
 	PIP_INSTALL := uv pip install --python $(PY)
 endif
 
@@ -29,6 +37,8 @@ help:
 	@echo "test-api     Test API san pham (interface/backend/tests/)"
 	@echo "check        lint + format + test cho src/  (chay truoc khi push)"
 	@echo "check-all    check + test-api"
+	@echo "--- Deploy ---"
+	@echo "sync-deploy  Day main + develop tu repo BTC sang mirror ca nhan"
 
 # ---------- Cài đặt ----------
 
@@ -84,6 +94,18 @@ typecheck:
 check: lint format test
 
 check-all: check test-api
+
+# ---------- Deploy ----------
+
+# Đẩy main + develop từ repo BTC sang mirror cá nhân để Render deploy.
+#
+# Logic nằm trong scripts/sync_deploy.py, không viết thẳng vào recipe: `make`
+# trên Windows chạy recipe bằng cmd.exe khi không tìm thấy sh.exe, nên mọi cú
+# pháp POSIX (for/do/done, {}, /dev/null) đều vỡ khi gọi từ PowerShell.
+DEPLOY_REMOTE := deploy
+
+sync-deploy:
+	$(PY) scripts/sync_deploy.py $(DEPLOY_REMOTE)
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
