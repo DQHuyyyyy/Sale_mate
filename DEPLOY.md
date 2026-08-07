@@ -47,10 +47,15 @@ Render không cài được GitHub App lên org `AI20K-Build-Phase-Cohort-3` —
 hữu org đã tắt cả việc cài lẫn việc thành viên gửi yêu cầu. Nên có một **bản sao
 để deploy** ở tài khoản cá nhân:
 
-| Repo | Vai trò | Ai đẩy |
-|---|---|---|
-| `AI20K-Build-Phase-Cohort-3/P-055` | **Nguồn sự thật.** Mọi commit, PR, review đều ở đây | cả team |
-| `DQHuyyyyy/Sale_mate` | **Bản sao một chiều.** Chỉ để Render đọc | chỉ huy, bằng `make sync-deploy` |
+| Repo | Nhánh | Vai trò | Ai đẩy |
+|---|---|---|---|
+| `AI20K-Build-Phase-Cohort-3/P-055` | `main` ← `develop` ← nhánh cá nhân | **Nguồn sự thật.** Mọi commit, PR, review đều ở đây | cả team |
+| `DQHuyyyyy/Sale_mate` | **chỉ `develop`** | **Bản sao một chiều.** Chỉ để Render và Vercel đọc | chỉ huy, bằng `make sync-deploy` |
+
+Mirror **cố ý chỉ giữ một nhánh**, và `develop` là nhánh mặc định của nó. Phân
+cấp `main ← develop` không có ý nghĩa gì ở một repo không ai làm việc trong đó,
+trong khi một nhánh `main` cũ nằm đấy thì gây hại thật: Render và Vercel mặc
+định nhìn vào nó, thấy cây file chưa có `interface/` và build hỏng.
 
 > **Không commit vào repo mirror.** BTC chấm tiến độ bằng git history ở repo org
 > — commit lạc sang mirror là commit không ai tính. Mirror không nhận PR, không
@@ -62,21 +67,26 @@ hữu org đã tắt cả việc cài lẫn việc thành viên gửi yêu cầu
 git remote add deploy https://github.com/DQHuyyyyy/Sale_mate.git
 ```
 
+Trên GitHub, đặt `develop` làm **Default branch** của `Sale_mate` (Settings →
+General), rồi xoá nhánh `main` khỏi mirror.
+
 ### Mỗi lần muốn đưa code mới lên server
 
 ```bash
 make sync-deploy
 ```
 
-Lệnh này lấy `main` và `develop` mới nhất **từ repo org** rồi đẩy sang mirror.
-Nó đẩy thẳng `origin/<nhánh>` chứ không qua nhánh local, nên bạn không cần
-checkout hay pull trước — kết quả luôn đúng thứ đang nằm trên repo org.
+Lệnh này lấy `develop` mới nhất **từ repo org** rồi đẩy sang mirror. Nó đẩy
+thẳng `origin/develop` chứ không qua nhánh local, nên bạn không cần checkout hay
+pull trước — kết quả luôn đúng thứ đang nằm trên repo org.
 
 ```
 Mirror: https://github.com/DQHuyyyyy/Sale_mate.git
-  main: da dong bo
   develop: mirror thieu 3 commit -> dang day...
 ```
+
+Danh sách nhánh cần đẩy nằm ở hằng `BRANCHES` trong
+[scripts/sync_deploy.py](scripts/sync_deploy.py).
 
 Đẩy xong Render tự build lại nhánh vừa đổi. Chạy lại lúc không có gì mới cũng
 không sao, nó chỉ báo "da dong bo".
@@ -105,13 +115,13 @@ thường, không phải hỏng.
 
 ## Bước 1 — Render
 
-Trước hết chạy `make sync-deploy` để mirror có sẵn `main` và `develop`, rồi cài
-Render GitHub App lên tài khoản `DQHuyyyyy` và cho nó quyền đọc `Sale_mate`.
+Trước hết chạy `make sync-deploy` để mirror có nhánh `develop`, rồi cài Render
+GitHub App lên tài khoản `DQHuyyyyy` và cho nó quyền đọc `Sale_mate`.
 
 **Dashboard → New → Blueprint → chọn repo `Sale_mate`.** Ô **Branch** ở màn hình
-này chỉ nói cho Render biết *đọc file `render.yaml` ở nhánh nào* — chọn `develop`
-hay `main` đều được, miễn nhánh đó đã có file. Nhánh mà từng service deploy thì
-lấy từ chính `render.yaml`, không phải từ ô này.
+này chỉ nói cho Render biết *đọc file `render.yaml` ở nhánh nào* — chọn
+`develop`. Nhánh mà từng service deploy thì lấy từ chính `render.yaml`, không
+phải từ ô này.
 
 Render dựng hai service, cả hai đều theo nhánh `develop`, và hỏi các biến
 `sync: false` của `salesmate-api-dev`:
@@ -143,18 +153,22 @@ Lần gọi đầu chờ khoảng 50 giây — service đang ngủ dậy. Xem m�
 
 ## Bước 2 — Vercel
 
-**Add New → Project → chọn repo này**, rồi đặt:
+**Điều kiện: mirror phải đã lấy `develop` làm nhánh mặc định** (xem mục repo thứ
+hai ở trên). Màn hình New Project của Vercel luôn import từ nhánh mặc định và
+**không cho đổi ở bước đó** — Production Branch chỉ sửa được sau khi project đã
+tồn tại. Nếu mặc định còn là `main`, Vercel đọc cây file của `main`: Root
+Directory không chọn được `interface/frontend` vì nó không tồn tại ở đó, và
+preset bị đoán nhầm thành FastAPI do gốc repo có `requirements.txt` với `src/`.
+
+**Add New → Project → chọn `Sale_mate`**:
 
 | Mục | Giá trị |
 |---|---|
 | Root Directory | `interface/frontend` ← quan trọng, repo là monorepo |
-| Framework Preset | Vite (Vercel tự nhận) |
-| Production Branch | **`develop`** ← không phải `main` |
+| Framework Preset | Vite — tự nhận đúng sau khi đặt Root Directory |
 
-Production Branch phải là `develop` vì cùng lý do với Render: `main` không có
-`interface/frontend`, chỉ có `frontend/` ở gốc, nên build từ `main` sẽ hỏng. Đặt
-`develop` thì người test có một URL ngắn gọn (`salesmate.vercel.app`) thay vì URL
-preview dài loằng ngoằng.
+Người test sẽ có URL ngắn gọn dạng `sale-mate.vercel.app` vì `develop` giờ là
+nhánh production của Vercel.
 
 Build command và output directory đã khai trong
 [interface/frontend/vercel.json](interface/frontend/vercel.json), khỏi điền.
@@ -174,10 +188,11 @@ có file tĩnh — nên phải trỏ tuyệt đối.
 ## Bước 3 — Nối dây CORS
 
 Quay lại Render, điền `CORS_ORIGINS` cho `salesmate-api-dev` rồi để nó tự deploy
-lại. Giá trị là URL Vercel vừa có ở bước 2:
+lại. Giá trị là **URL Vercel vừa có ở bước 2**, copy nguyên văn từ dashboard
+Vercel — dạng `https://<ten-project>.vercel.app`, ví dụ:
 
 ```
-https://salesmate.vercel.app
+https://sale-mate.vercel.app
 ```
 
 Nhiều domain thì ngăn bằng dấu phẩy, không có khoảng trắng — hữu ích khi bạn
@@ -202,7 +217,11 @@ thô, nên quên là phải tạo lại.
 Điều kiện cần: **`main` đã có thư mục `interface/`**, tức là đã merge `develop`
 vào `main`. Trước đó thì mọi service trỏ vào `main` đều build hỏng.
 
-Merge xong, sửa [render.yaml](render.yaml): copy khối `salesmate-api-dev`, đổi
+Merge xong, thêm `"main"` vào hằng `BRANCHES` trong
+[scripts/sync_deploy.py](scripts/sync_deploy.py) rồi chạy `make sync-deploy` để
+mirror có nhánh đó.
+
+Tiếp theo sửa [render.yaml](render.yaml): copy khối `salesmate-api-dev`, đổi
 `name` thành `salesmate-api` và `branch` thành `main`. Đặt `CORS_ORIGINS` của nó
 bằng URL production Vercel. Bên Vercel đổi Production Branch về `main`, và tách
 `VITE_API_BASE_URL` thành hai giá trị — Production trỏ `salesmate-api`, Preview

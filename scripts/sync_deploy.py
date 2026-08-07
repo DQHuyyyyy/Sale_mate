@@ -1,4 +1,4 @@
-"""Đẩy main + develop từ repo BTC sang mirror cá nhân để Render deploy.
+"""Đẩy nhánh cần deploy từ repo BTC sang mirror cá nhân cho Render và Vercel.
 
 Chạy qua `make sync-deploy`, hoặc trực tiếp:
 
@@ -14,7 +14,15 @@ from __future__ import annotations
 import subprocess
 import sys
 
-BRANCHES = ("main", "develop")
+# Mirror chỉ giữ đúng những nhánh đang được deploy. Hiện chỉ có một môi trường,
+# chạy từ develop — đó cũng là nhánh mặc định của repo mirror.
+#
+# Phân cấp main <- develop vẫn giữ nguyên ở repo BTC. Đẩy cả main sang mirror
+# chỉ tổ hại: main đang là bản cũ chưa có thư mục interface/, Render và Vercel
+# trỏ vào đó là build hỏng.
+#
+# Khi nào dựng môi trường production thì thêm "main" vào tuple này.
+BRANCHES = ("develop",)
 DEFAULT_REMOTE = "deploy"
 
 
