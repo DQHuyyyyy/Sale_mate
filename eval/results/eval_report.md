@@ -19,10 +19,10 @@
 
 | Chỉ số Tốc độ | Thời gian (ms) | Mô tả |
 |---------------|----------------|-------|
-| **Mean Latency (Trung bình)** | **0.80 ms** | Thời gian xử lý trung bình toàn luồng |
-| **P90 Latency** | **1.05 ms** | 90% truy vấn hoàn thành dưới ngưỡng này |
-| **Min / Max Latency** | **0.24 ms / 1.72 ms** | Thời gian nhanh nhất / chậm nhất |
-| **Retrieval & Rerank Latency** | **0.80 ms** | Vector search (Top-12) + Cross-Encoder (Top-3) |
+| **Mean Latency (Trung bình)** | **0.20 ms** | Thời gian xử lý trung bình toàn luồng |
+| **P90 Latency** | **0.26 ms** | 90% truy vấn hoàn thành dưới ngưỡng này |
+| **Min / Max Latency** | **0.08 ms / 0.33 ms** | Thời gian nhanh nhất / chậm nhất |
+| **Retrieval & Rerank Latency** | **0.20 ms** | Vector search (Top-12) + Cross-Encoder (Top-3) |
 | **LLM Generation Latency** | **0.00 ms** | Xây dựng prompt & Sinh câu trả lời |
 
 ---
@@ -31,10 +31,10 @@
 
 | Nhóm Câu Hỏi | Số lượng | Đạt (Passed) | Tỷ lệ Đạt | Tốc độ Trung bình |
 |--------------|----------|--------------|-----------|-------------------|
-| **Tra cứu đơn** | 5 | 5 | **100.0%** | 0.96 ms |
-| **Có ràng buộc số** | 5 | 5 | **100.0%** | 0.27 ms |
-| **So sánh nhiều căn & Chính sách** | 4 | 4 | **100.0%** | 1.18 ms |
-| **Câu hỏi bẫy (Out-of-context)** | 4 | 4 | **100.0%** | 0.91 ms |
+| **Tra cứu đơn** | 5 | 5 | **100.0%** | 0.26 ms |
+| **Có ràng buộc số** | 5 | 5 | **100.0%** | 0.09 ms |
+| **So sánh nhiều căn & Chính sách** | 4 | 4 | **100.0%** | 0.22 ms |
+| **Câu hỏi bẫy (Out-of-context)** | 4 | 4 | **100.0%** | 0.22 ms |
 
 ---
 

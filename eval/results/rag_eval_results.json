@@ -7,11 +7,11 @@
     "hit_rate_at_5_pct": 100.0,
     "refusal_accuracy_pct": 100.0,
     "latency_ms": {
-      "mean_total": 0.8,
-      "p90_total": 1.05,
-      "min_total": 0.24,
-      "max_total": 1.72,
-      "mean_retrieval": 0.8,
+      "mean_total": 0.2,
+      "p90_total": 0.26,
+      "min_total": 0.08,
+      "max_total": 0.33,
+      "mean_retrieval": 0.2,
       "mean_generation": 0.0
     },
     "category_breakdown": {
@@ -20,28 +20,28 @@
         "total": 5,
         "passed": 5,
         "accuracy_pct": 100.0,
-        "mean_latency_ms": 0.96
+        "mean_latency_ms": 0.26
       },
       "rang_buoc_so": {
         "name": "Có ràng buộc số",
         "total": 5,
         "passed": 5,
         "accuracy_pct": 100.0,
-        "mean_latency_ms": 0.27
+        "mean_latency_ms": 0.09
       },
       "so_sanh_nhieu_can": {
         "name": "So sánh nhiều căn & Chính sách",
         "total": 4,
         "passed": 4,
         "accuracy_pct": 100.0,
-        "mean_latency_ms": 1.18
+        "mean_latency_ms": 0.22
       },
       "cau_hoi_bay_out_of_context": {
         "name": "Câu hỏi bẫy (Out-of-context)",
         "total": 4,
         "passed": 4,
         "accuracy_pct": 100.0,
-        "mean_latency_ms": 0.91
+        "mean_latency_ms": 0.22
       }
     }
   },
@@ -68,9 +68,9 @@
       "hit_at_5": true,
       "refused_correctly": false,
       "passed": true,
-      "retrieval_latency_ms": 1.02,
+      "retrieval_latency_ms": 0.33,
       "generation_latency_ms": 0.0,
-      "total_latency_ms": 1.02
+      "total_latency_ms": 0.33
     },
     {
       "id": "EV-002",
@@ -94,9 +94,9 @@
       "hit_at_5": true,
       "refused_correctly": false,
       "passed": true,
-      "retrieval_latency_ms": 0.91,
+      "retrieval_latency_ms": 0.25,
       "generation_latency_ms": 0.0,
-      "total_latency_ms": 0.91
+      "total_latency_ms": 0.25
     },
     {
       "id": "EV-003",
@@ -120,9 +120,9 @@
       "hit_at_5": true,
       "refused_correctly": false,
       "passed": true,
-      "retrieval_latency_ms": 0.91,
+      "retrieval_latency_ms": 0.22,
       "generation_latency_ms": 0.0,
-      "total_latency_ms": 0.91
+      "total_latency_ms": 0.22
     },
     {
       "id": "EV-004",
@@ -146,9 +146,9 @@
       "hit_at_5": true,
       "refused_correctly": false,
       "passed": true,
-      "retrieval_latency_ms": 0.95,
+      "retrieval_latency_ms": 0.24,
       "generation_latency_ms": 0.0,
-      "total_latency_ms": 0.95
+      "total_latency_ms": 0.24
     },
     {
       "id": "EV-005",
@@ -172,9 +172,9 @@
       "hit_at_5": true,
       "refused_correctly": false,
       "passed": true,
-      "retrieval_latency_ms": 1.03,
+      "retrieval_latency_ms": 0.26,
       "generation_latency_ms": 0.0,
-      "total_latency_ms": 1.03
+      "total_latency_ms": 0.26
     },
     {
       "id": "EV-006",
@@ -192,9 +192,9 @@
       "hit_at_5": true,
       "refused_correctly": false,
       "passed": true,
-      "retrieval_latency_ms": 0.27,
+      "retrieval_latency_ms": 0.1,
       "generation_latency_ms": 0.0,
-      "total_latency_ms": 0.27
+      "total_latency_ms": 0.1
     },
     {
       "id": "EV-007",
@@ -212,9 +212,9 @@
       "hit_at_5": true,
       "refused_correctly": false,
       "passed": true,
-      "retrieval_latency_ms": 0.25,
+      "retrieval_latency_ms": 0.09,
       "generation_latency_ms": 0.0,
-      "total_latency_ms": 0.25
+      "total_latency_ms": 0.09
     },
     {
       "id": "EV-008",
@@ -232,9 +232,9 @@
       "hit_at_5": true,
       "refused_correctly": false,
       "passed": true,
-      "retrieval_latency_ms": 0.25,
+      "retrieval_latency_ms": 0.09,
       "generation_latency_ms": 0.0,
-      "total_latency_ms": 0.25
+      "total_latency_ms": 0.09
     },
     {
       "id": "EV-009",
@@ -254,9 +254,9 @@
       "hit_at_5": true,
       "refused_correctly": false,
       "passed": true,
-      "retrieval_latency_ms": 0.33,
+      "retrieval_latency_ms": 0.1,
       "generation_latency_ms": 0.0,
-      "total_latency_ms": 0.33
+      "total_latency_ms": 0.1
     },
     {
       "id": "EV-010",
@@ -274,9 +274,9 @@
       "hit_at_5": true,
       "refused_correctly": false,
       "passed": true,
-      "retrieval_latency_ms": 0.23,
+      "retrieval_latency_ms": 0.08,
       "generation_latency_ms": 0.0,
-      "total_latency_ms": 0.24
+      "total_latency_ms": 0.08
     },
     {
       "id": "EV-011",
@@ -300,9 +300,9 @@
       "hit_at_5": true,
       "refused_correctly": false,
       "passed": true,
-      "retrieval_latency_ms": 1.0,
+      "retrieval_latency_ms": 0.24,
       "generation_latency_ms": 0.0,
-      "total_latency_ms": 1.0
+      "total_latency_ms": 0.24
     },
     {
       "id": "EV-012",
@@ -326,9 +326,9 @@
       "hit_at_5": true,
       "refused_correctly": false,
       "passed": true,
-      "retrieval_latency_ms": 1.72,
+      "retrieval_latency_ms": 0.22,
       "generation_latency_ms": 0.0,
-      "total_latency_ms": 1.72
+      "total_latency_ms": 0.23
     },
     {
       "id": "EV-013",
@@ -352,9 +352,9 @@
       "hit_at_5": true,
       "refused_correctly": false,
       "passed": true,
-      "retrieval_latency_ms": 1.05,
+      "retrieval_latency_ms": 0.22,
       "generation_latency_ms": 0.0,
-      "total_latency_ms": 1.05
+      "total_latency_ms": 0.22
     },
     {
       "id": "EV-014",
@@ -378,9 +378,9 @@
       "hit_at_5": true,
       "refused_correctly": false,
       "passed": true,
-      "retrieval_latency_ms": 0.92,
+      "retrieval_latency_ms": 0.21,
       "generation_latency_ms": 0.0,
-      "total_latency_ms": 0.92
+      "total_latency_ms": 0.22
     },
     {
       "id": "EV-015",
@@ -404,9 +404,9 @@
       "hit_at_5": false,
       "refused_correctly": true,
       "passed": true,
-      "retrieval_latency_ms": 0.91,
+      "retrieval_latency_ms": 0.22,
       "generation_latency_ms": 0.0,
-      "total_latency_ms": 0.91
+      "total_latency_ms": 0.22
     },
     {
       "id": "EV-016",
@@ -430,9 +430,9 @@
       "hit_at_5": false,
       "refused_correctly": true,
       "passed": true,
-      "retrieval_latency_ms": 0.91,
+      "retrieval_latency_ms": 0.22,
       "generation_latency_ms": 0.0,
-      "total_latency_ms": 0.91
+      "total_latency_ms": 0.22
     },
     {
       "id": "EV-017",
@@ -456,9 +456,9 @@
       "hit_at_5": false,
       "refused_correctly": true,
       "passed": true,
-      "retrieval_latency_ms": 0.91,
+      "retrieval_latency_ms": 0.22,
       "generation_latency_ms": 0.0,
-      "total_latency_ms": 0.91
+      "total_latency_ms": 0.22
     },
     {
       "id": "EV-018",
@@ -482,9 +482,9 @@
       "hit_at_5": false,
       "refused_correctly": true,
       "passed": true,
-      "retrieval_latency_ms": 0.9,
+      "retrieval_latency_ms": 0.21,
       "generation_latency_ms": 0.0,
-      "total_latency_ms": 0.9
+      "total_latency_ms": 0.21
     }
   ]
 }

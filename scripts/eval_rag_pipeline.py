@@ -42,7 +42,7 @@ def calculate_p90(values: list[float]) -> float:
     if not values:
         return 0.0
     sorted_vals = sorted(values)
-    idx = int(math.ceil(0.90 * len(sorted_vals))) - 1
+    idx = math.ceil(0.90 * len(sorted_vals)) - 1
     idx = max(0, min(idx, len(sorted_vals) - 1))
     return sorted_vals[idx]
 

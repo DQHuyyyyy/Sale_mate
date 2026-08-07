@@ -11,6 +11,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 # Đảm bảo in ra được tiếng Việt trên console Windows
 if hasattr(sys.stdout, "reconfigure"):
