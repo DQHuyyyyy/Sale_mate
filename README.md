@@ -174,7 +174,9 @@ P-055/
 │   ├── services/      Adapter ra ngoài: OpenAI · portal repo
 │   ├── bootstrap.py   NƠI DUY NHẤT gắn interface ↔ implementation
 │   └── main.py        FastAPI app
-├── frontend/          Next.js — portal + AIWidget
+├── interface/         FE + API sản phẩm gộp một chỗ
+│   ├── frontend/      Next.js — portal + AIWidget
+│   └── backend/       API sản phẩm :8000 — auth · apartments · zones · sales
 ├── tests/             57 test, không test nào gọi mạng
 ├── docs/
 │   ├── adr/           Architecture Decision Records
@@ -209,7 +211,7 @@ make cov
 
 | Thành viên | Phụ trách | Thư mục sở hữu |
 |---|---|---|
-| **huy** (lead) | Kiến trúc · Frontend | `frontend/` · `src/core/` |
+| **huy** (lead) | Kiến trúc · Frontend | `interface/frontend/` · `src/core/` |
 | **dat** | Data handling (RAG) | `src/data/` |
 | **viet** | AI core (agent) | `src/agents/` |
 | **phuc** | Interface (backend API) | `src/api/` |
@@ -224,6 +226,8 @@ Commit theo chuẩn `feat:` `fix:` `docs:` `test:` `refactor:`.
 | Tài liệu | Nội dung |
 |---|---|
 | [`CLAUDE.md`](CLAUDE.md) | Điểm vào cho cả team và AI coding assistant |
+| [`RUN.md`](RUN.md) | Chạy trên máy mình |
+| [`DEPLOY.md`](DEPLOY.md) | Đưa lên Vercel + Render, hai môi trường, chi phí 0đ |
 | [`docs/architecture_diagram.md`](docs/architecture_diagram.md) | Sơ đồ kiến trúc, luồng agent, luồng dữ liệu |
 | [`docs/adr/`](docs/adr/README.md) | Quyết định kiến trúc và lý do |
 | [`Context Product/`](Context%20Product/) | Đặc tả sản phẩm: giao diện · lõi AI · data · API |

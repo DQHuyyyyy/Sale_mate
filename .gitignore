@@ -89,11 +89,11 @@ out/
 .github/hooks/hooks.json
 
 # Frontend build output
-frontend/.next/
-frontend/out/
-frontend/node_modules/
-frontend/.env.local
-frontend/dist/
+interface/frontend/.next/
+interface/frontend/out/
+interface/frontend/node_modules/
+interface/frontend/.env.local
+interface/frontend/dist/
 
 # Coverage
 .coverage

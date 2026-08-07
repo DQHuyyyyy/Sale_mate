@@ -106,7 +106,8 @@ def search_apartments(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
                 "Chưa lọc được theo giá vì bảng căn hộ thiếu cột số gia_tri. "
-                "Chạy backend/migrations/001_alter_salemate_v1.sql rồi khởi động lại backend."
+                "Chạy interface/backend/migrations/001_alter_salemate_v1.sql "
+                "rồi khởi động lại backend."
             ),
         )
 
