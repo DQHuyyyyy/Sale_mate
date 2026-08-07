@@ -128,9 +128,21 @@ async def test_xoa_theo_doc_id(memory_store, fake_embedder):
 @pytest.mark.asyncio
 async def test_loc_cau_truc_bat_dong_san(memory_store, fake_embedder):
     """Test bộ lọc cấu trúc (giá, diện tích, số phòng, tòa, loại căn) tách biệt khỏi ngữ nghĩa."""
-    c1 = _chunk("c1", "Căn 2PN sang trọng", metadata={"price": 3.5, "area": 65.0, "num_bedrooms": 2, "building": "S1.01", "property_type": "2PN"})
-    c2 = _chunk("c2", "Căn 3PN rộng rãi", metadata={"price": 5.0, "area": 90.0, "num_bedrooms": 3, "building": "S1.02", "property_type": "3PN"})
-    c3 = _chunk("c3", "Căn Studio tiện nghi", metadata={"price": 2.0, "area": 35.0, "num_bedrooms": 1, "building": "S1.01", "property_type": "Studio"})
+    c1 = _chunk(
+        "c1",
+        "Căn 2PN sang trọng",
+        metadata={"price": 3.5, "area": 65.0, "num_bedrooms": 2, "building": "S1.01", "property_type": "2PN"},
+    )
+    c2 = _chunk(
+        "c2",
+        "Căn 3PN rộng rãi",
+        metadata={"price": 5.0, "area": 90.0, "num_bedrooms": 3, "building": "S1.02", "property_type": "3PN"},
+    )
+    c3 = _chunk(
+        "c3",
+        "Căn Studio tiện nghi",
+        metadata={"price": 2.0, "area": 35.0, "num_bedrooms": 1, "building": "S1.01", "property_type": "Studio"},
+    )
 
     chunks = [c1, c2, c3]
     vectors = await fake_embedder.embed_texts([c.text for c in chunks])
@@ -151,7 +163,9 @@ async def test_loc_cau_truc_bat_dong_san(memory_store, fake_embedder):
     assert [c.id for c in found] == ["c1"]
 
     # Lọc kết hợp Tòa S1.01 & Loại căn Studio
-    found = await memory_store.search(query_vec, filters=RetrievalFilter(building="S1.01", property_type="Studio"), limit=10)
+    found = await memory_store.search(
+        query_vec, filters=RetrievalFilter(building="S1.01", property_type="Studio"), limit=10
+    )
     assert [c.id for c in found] == ["c3"]
 
 
@@ -200,10 +214,7 @@ async def test_fake_cross_encoder_reranker():
     from src.data.retrieval.rerankers import FakeCrossEncoderReranker
 
     reranker = FakeCrossEncoderReranker()
-    chunks = [
-        _chunk(f"c{i}", f"Thông tin căn hộ {i} view biển hồ đẹp", score=0.5)
-        for i in range(1, 11)
-    ]
+    chunks = [_chunk(f"c{i}", f"Thông tin căn hộ {i} view biển hồ đẹp", score=0.5) for i in range(1, 11)]
     # Đưa một chunk phù hợp nhất lên từ từ
     chunks[7] = _chunk("c8", "Căn biệt thự view biển hồ trực diện đẹp xuất sắc", score=0.4)
 
@@ -220,10 +231,7 @@ async def test_two_stage_retriever_top_k_12_to_top_n_3(memory_store, fake_embedd
     from src.data.retrieval.rerankers import FakeCrossEncoderReranker
     from src.data.retrieval.retriever import DefaultRetriever
 
-    chunks = [
-        _chunk(f"c{i}", f"Căn hộ thứ {i} tòa S2", score=0.1 * i)
-        for i in range(1, 15)
-    ]
+    chunks = [_chunk(f"c{i}", f"Căn hộ thứ {i} tòa S2", score=0.1 * i) for i in range(1, 15)]
     vectors = await fake_embedder.embed_texts([c.text for c in chunks])
     await memory_store.upsert(chunks, vectors)
 
@@ -244,6 +252,7 @@ async def test_two_stage_retriever_top_k_12_to_top_n_3(memory_store, fake_embedd
 def test_qdrant_filter_translation():
     """Kiểm tra việc chuyển đổi RetrievalFilter thành Qdrant Filter object."""
     from qdrant_client import models
+
     from src.data.stores.qdrant_store import _to_qdrant_filter
 
     f = RetrievalFilter(

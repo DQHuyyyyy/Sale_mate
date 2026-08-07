@@ -5,13 +5,11 @@ from __future__ import annotations
 import pytest
 
 from src.agents.graph import build_graph, build_nodes
-from src.agents.nodes.generate import GenerateNode, build_messages
+from src.agents.nodes.generate import build_messages
 from src.agents.nodes.guardrail import INSUFFICIENT_MESSAGE, GuardrailNode
 from src.agents.prompts import system_prompt
 from src.agents.state import initial_state
-from src.data.contracts import Chunk, RetrievalResult
-from src.data.retrieval.retriever import DefaultRetriever, EmptyRetriever
-from tests.conftest import FAKE_REPLY
+from src.data.retrieval.retriever import EmptyRetriever
 
 
 @pytest.mark.asyncio
@@ -41,7 +39,10 @@ async def test_build_messages_ep_grounding_va_dinh_dang_trich_dan():
 
     assert "<ngu_canh>" in user_prompt
     assert "Ma can: VOP398, Gia: 3.1 tỷ" in user_prompt
-    assert "trích dẫn nguồn bằng định dạng [Mã căn] hoặc [Tên tài liệu]" in user_prompt.lower() or "trích dẫn" in user_prompt.lower()
+    assert (
+        "trích dẫn nguồn bằng định dạng [Mã căn] hoặc [Tên tài liệu]" in user_prompt.lower()
+        or "trích dẫn" in user_prompt.lower()
+    )
 
 
 @pytest.mark.asyncio

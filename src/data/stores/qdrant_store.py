@@ -46,7 +46,7 @@ class QdrantVectorStore:
                     distance=models.Distance.COSINE,
                 ),
             )
-# Index cho các trường lọc phân quyền, lọc cấu trúc bất động sản,
+            # Index cho các trường lọc phân quyền, lọc cấu trúc bất động sản,
             # và metadata.source_site — bắt buộc để filter nhanh. Qdrant Cloud
             # (khác local Docker) từ chối filter trên field chưa có index với
             # lỗi 400 — cần cho list_active_doc_ids() (mục 6 active/expired).
