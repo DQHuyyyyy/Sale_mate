@@ -13,6 +13,6 @@ uvicorn src.main:app --reload --port 8000
 Terminal 2 — Frontend:
 
 
-cd E:\VSCSTD\VIN\P-055\frontend
+cd E:\VSCSTD\VIN\P-055\interface\frontend
 npm run dev
 Dừng: Ctrl+C ở mỗi cửa sổ.

@@ -6,17 +6,17 @@
 #   docker compose logs -f ai-core    xem log
 #
 # Ba tầng sau khi gộp nhánh dat:
-#   frontend/  Vite + React   :5173  proxy /api -> :8000
-#   backend/   API sản phẩm   :8000  auth · apartments · zones · sales · chat
-#   src/       lõi AI + RAG   :8001  backend/ gọi vào qua AI_CORE_URL
+#   interface/frontend/  Vite + React  :5173  proxy /api -> :8000
+#   interface/backend/   API sản phẩm  :8000  auth · apartments · zones · sales
+#   src/                 lõi AI + RAG  :8001  backend gọi vào qua AI_CORE_URL
 #   docker compose down               dừng (giữ dữ liệu)
 #   docker compose down -v            dừng và XOÁ dữ liệu
 # ============================================
 
 services:
-  # Lõi AI: agent graph + RAG. backend/ gọi vào đây qua AI_CORE_URL.
+  # Lõi AI: agent graph + RAG. interface/backend/ gọi vào đây qua AI_CORE_URL.
   # Cổng 8000 vẫn là cổng trong container; ra ngoài đổi sang 8001 để nhường
-  # 8000 cho API sản phẩm ở backend/ (frontend proxy /api thẳng vào đó).
+  # 8000 cho API sản phẩm ở interface/backend/ (frontend proxy /api vào đó).
   ai-core:
     build:
       context: .
