@@ -7,13 +7,8 @@ tính độ phủ nằm ở đây. Đổi store hay reranker không ảnh hưở
 from __future__ import annotations
 
 from src.core.logging import get_logger
-from src.data.contracts import (
-    Embedder,
-    Reranker,
-    RetrievalFilter,
-    RetrievalResult,
-    VectorStore,
-)
+from src.data.contracts import Embedder, RetrievalFilter, VectorStore
+from src.rag.contracts import Reranker, RetrievalResult
 
 logger = get_logger(__name__)
 

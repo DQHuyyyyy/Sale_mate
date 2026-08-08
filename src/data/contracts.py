@@ -1,10 +1,17 @@
-"""HỢP ĐỒNG của module Data (RAG).
+"""HỢP ĐỒNG của module DATA — đường GHI dữ liệu.
 
-Module khác (agents, api) CHỈ import từ file này — không import class cụ thể
-trong stores/ hay embedders/. Nhờ vậy đổi Qdrant ↔ Chroma, OpenAI ↔ BGE-M3
-không cần sửa bên gọi.
+    crawl → parse → chunk → embed → vector store
 
-Chủ sở hữu: dat (src/data/**)
+Module khác CHỈ import từ file này, không import class cụ thể trong stores/
+hay ingestion/. Nhờ vậy đổi Qdrant ↔ Chroma, OpenAI ↔ BGE-M3 không phải sửa
+bên gọi.
+
+`RetrievalFilter` nằm ở đây chứ không ở `src/rag/` vì nó là **tham số truy vấn
+của VectorStore**. Để bên rag thì data phải import rag, mà rag đã import data
+→ vòng lặp. Phần đọc (RetrievalResult · Retriever · Reranker) ở
+`src/rag/contracts.py`.
+
+Chủ sở hữu: viet (src/data/**)
 """
 
 from __future__ import annotations
@@ -65,38 +72,6 @@ class RetrievalFilter(BaseModel):
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
-class RetrievalResult(BaseModel):
-    """Kết quả truy hồi kèm độ phủ để quyết định có đủ dữ liệu trả lời không."""
-
-    chunks: list[Chunk] = Field(default_factory=list)
-    coverage: float = Field(default=0.0, ge=0.0, le=1.0)
-    query: str = ""
-
-    def is_sufficient(self, threshold: float) -> bool:
-        """Dưới ngưỡng thì agent phải trả lời 'chưa đủ dữ liệu'."""
-        return bool(self.chunks) and self.coverage >= threshold
-
-    def as_context(self, separator: str = "\n---\n") -> str:
-        """Ghép các chunk Reranked thành context giàu metadata đưa vào LLM Prompt."""
-        pieces: list[str] = []
-        for chunk in self.chunks:
-            meta = chunk.metadata
-            piece = chunk.text
-            extra_details: list[str] = []
-            if "ma_can" in meta and meta["ma_can"]:
-                extra_details.append(f"Mã căn: [{meta['ma_can']}]")
-            if "image_url" in meta and meta["image_url"]:
-                extra_details.append(f"Link Ảnh: {meta['image_url']}")
-            if "price" in meta and meta["price"]:
-                orig = meta["price"]
-                disc = round(orig * 0.92, 3)
-                extra_details.append(f"Giá gốc: {orig} tỷ (Giá sau chiết khấu 8%: {disc} tỷ)")
-            if extra_details:
-                piece += "\n[Chi tiết bổ sung: " + " | ".join(extra_details) + "]"
-            pieces.append(piece)
-        return separator.join(pieces)
-
-
 # --------------------------------------------------------------------------
 # Protocol — mỗi cái là một điểm cắm implementation
 # --------------------------------------------------------------------------
@@ -149,24 +124,3 @@ class VectorStore(Protocol):
     async def delete_by_doc(self, doc_id: str) -> int: ...
 
     async def count(self) -> int: ...
-
-
-@runtime_checkable
-class Reranker(Protocol):
-    """Xếp lại kết quả trước khi đưa vào LLM."""
-
-    async def rerank(self, query: str, chunks: list[Chunk], top_n: int) -> list[Chunk]: ...
-
-
-@runtime_checkable
-class Retriever(Protocol):
-    """Mặt tiền cho toàn bộ khâu truy hồi — agent chỉ gọi cái này."""
-
-    async def retrieve(
-        self,
-        query: str,
-        *,
-        filters: RetrievalFilter | None = None,
-        top_k: int | None = None,
-        top_n: int | None = None,
-    ) -> RetrievalResult: ...

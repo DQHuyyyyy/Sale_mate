@@ -6,7 +6,7 @@ import pytest
 
 from src.agents.graph import build_graph, build_nodes, route_after_router
 from src.agents.state import initial_state
-from src.data.retrieval.retriever import EmptyRetriever
+from src.rag.retriever import EmptyRetriever
 from tests.conftest import FAKE_REPLY
 
 

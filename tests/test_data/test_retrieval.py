@@ -7,10 +7,10 @@ import pytest
 from src.data.contracts import Chunk, LoadedDocument, RetrievalFilter
 from src.data.crawling.meeyland import parse_listing_detail
 from src.data.ingestion.chunkers import ParagraphChunker
-from src.data.pipelines import IngestPipeline
-from src.data.retrieval.rerankers import KeywordOverlapReranker, PassthroughReranker
-from src.data.retrieval.retriever import DefaultRetriever
+from src.data.pipeline import IngestPipeline
 from src.data.sources.inventory import InventoryUnit, unit_to_document
+from src.rag.rerankers import KeywordOverlapReranker, PassthroughReranker
+from src.rag.retriever import DefaultRetriever
 
 
 def _chunk(chunk_id: str, text: str, **kwargs) -> Chunk:
@@ -211,7 +211,7 @@ async def test_loc_doc_kind_va_image_url_va_policy(memory_store, fake_embedder):
 @pytest.mark.asyncio
 async def test_fake_cross_encoder_reranker():
     """Test FakeCrossEncoderReranker chấm điểm và cắt top-n=3 từ 10 ứng viên."""
-    from src.data.retrieval.rerankers import FakeCrossEncoderReranker
+    from src.rag.rerankers import FakeCrossEncoderReranker
 
     reranker = FakeCrossEncoderReranker()
     chunks = [_chunk(f"c{i}", f"Thông tin căn hộ {i} view biển hồ đẹp", score=0.5) for i in range(1, 11)]
@@ -228,8 +228,8 @@ async def test_fake_cross_encoder_reranker():
 @pytest.mark.asyncio
 async def test_two_stage_retriever_top_k_12_to_top_n_3(memory_store, fake_embedder):
     """Test quy trình Retriever 2 giai đoạn: lấy 12 ứng viên -> rerank lấy top-3 tinh túy nhất."""
-    from src.data.retrieval.rerankers import FakeCrossEncoderReranker
-    from src.data.retrieval.retriever import DefaultRetriever
+    from src.rag.rerankers import FakeCrossEncoderReranker
+    from src.rag.retriever import DefaultRetriever
 
     chunks = [_chunk(f"c{i}", f"Căn hộ thứ {i} tòa S2", score=0.1 * i) for i in range(1, 15)]
     vectors = await fake_embedder.embed_texts([c.text for c in chunks])

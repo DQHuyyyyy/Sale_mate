@@ -16,17 +16,19 @@ from src.agents.graph import build_graph, build_nodes
 from src.agents.service import LangGraphAgentService
 from src.core.config import Settings, get_settings
 from src.core.container import Container, container
+from src.core.exceptions import ConfigurationError
 from src.core.logging import get_logger
-from src.data.contracts import Embedder, Reranker, Retriever, VectorStore
+from src.data.contracts import Embedder, VectorStore
 from src.data.ingestion.embedders import FakeEmbedder, OpenAIEmbedder
-from src.data.retrieval.rerankers import (
+from src.data.stores.memory_store import InMemoryVectorStore
+from src.data.stores.qdrant_store import QdrantVectorStore
+from src.rag.contracts import Reranker, Retriever
+from src.rag.rerankers import (
     CrossEncoderReranker,
     KeywordOverlapReranker,
     PassthroughReranker,
 )
-from src.data.retrieval.retriever import DefaultRetriever, EmptyRetriever
-from src.data.stores.memory_store import InMemoryVectorStore
-from src.data.stores.qdrant_store import QdrantVectorStore
+from src.rag.retriever import DefaultRetriever, EmptyRetriever
 from src.services.llm import OpenAIProvider, ScriptedProvider
 
 logger = get_logger(__name__)
@@ -39,11 +41,24 @@ def configure(target: Container | None = None, settings: Settings | None = None)
 
     box.register_instance(Settings, cfg)
 
+    # Đồ giả lập CHỈ được dùng trong môi trường test. Ở dev và production, thiếu
+    # khoá là dừng ngay — thà không chạy còn hơn phục vụ nội dung bịa ra.
+    #
+    # Trước đây thiếu OPENAI_API_KEY thì hệ thống âm thầm rơi về ScriptedProvider
+    # (trả câu trả lời soạn sẵn) và FakeEmbedder (vector 64 chiều, không khớp
+    # collection 1536 chiều). Người dùng nhận nội dung giả mà tưởng là thật, và
+    # truy hồi hỏng theo kiểu khó chẩn đoán.
+    if not cfg.has_openai_key and not cfg.is_test:
+        raise ConfigurationError(
+            "Thiếu OPENAI_API_KEY hợp lệ. Lõi AI không khởi động khi không có khoá thật — "
+            "hệ thống chỉ trả lời dựa trên tài liệu, không dùng dữ liệu giả lập. "
+            "Điền OPENAI_API_KEY vào .env rồi chạy lại."
+        )
+
     # ---------- LLM ----------
     def make_llm() -> LLMProvider:
         if not cfg.has_openai_key:
-            logger.warning("Chưa có OPENAI_API_KEY hợp lệ — dùng LLM giả lập.")
-            return ScriptedProvider()
+            return ScriptedProvider()  # chỉ tới được ở APP_ENV=test
         return OpenAIProvider(
             cfg.openai_api_key,
             default_model=cfg.llm_model_fast,
@@ -55,8 +70,7 @@ def configure(target: Container | None = None, settings: Settings | None = None)
     # ---------- Embedder ----------
     def make_embedder() -> Embedder:
         if not cfg.has_openai_key:
-            logger.warning("Không có OPENAI_API_KEY — embedding giả lập, truy hồi sẽ vô nghĩa.")
-            return FakeEmbedder()
+            return FakeEmbedder()  # chỉ tới được ở APP_ENV=test
         return OpenAIEmbedder(
             cfg.openai_api_key,
             model=cfg.embedding_model,

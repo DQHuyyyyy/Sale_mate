@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from src.data.contracts import Chunk, Reranker  # noqa: F401
+from src.data.contracts import Chunk  # noqa: F401
 
 
 class PassthroughReranker:
