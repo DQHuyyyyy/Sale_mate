@@ -1,9 +1,12 @@
 """Wiring — nơi DUY NHẤT gắn Protocol với implementation cụ thể.
 
-Đọc file này là biết toàn bộ hệ thống đang chạy bằng gì. Đổi Qdrant ↔ in-memory,
-OpenAI ↔ giả lập, mock portal ↔ SQL đều sửa ở đây, không đụng code gọi.
+Đọc file này là biết toàn bộ lõi AI đang chạy bằng gì. Đổi Qdrant ↔ in-memory,
+OpenAI ↔ giả lập đều sửa ở đây, không đụng code gọi.
 
 src/core/ không import file này (tránh vòng lặp); main.py gọi configure().
+
+Mọi lựa chọn dưới đây đều lấy từ Settings chứ không hardcode — nhờ vậy đổi hành
+vi bằng biến môi trường, không phải sửa code rồi commit.
 """
 
 from __future__ import annotations
@@ -14,19 +17,19 @@ from src.agents.service import LangGraphAgentService
 from src.core.config import Settings, get_settings
 from src.core.container import Container, container
 from src.core.logging import get_logger
-from src.data.contracts import Embedder, Retriever, VectorStore
+from src.data.contracts import Embedder, Reranker, Retriever, VectorStore
 from src.data.ingestion.embedders import FakeEmbedder, OpenAIEmbedder
-from src.data.retrieval.rerankers import KeywordOverlapReranker
+from src.data.retrieval.rerankers import (
+    CrossEncoderReranker,
+    KeywordOverlapReranker,
+    PassthroughReranker,
+)
 from src.data.retrieval.retriever import DefaultRetriever, EmptyRetriever
 from src.data.stores.memory_store import InMemoryVectorStore
+from src.data.stores.qdrant_store import QdrantVectorStore
 from src.services.llm import OpenAIProvider, ScriptedProvider
-from src.services.portal import InMemoryPortalRepository, PortalRepository
 
 logger = get_logger(__name__)
-
-# Bật khi module Data đã nạp tài liệu thật vào vector store.
-# Đang tắt: trợ lý trả lời trực tiếp bằng LLM, chưa tra tài liệu.
-ENABLE_RAG = False
 
 
 def configure(target: Container | None = None, settings: Settings | None = None) -> Container:
@@ -49,9 +52,10 @@ def configure(target: Container | None = None, settings: Settings | None = None)
 
     box.register(LLMProvider, make_llm)
 
-    # ---------- Data ----------
+    # ---------- Embedder ----------
     def make_embedder() -> Embedder:
         if not cfg.has_openai_key:
+            logger.warning("Không có OPENAI_API_KEY — embedding giả lập, truy hồi sẽ vô nghĩa.")
             return FakeEmbedder()
         return OpenAIEmbedder(
             cfg.openai_api_key,
@@ -60,25 +64,44 @@ def configure(target: Container | None = None, settings: Settings | None = None)
         )
 
     box.register(Embedder, make_embedder)
-    # Mặc định in-memory: dev/test chạy được không cần Docker.
-    # Đổi sang Qdrant: trả về QdrantVectorStore(cfg.qdrant_url, cfg.qdrant_collection).
-    box.register(VectorStore, InMemoryVectorStore)
 
+    # ---------- Vector store ----------
+    def make_vector_store() -> VectorStore:
+        # Test luôn chạy trong bộ nhớ: không test nào được gọi Qdrant thật.
+        if not cfg.use_real_vector_store:
+            return InMemoryVectorStore()
+        return QdrantVectorStore(
+            cfg.qdrant_url,
+            cfg.qdrant_collection,
+            api_key=cfg.qdrant_api_key,
+        )
+
+    box.register(VectorStore, make_vector_store)
+
+    # ---------- Reranker ----------
+    def make_reranker() -> Reranker:
+        if cfg.reranker == "cross_encoder":
+            return CrossEncoderReranker()
+        if cfg.reranker == "passthrough":
+            return PassthroughReranker()
+        return KeywordOverlapReranker()
+
+    box.register(Reranker, make_reranker)
+
+    # ---------- Retriever ----------
     def make_retriever() -> Retriever:
-        if not ENABLE_RAG:
+        if not cfg.enable_rag:
+            logger.warning("ENABLE_RAG tắt — trợ lý sẽ luôn trả lời 'chưa đủ dữ liệu'.")
             return EmptyRetriever()
         return DefaultRetriever(
             box.resolve(Embedder),
             box.resolve(VectorStore),
-            KeywordOverlapReranker(),
+            box.resolve(Reranker),
             top_k=cfg.retrieval_top_k,
             top_n=cfg.rerank_top_n,
         )
 
     box.register(Retriever, make_retriever)
-
-    # ---------- Portal ----------
-    box.register(PortalRepository, InMemoryPortalRepository)
 
     # ---------- Agent ----------
     def make_agent() -> AgentService:
@@ -89,13 +112,21 @@ def configure(target: Container | None = None, settings: Settings | None = None)
             llm,
             cfg,
             nodes=nodes,
-            enable_rag=ENABLE_RAG,
+            enable_rag=cfg.enable_rag,
         )
 
     box.register(AgentService, make_agent)
 
     logger.info(
-        "Đã cấu hình dịch vụ",
-        extra={"context": {"rag": ENABLE_RAG, "llm_real": cfg.has_openai_key}},
+        "Đã cấu hình lõi AI",
+        extra={
+            "context": {
+                "rag": cfg.enable_rag,
+                "vector_store": "qdrant" if cfg.use_real_vector_store else "memory",
+                "qdrant_cloud": cfg.uses_qdrant_cloud,
+                "reranker": cfg.reranker,
+                "llm_real": cfg.has_openai_key,
+            }
+        },
     )
     return box

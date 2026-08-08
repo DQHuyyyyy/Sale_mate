@@ -13,17 +13,11 @@ from fastapi import Depends
 from src.agents.contracts import AgentService
 from src.core.config import Settings, get_settings
 from src.core.container import container
-from src.services.portal import PortalRepository
 
 
 def get_agent_service() -> AgentService:
     return container.resolve(AgentService)
 
 
-def get_portal_repository() -> PortalRepository:
-    return container.resolve(PortalRepository)
-
-
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 AgentDep = Annotated[AgentService, Depends(get_agent_service)]
-PortalDep = Annotated[PortalRepository, Depends(get_portal_repository)]

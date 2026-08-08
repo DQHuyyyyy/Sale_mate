@@ -51,10 +51,17 @@ class Settings(BaseSettings):
     embedding_dim: int = Field(default=1536, gt=0)
 
     # ---------- Retrieval ----------
+    # Tắt RAG thì agent trả lời bằng kiến thức chung của model, không tra tài
+    # liệu và không trích nguồn — chỉ dùng khi cần chẩn đoán, không dùng khi demo.
+    enable_rag: bool = True
     retrieval_top_k: int = Field(default=20, gt=0)
     rerank_top_n: int = Field(default=5, gt=0)
     # Dưới ngưỡng này coi như "chưa đủ dữ liệu" — agent phải từ chối thay vì đoán.
     coverage_threshold: float = Field(default=0.35, ge=0.0, le=1.0)
+    # keyword: không cần thư viện ngoài, chạy được ở mọi nơi kể cả Render free.
+    # cross_encoder: chính xác hơn nhưng kéo theo sentence-transformers + torch
+    # (~2GB) — xem docs/adr/ADR-002 về lý do không đưa vào phụ thuộc mặc định.
+    reranker: Literal["keyword", "cross_encoder", "passthrough"] = "keyword"
 
     # ---------- Database ----------
     database_url: str = "sqlite:///./data/app.db"
@@ -91,6 +98,15 @@ class Settings(BaseSettings):
     @property
     def uses_qdrant_cloud(self) -> bool:
         return "cloud.qdrant.io" in self.qdrant_url
+
+    @property
+    def use_real_vector_store(self) -> bool:
+        """Có nối vào Qdrant thật không.
+
+        Môi trường test luôn dùng store trong bộ nhớ — không test nào được gọi
+        Qdrant thật, vừa chậm vừa phụ thuộc mạng vừa làm bẩn dữ liệu chung.
+        """
+        return bool(self.qdrant_url) and not self.is_test
 
     @property
     def has_openai_key(self) -> bool:
