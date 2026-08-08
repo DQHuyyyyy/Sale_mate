@@ -1,17 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { sendChatMessage } from '../api';
-import { CloseIcon, ExpandIcon, SendIcon } from './Icons';
+import { CloseIcon, SendIcon } from './Icons';
 
 const QUICK_ASKS = ['Căn 2PN dưới 4 tỷ', 'Căn còn ở tòa S1', 'Tư vấn view đẹp'];
 
 /**
- * Trợ lý S — nút tròn góc dưới phải, mở ra khung chat.
+ * Trợ lý S — sidebar bên phải, thu gọn thành nút tròn chữ "S".
+ *
+ * Mở được cho cả khách chưa đăng nhập. Backend giới hạn số lượt theo IP nên khi
+ * hỏi quá nhanh sẽ nhận lỗi 429 kèm số giây phải đợi — hiện nguyên văn câu đó
+ * cho người dùng, không nuốt đi.
+ *
  * Giữ lịch sử hội thoại trong state và gửi kèm mỗi lượt, đúng contract
  * POST /api/chat {message, history} -> {reply}.
  */
-export default function ChatbotWidget() {
-  const [open, setOpen] = useState(false);
-  const [big, setBig] = useState(false);
+export default function ChatSidebar({ open, onToggle }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -21,6 +24,10 @@ export default function ChatbotWidget() {
   useEffect(() => {
     if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
   }, [messages, sending]);
+
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
 
   const ask = async (text) => {
     const message = text.trim();
@@ -55,13 +62,7 @@ export default function ChatbotWidget() {
   if (!open) {
     return (
       <div className="fab">
-        <button
-          aria-label="Mở trợ lý S"
-          onClick={() => {
-            setOpen(true);
-            setTimeout(() => inputRef.current?.focus(), 0);
-          }}
-        >
+        <button aria-label="Mở trợ lý S" onClick={onToggle}>
           S
         </button>
       </div>
@@ -69,7 +70,7 @@ export default function ChatbotWidget() {
   }
 
   return (
-    <div className={big ? 'chatw big' : 'chatw'} role="dialog" aria-label="Trợ lý S">
+    <aside className="chat-sidebar" aria-label="Trợ lý S">
       <div className="cw-hd">
         <div className="ava">S</div>
         <div>
@@ -77,16 +78,7 @@ export default function ChatbotWidget() {
           <span>SalesMate AI</span>
         </div>
         <div className="acts">
-          <button aria-label="Phóng to / thu nhỏ" onClick={() => setBig((v) => !v)}>
-            <ExpandIcon />
-          </button>
-          <button
-            aria-label="Đóng"
-            onClick={() => {
-              setOpen(false);
-              setBig(false);
-            }}
-          >
+          <button aria-label="Thu gọn trợ lý" onClick={onToggle}>
             <CloseIcon />
           </button>
         </div>
@@ -111,9 +103,7 @@ export default function ChatbotWidget() {
         {messages.map((item, index) => (
           <div
             key={index}
-            className={
-              item.role === 'user' ? 'cmsg u' : item.error ? 'cmsg a err' : 'cmsg a'
-            }
+            className={item.role === 'user' ? 'cmsg u' : item.error ? 'cmsg a err' : 'cmsg a'}
           >
             {item.content}
           </div>
@@ -149,6 +139,6 @@ export default function ChatbotWidget() {
           </button>
         </div>
       </div>
-    </div>
+    </aside>
   );
 }

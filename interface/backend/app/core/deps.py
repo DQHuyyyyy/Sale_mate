@@ -53,6 +53,26 @@ def get_current_user(
     return CurrentUser(**row)
 
 
+def get_optional_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> CurrentUser | None:
+    """Dùng cho route công khai: có token hợp lệ thì trả user, không thì trả None.
+
+    Khác `get_current_user` ở chỗ KHÔNG ném lỗi khi thiếu token — khách vãng lai
+    vẫn xem được căn hộ và phân khu. Token sai hoặc hết hạn cũng coi như khách,
+    không chặn, vì mấy trang này vốn không cần đăng nhập.
+
+    Chỉ gắn vào route thực sự công khai. Route nào cần danh tính thì vẫn phải
+    dùng `get_current_user` / `require_admin`.
+    """
+    if credentials is None or not credentials.credentials:
+        return None
+    try:
+        return get_current_user(credentials)
+    except HTTPException:
+        return None
+
+
 def require_admin(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
     if current_user.role != "admin":
         raise HTTPException(

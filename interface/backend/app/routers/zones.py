@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from app.core.db import fetch_all
-from app.core.deps import get_current_user
+from app.core.deps import get_optional_user
 from app.schemas.auth import CurrentUser
 from app.schemas.zone import Tower, Zone
 
@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api", tags=["zones"])
 
 
 @router.get("/zones", response_model=list[Zone])
-def list_zones(_: CurrentUser = Depends(get_current_user)) -> list[Zone]:
+def list_zones(_: CurrentUser | None = Depends(get_optional_user)) -> list[Zone]:
     """Danh sách phân khu, kèm mã các tòa thuộc khu — dựng sơ đồ phân khu."""
     rows = fetch_all(
         """
@@ -30,7 +30,7 @@ def list_zones(_: CurrentUser = Depends(get_current_user)) -> list[Zone]:
 
 
 @router.get("/towers", response_model=list[Tower])
-def list_towers(_: CurrentUser = Depends(get_current_user)) -> list[Tower]:
+def list_towers(_: CurrentUser | None = Depends(get_optional_user)) -> list[Tower]:
     """Danh sách tòa để đổ vào dropdown bộ lọc."""
     rows = fetch_all(
         """

@@ -22,7 +22,7 @@ from app.core.columns import (
     normalize_sql,
 )
 from app.core.db import fetch_all, fetch_one, get_conn
-from app.core.deps import get_current_user, require_admin
+from app.core.deps import get_optional_user, require_admin
 from app.core.schema import numeric_columns_ready
 from app.schemas.apartment import (
     PRICE_MAX,
@@ -91,7 +91,7 @@ def search_apartments(
     type: str | None = Query(default=None, description="Loại căn, ví dụ '2 PN, 1WC'"),
     limit: int = Query(default=100, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    _: CurrentUser = Depends(get_current_user),
+    _: CurrentUser | None = Depends(get_optional_user),
 ) -> list[ApartmentListItem]:
     """Tìm kiếm căn hộ. Luôn chỉ trả căn "Tình trạng" = 'Còn'."""
     if price_min is not None and price_max is not None and price_min > price_max:
@@ -178,7 +178,7 @@ def _load_detail(ma_can: str) -> ApartmentDetail:
 @router.get("/{ma_can}", response_model=ApartmentDetail)
 def get_apartment(
     ma_can: str,
-    _: CurrentUser = Depends(get_current_user),
+    _: CurrentUser | None = Depends(get_optional_user),
 ) -> ApartmentDetail:
     return _load_detail(ma_can)
 
