@@ -7,9 +7,8 @@ tách hai đường đi này. Không nhét giá/tình trạng vào RAG — hai t
 có ở đây, tránh hai nguồn số liệu lệch nhau theo thời gian.
 
 Trước đây tool này đọc thẳng CSV mỗi lần gọi (không có DB); giờ query SQL
-thật. Nạp/cập nhật dữ liệu vào bảng qua scripts/migrate_inventory_to_postgres.py
-— gần nhất với "thời gian thực" khi hệ thống chưa có ERP ghi trực tiếp vào
-bảng này.
+thật. `inventory_units` là VIEW đọc thẳng `salemate_v1` (migration 005), nên
+số liệu luôn khớp đúng thứ portal hiển thị — không còn bản sao để lệch.
 """
 
 from __future__ import annotations

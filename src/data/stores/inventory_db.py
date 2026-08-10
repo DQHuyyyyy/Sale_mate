@@ -3,7 +3,7 @@
 đường đi khác nhau: có cấu trúc → Postgres + SQL, văn bản dài → Qdrant + RAG.
 
 Trước đây `InventoryLookupTool` đọc thẳng CSV mỗi lần gọi; giờ CSV chỉ còn là
-nguồn nạp ban đầu (`scripts/migrate_inventory_to_postgres.py`), còn tool tra
+nguồn dữ liệu là VIEW `inventory_units` trên `salemate_v1` (migration 005), còn tool tra
 cứu thật sự query bảng `inventory_units` trong Postgres (Supabase).
 
 Dùng SQLAlchemy Core (không ORM) — bảng định nghĩa portable giữa SQLite (test,
