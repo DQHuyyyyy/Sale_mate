@@ -52,7 +52,9 @@ export default function AvatarMenu() {
   const handleSignOut = () => {
     close();
     signOut();
-    navigate('/login', { replace: true });
+    // Về trang chủ, không phải màn đăng nhập: website xem được khi chưa đăng
+    // nhập, nên đăng xuất xong vẫn tra cứu căn hộ bình thường.
+    navigate('/', { replace: true });
   };
 
   return (

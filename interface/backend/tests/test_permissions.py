@@ -14,13 +14,27 @@ os.environ.setdefault("DATABASE_URL", "postgresql://user:pass@localhost:5432/tes
 import pytest  # noqa: E402
 from app.core.deps import get_current_user  # noqa: E402
 from app.main import app  # noqa: E402
+from app.routers import apartments as apartments_router  # noqa: E402
+from app.routers import chat as chat_router  # noqa: E402
 from app.routers import sales as sales_router  # noqa: E402
 from app.routers import users as users_router  # noqa: E402
+from app.routers import zones as zones_router  # noqa: E402
 from app.schemas.auth import CurrentUser  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 SALE = CurrentUser(id=7, username="sale01", full_name="Nguyễn Văn Sale", role="sale")
 ADMIN = CurrentUser(id=1, username="admin", full_name="Trần Quản Trị", role="admin")
+
+
+def _khong_cham_database(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Thay mọi lối đi xuống database bằng hàm giả.
+
+    Route căn hộ còn hỏi schema qua `numeric_columns_ready` chứ không chỉ đọc dữ
+    liệu — quên cái này là test sập với PoolClosed.
+    """
+    monkeypatch.setattr(apartments_router, "fetch_all", lambda *args, **kwargs: [])
+    monkeypatch.setattr(apartments_router, "numeric_columns_ready", lambda: True)
+    monkeypatch.setattr(zones_router, "fetch_all", lambda *args, **kwargs: [])
 
 
 def as_user(user: CurrentUser) -> TestClient:
@@ -136,12 +150,11 @@ class TestMyHistory:
 
 
 class TestKhongCoToken:
-    def test_moi_route_deu_doi_dang_nhap(self) -> None:
+    """Ranh giới giữa phần khách xem được và phần bắt buộc đăng nhập."""
+
+    def test_route_noi_bo_van_doi_dang_nhap(self) -> None:
         client = TestClient(app)
         for path in (
-            "/api/apartments",
-            "/api/zones",
-            "/api/towers",
             "/api/documents",
             "/api/sales/my-history",
             "/api/sales/all",
@@ -149,6 +162,39 @@ class TestKhongCoToken:
         ):
             assert client.get(path).status_code == 401, path
 
-    def test_chat_cung_doi_dang_nhap(self) -> None:
-        response = TestClient(app).post("/api/chat", json={"message": "chào", "history": []})
+    def test_route_cong_khai_khong_doi_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Khách vãng lai xem được căn hộ và phân khu."""
+        _khong_cham_database(monkeypatch)
+
+        client = TestClient(app)
+        for path in ("/api/apartments", "/api/zones", "/api/towers"):
+            assert client.get(path).status_code == 200, path
+
+    def test_token_rac_tren_route_cong_khai_van_xem_duoc(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Token hỏng thì coi như khách, không chặn — trang này vốn không cần đăng nhập."""
+        _khong_cham_database(monkeypatch)
+        response = TestClient(app).get("/api/apartments", headers={"Authorization": "Bearer khong-phai-token"})
+        assert response.status_code == 200
+
+    def test_them_can_ho_van_chi_admin(self) -> None:
+        response = TestClient(app).post("/api/apartments", json={})
         assert response.status_code == 401
+
+
+class TestHanMucChat:
+    def test_khach_bi_chan_sau_khi_vuot_han_muc(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        async def fake_reply(message, history):
+            return "trả lời mẫu"
+
+        monkeypatch.setattr(chat_router, "generate_reply", fake_reply)
+        # Bộ đếm dùng chung cả tiến trình, phải làm sạch trước khi đo.
+        chat_router._gioi_han_khach._hits.clear()
+
+        client = TestClient(app)
+        body = {"message": "chào", "history": []}
+        for lan in range(chat_router.KHACH_MOI_10_PHUT):
+            assert client.post("/api/chat", json=body).status_code == 200, lan
+
+        response = client.post("/api/chat", json=body)
+        assert response.status_code == 429
+        assert "Retry-After" in response.headers

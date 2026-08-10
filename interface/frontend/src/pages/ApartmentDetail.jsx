@@ -130,7 +130,7 @@ export default function ApartmentDetail() {
 
       <div className="detail-grid">
         <div>
-          <div className="gallery-main">
+          <div className={current?.image_url ? 'gallery-main' : 'gallery-main no-photo'}>
             {current?.image_url ? (
               <img src={current.image_url} alt={`Ảnh căn ${apartment.ma_can}`} />
             ) : (
