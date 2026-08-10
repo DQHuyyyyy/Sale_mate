@@ -16,6 +16,17 @@ from src.models.chat import ChatMessage
 from src.rag.grounding import build_grounded_messages
 
 
+def merged_context(state: AgentState) -> str:
+    """Ghép dữ liệu tool với tài liệu truy hồi.
+
+    Tool đứng TRƯỚC: đó là số liệu đọc thẳng từ nguồn sự thật ngay lúc hỏi, còn
+    tài liệu trong vector store là bản chụp. Khi hai nguồn nói khác nhau về giá
+    hay tình trạng căn, cái đúng phải nằm ở vị trí model đọc trước.
+    """
+    parts = [state.get("tool_context", ""), state.get("context", "")]
+    return "\n\n".join(part for part in parts if part)
+
+
 def build_messages(state: AgentState) -> list[ChatMessage]:
     """Dựng prompt từ state.
 
@@ -25,7 +36,7 @@ def build_messages(state: AgentState) -> list[ChatMessage]:
     return build_grounded_messages(
         state.get("query", ""),
         system_prompt=system_prompt(),
-        context=state.get("context", ""),
+        context=merged_context(state),
         history=state.get("history", []),
     )
 

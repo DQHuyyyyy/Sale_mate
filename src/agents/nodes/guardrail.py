@@ -13,6 +13,7 @@ from typing import Any
 
 from src.agents.nodes.base import BaseNode
 from src.agents.state import AgentState, Intent
+from src.models.chat import Citation
 
 INSUFFICIENT_MESSAGE = (
     "Mình chưa có đủ dữ liệu để trả lời chính xác câu này. "
@@ -41,8 +42,6 @@ class GuardrailNode(BaseNode):
         self._threshold = coverage_threshold
 
     async def execute(self, state: AgentState) -> dict[str, Any]:
-        updates: dict[str, Any] = {}
-
         if state.get("needs_retrieval") and not self._has_enough_context(state):
             return {
                 "answer": INSUFFICIENT_MESSAGE,
@@ -50,11 +49,31 @@ class GuardrailNode(BaseNode):
                 "is_sensitive": False,
             }
 
-        updates["is_sensitive"] = self._is_sensitive(state)
-        return updates
+        return {
+            "is_sensitive": self._is_sensitive(state),
+            "citations": self._all_citations(state),
+        }
 
     def _has_enough_context(self, state: AgentState) -> bool:
+        """Đủ dữ liệu khi truy hồi đạt ngưỡng, HOẶC khi tool đã trả về số liệu.
+
+        Không tính kết quả tool là bỏ sót trường hợp hay gặp nhất: hỏi giá một
+        căn cụ thể. Nhãn đó bật needs_retrieval, mà kho tài liệu không chứa giá
+        từng căn — độ phủ luôn dưới ngưỡng. Thiếu vế sau thì agent từ chối trả
+        lời ngay cả khi tool đã cầm sẵn con số đúng trong tay.
+        """
+        if state.get("tool_context"):
+            return True
         return bool(state.get("chunks")) and state.get("coverage", 0.0) >= self._threshold
+
+    def _all_citations(self, state: AgentState) -> list[Citation]:
+        """Gộp nguồn tài liệu với nguồn tool.
+
+        Gộp ở đây vì guardrail là node cuối: node retrieve chạy sau tools và
+        ghi đè `citations`, nên tool phải giữ nguồn của mình ở khoá riêng cho
+        tới bước này.
+        """
+        return [*state.get("citations", []), *state.get("tool_citations", [])]
 
     def _is_sensitive(self, state: AgentState) -> bool:
         answer = state.get("answer", "")
