@@ -1,5 +1,6 @@
 .PHONY: help install install-api install-fe run-ai run-api fe test test-api cov \
-        lint format typecheck check check-all infra infra-down clean sync-deploy
+        lint format typecheck check check-all infra infra-down clean sync-deploy \
+        data-status data-ingest data-eval
 
 # Windows dùng .venv/Scripts, Linux/macOS dùng .venv/bin
 PY := .venv/bin/python
@@ -32,6 +33,10 @@ help:
 	@echo "run-ai       Loi AI + RAG  -> http://localhost:8001/docs"
 	@echo "fe           Frontend      -> http://localhost:5173"
 	@echo "infra        Bat Qdrant + Postgres bang Docker"
+	@echo "--- Du lieu RAG ---"
+	@echo "data-status  Vector store dang co gi"
+	@echo "data-ingest  Nap toan bo 4 nguon vao Qdrant"
+	@echo "data-eval    Do truy hoi tren bo cau hoi vang"
 	@echo "--- Kiem tra ---"
 	@echo "test         Test loi AI (tests/)"
 	@echo "test-api     Test API san pham (interface/backend/tests/)"
@@ -94,6 +99,19 @@ typecheck:
 check: lint format test
 
 check-all: check test-api
+
+# ---------- Du lieu RAG ----------
+# Moi thao tac di qua src/cli.py — cung cau hinh voi ung dung, khong
+# con moi nguon mot script tu dung pipeline rieng nhu truoc.
+
+data-status:
+	$(PY) -m src.cli status
+
+data-ingest:
+	$(PY) -m src.cli ingest --all
+
+data-eval:
+	$(PY) -m src.cli eval retrieval
 
 # ---------- Deploy ----------
 

@@ -60,18 +60,35 @@ Lý do: [ADR-004](docs/adr/ADR-004-module-contracts.md).
 Mở [`src/bootstrap.py`](src/bootstrap.py) — một file, đọc là biết hệ thống đang
 chạy bằng gì. Hiện tại:
 
-| Protocol | Đang chạy | Sẽ đổi thành |
+| Protocol | Đang chạy | Ghi chú |
 |---|---|---|
-| `LLMProvider` | `OpenAIProvider`, rơi về `ScriptedProvider` khi thiếu key | — |
-| `VectorStore` | `InMemoryVectorStore` | `QdrantVectorStore` |
-| `Embedder` | `OpenAIEmbedder` / `FakeEmbedder` | BGE-M3 |
-| `Retriever` | `EmptyRetriever` (RAG tắt) | `DefaultRetriever` |
-| `PortalRepository` | `InMemoryPortalRepository` | SQL |
-| `AgentService` | `LangGraphAgentService` | — |
+| `LLMProvider` | `OpenAIProvider`, rơi về `ScriptedProvider` khi thiếu key | |
+| `Embedder` | `OpenAIEmbedder` / `FakeEmbedder` khi thiếu key | BGE-M3 sau — [ADR-002](docs/adr/ADR-002-embedding-tieng-viet.md) |
+| `VectorStore` | **`QdrantVectorStore`** (Cloud) · in-memory khi `APP_ENV=test` | |
+| `Reranker` | `KeywordOverlapReranker` | `cross_encoder` cần torch ~2GB |
+| `Retriever` | **`DefaultRetriever`** — RAG đang BẬT | |
+| `AgentService` | `LangGraphAgentService` | |
 
-Cờ `ENABLE_RAG = False` ở đầu `bootstrap.py`. Bật lên là luồng chat chạy qua
-router + retrieve và phát thêm event `route` + `sources` — FE không phải sửa gì
-vì hợp đồng `ChatEvent` đã có sẵn cả 6 loại event.
+Mọi lựa chọn lấy từ `Settings`, **không hardcode** — đổi hành vi bằng biến môi
+trường (`ENABLE_RAG`, `RERANKER`, `QDRANT_URL`), không phải sửa code rồi commit.
+
+Test luôn dùng vector store trong bộ nhớ: không test nào được gọi Qdrant thật.
+
+## Dữ liệu RAG
+
+Một dòng lệnh duy nhất cho mọi thao tác dữ liệu:
+
+```bash
+python -m src.cli status            # vector store đang có gì
+python -m src.cli ingest --all      # nạp 4 nguồn
+python -m src.cli search "câu hỏi"  # thử truy hồi
+python -m src.cli eval retrieval    # đo trên bộ câu hỏi vàng
+```
+
+Thêm nguồn mới: viết hàm `ingest_<tên>()` trong `src/data/ingest/sources.py`
+rồi thêm một dòng vào `SOURCES`. **Không tạo script rời** — bài học cũ: bốn
+script tự dựng `QdrantVectorStore` riêng nên chạy tốt, trong khi `bootstrap.py`
+vẫn dùng in-memory, web app đứt khỏi dữ liệu nhiều ngày mà không ai phát hiện.
 
 ## Luồng agent
 

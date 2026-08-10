@@ -34,15 +34,36 @@ Chọn phương án 2.
 src/
 ├── core/         config · logging · exceptions · container   (dùng chung)
 ├── models/       DTO — HỢP ĐỒNG FE ↔ BE                      (đóng băng)
-├── data/         contracts.py + stores/ + retrieval/         → dat
-├── agents/       contracts.py + graph + nodes/ + tools/      → viet
-├── api/          deps · errors · v1/                         → phuc
-├── services/     adapter ra ngoài (OpenAI, portal data)
+├── data/         ĐƯỜNG GHI: crawl → parse → chunk → embed → store   → viet
+├── rag/          ĐƯỜNG ĐỌC: retriever · rerankers · grounding       → phuc
+├── agents/       ĐIỀU PHỐI: graph · nodes · tools                   → huy
+├── eval/         Đo lường trên bộ câu hỏi vàng                      → phuc
+├── api/          deps · errors · v1/                                → huy
+├── services/     adapter ra ngoài (OpenAI)
+├── cli.py        dòng lệnh: ingest · search · eval
 └── bootstrap.py  NƠI DUY NHẤT gắn Protocol ↔ implementation
 ```
 
 **Quy tắc:** module chỉ được import `contracts.py` và `models/` của module khác,
 không bao giờ import class cụ thể.
+
+**Phụ thuộc một chiều `rag → data`.** `data/` tuyệt đối không import `rag/`.
+Vì thế `RetrievalFilter` nằm ở `data/contracts.py` — nó là tham số của
+`VectorStore.search()`; để bên `rag/` là tạo vòng lặp import.
+
+### Cập nhật 2026-08-08 — vì sao tách `rag/` khỏi `data/`
+
+Ban đầu truy hồi nằm trong `src/data/retrieval/`. Cách chia đó cắt ngang công
+việc của một người: Phúc phải ghi vào cả `data/` (truy hồi) lẫn `agents/`
+(grounding trong `generate.py`), nên **không ai sở hữu "RAG từ đầu đến cuối"**.
+
+Hậu quả thật: Viet nạp 870 chunk vào Qdrant Cloud, Phúc xây xong pipeline RAG,
+nhưng `bootstrap.py` vẫn trỏ `InMemoryVectorStore` với `ENABLE_RAG = False`.
+Web app đứt khỏi dữ liệu nhiều ngày mà không ai phát hiện — Phúc tưởng xong,
+Huy không biết cần bật, và khoảng giữa không thuộc trách nhiệm của ai.
+
+Cách chia mới theo **đường ghi / đường đọc / điều phối** khớp cả với năng lực
+lẫn người phụ trách, và sau đó không file nào có hai chủ.
 
 ## Lý do
 

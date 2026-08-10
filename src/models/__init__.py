@@ -1,7 +1,11 @@
-"""DTO dùng chung — HỢP ĐỒNG giữa 4 module (data · agents · api · frontend).
+"""DTO dùng chung — HỢP ĐỒNG giữa lõi AI và API sản phẩm.
 
 ⚠️ File trong thư mục này bị ĐÓNG BĂNG. Muốn thêm/sửa trường: mở PR riêng vào
 develop để cả team review, không sửa lẫn trong PR tính năng.
+
+Dữ liệu căn hộ (Listing/Project/MarketStats) ĐÃ BỎ khỏi đây — lõi AI không phục
+vụ trang portal nữa. Frontend gọi `interface/backend` (cổng 8000), nơi đọc thẳng
+`salemate_v1` trên Supabase. Xem `interface/backend/app/schemas/apartment.py`.
 """
 
 from src.models.chat import (
@@ -14,16 +18,6 @@ from src.models.chat import (
     MessageRole,
 )
 from src.models.common import ErrorDetail, ErrorResponse, HealthResponse
-from src.models.portal import (
-    Demand,
-    Listing,
-    ListingType,
-    MarketBar,
-    MarketStats,
-    Page,
-    Project,
-    PropertyKind,
-)
 
 __all__ = [
     "ChatEvent",
@@ -32,16 +26,8 @@ __all__ = [
     "ChatRequest",
     "ChatResponse",
     "Citation",
-    "Demand",
     "ErrorDetail",
     "ErrorResponse",
     "HealthResponse",
-    "Listing",
-    "ListingType",
-    "MarketBar",
-    "MarketStats",
     "MessageRole",
-    "Page",
-    "Project",
-    "PropertyKind",
 ]

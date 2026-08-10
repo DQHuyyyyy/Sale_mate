@@ -14,7 +14,7 @@ import pytest
 from src.data.crawling.batdongsan import parse_listing_detail as parse_batdongsan
 from src.data.crawling.meeyland import parse_listing_detail as parse_meeyland
 from src.data.ingestion.chunkers import ParagraphChunker
-from src.data.metadata_schema import REQUIRED_METADATA_KEYS, validate_metadata
+from src.data.ingestion.metadata_schema import REQUIRED_METADATA_KEYS, validate_metadata
 from src.data.sources.inventory import InventoryUnit, unit_to_document
 
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")

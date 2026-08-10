@@ -1,7 +1,7 @@
 """Node sinh câu trả lời cuối — dùng model MẠNH.
 
-Nếu có context truy hồi thì ép LLM chỉ dựa vào context đó (grounding).
-Nếu không có, LLM trả lời theo kiến thức chung nhưng vẫn bị prompt cấm bịa số.
+Node chỉ điều phối: lấy prompt từ `src/rag/grounding.py` rồi gọi LLM. Cách dựng
+prompt (grounding, chống injection, quy tắc trích nguồn) thuộc module RAG.
 """
 
 from __future__ import annotations
@@ -12,31 +12,22 @@ from src.agents.contracts import LLMProvider
 from src.agents.nodes.base import BaseNode
 from src.agents.prompts import system_prompt
 from src.agents.state import AgentState
-from src.models.chat import ChatMessage, MessageRole
-
-_GROUNDED_TEMPLATE = """Dựa DUY NHẤT vào ngữ cảnh dưới đây để trả lời. \
-Nếu ngữ cảnh không chứa thông tin cần thiết, nói rõ là chưa có dữ liệu.
-
-<ngu_canh>
-{context}
-</ngu_canh>
-
-Câu hỏi: {query}"""
+from src.models.chat import ChatMessage
+from src.rag.grounding import build_grounded_messages
 
 
 def build_messages(state: AgentState) -> list[ChatMessage]:
-    """Ghép system prompt + lịch sử + câu hỏi (kèm context nếu có).
+    """Dựng prompt từ state.
 
-    Tách riêng để tầng streaming dùng lại được đúng cách dựng prompt này.
+    Tách riêng để tầng streaming (`agents/service.py`) dùng lại đúng cách dựng
+    prompt này, không tự ghép lần nữa.
     """
-    messages: list[ChatMessage] = [ChatMessage(role=MessageRole.SYSTEM, content=system_prompt())]
-    messages.extend(state.get("history", []))
-
-    query = state.get("query", "")
-    context = state.get("context", "")
-    content = _GROUNDED_TEMPLATE.format(context=context, query=query) if context else query
-    messages.append(ChatMessage(role=MessageRole.USER, content=content))
-    return messages
+    return build_grounded_messages(
+        state.get("query", ""),
+        system_prompt=system_prompt(),
+        context=state.get("context", ""),
+        history=state.get("history", []),
+    )
 
 
 class GenerateNode(BaseNode):

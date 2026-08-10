@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.data.metadata_schema import validate_metadata
+from src.data.ingestion.metadata_schema import validate_metadata
 from src.data.sources.knowledge_docs import load_knowledge_dir, load_knowledge_file
 
 _VALID_MD = """---

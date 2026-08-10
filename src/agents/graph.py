@@ -20,7 +20,7 @@ from src.agents.nodes.retrieve import RetrieveNode
 from src.agents.nodes.router import RouterNode
 from src.agents.state import AgentState
 from src.core.config import Settings
-from src.data.contracts import Retriever
+from src.rag.contracts import Retriever
 
 
 def route_after_router(state: AgentState) -> str:

@@ -8,6 +8,9 @@
 
 | Member | Task | Status | Output | Time |
 |--------|------|--------|--------|------|
+| Phúc | Khởi tạo dự án & setup môi trường Python (.venv) | ✅ Done | Python 3.11 venv | 1h |
+| Phúc | Cài đặt dependencies từ requirements.txt | ✅ Done | FastAPI, Uvicorn, LangChain, LangGraph | 0.5h |
+| Phúc | Setup AI Logging Hooks (`setup_hooks.ps1`) | ✅ Done | Git pre-push hook installed | 0.5h |
 | Viet | Thiết lập repository P-055 trên máy cá nhân | ✅ Done | Repository đã sẵn sàng để phát triển | — |
 | Viet | Tạo nhánh làm việc cá nhân và kết nối với GitHub | ✅ Done | Nhánh `viet` đã được tạo và push lên `origin/viet` | — |
 | Viet | Cấu hình hook ghi nhận lịch sử làm việc với AI | ✅ Done | Prompt được ghi vào `.ai-log/session.jsonl`; hook hoạt động trên Windows | — |
@@ -20,10 +23,7 @@
 | dat | Cài AI logging hook trên Windows (`scripts/setup_hooks.ps1`) | ✅ Done | `.git/hooks/pre-push` đã cài, `bash -n` pass | 0.25h |
 | dat | Fix `setup_hooks.ps1`: hook bị BOM UTF-8 + CRLF làm hỏng shebang trên Git Bash | ✅ Done | Đã đổi sang ghi UTF-8 no-BOM + LF; đã commit và push lên `origin/dat` | 0.5h |
 
-**Tổng kết ngày:** Hoàn tất thiết lập ban đầu cho repository P-055. Nhánh `viet`
-và `dat` đã có trên GitHub, môi trường ghi AI log hoạt động trên Windows. Phía
-dat còn vướng bước 2: `venv/` sai phiên bản Python (3.14 thay vì 3.11 như
-CI/Docker), cần tạo lại trước khi chạy được `pytest`.
+**Tổng kết ngày:** Hoàn tất thiết lập ban đầu cho repository P-055. Nhánh `viet` và `dat` đã có trên GitHub, môi trường Python 3.11 và logging hook đã hoạt động trên Windows. Phía dat còn vướng bước 2: `venv/` sai phiên bản Python (3.14 thay vì 3.11 như CI/Docker), cần tạo lại trước khi chạy được `pytest`.
 
 ---
 
@@ -37,6 +37,7 @@ CI/Docker), cần tạo lại trước khi chạy được `pytest`.
 | Viet | Viết test cho toàn bộ phần trên | ✅ Done | 69/69 test pass, `ruff check`/`format` sạch, coverage 80% | — |
 
 **Tổng kết ngày:** Hoàn thành phần "crawl data và xử lý data cho RAG" do huy giao. Dữ liệu (tồn kho + tin đăng BĐS thật) đã sẵn sàng và chứng minh chạy được qua demo agent có trích nguồn. Còn lại: bật `ENABLE_RAG` trong `bootstrap.py`, chuyển Qdrant, và hiển thị ảnh/nguồn trong widget — cần team quyết định và phối hợp (agent + frontend), không thuộc phạm vi việc này.
+>>>>>>> 45eb927d7f5be741830c682160be38901de9ffdd
 
 ---
 

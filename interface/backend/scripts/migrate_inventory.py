@@ -2,12 +2,12 @@
 
 Đúng kiến trúc "hai loại dữ liệu, hai đường đi": dữ liệu CÓ CẤU TRÚC (mã, giá,
 diện tích...) đi qua Postgres + SQL — khác văn bản dài (chính sách, tiện ích)
-đi qua Qdrant + vector search (xem scripts/ingest_knowledge_docs.py).
+đi qua Qdrant + vector search (xem `python -m src.cli ingest`).
 
 Idempotent — chạy lại bao nhiêu lần cũng an toàn (upsert theo unit_code).
 
 Chạy (cần DATABASE_URL trong .env trỏ đúng Supabase Postgres):
-    PYTHONUTF8=1 PYTHONPATH=. .venv/Scripts/python.exe scripts/migrate_inventory_to_postgres.py
+    PYTHONUTF8=1 PYTHONPATH=. .venv/Scripts/python.exe interface/backend/scripts/migrate_inventory.py
 """
 
 from __future__ import annotations

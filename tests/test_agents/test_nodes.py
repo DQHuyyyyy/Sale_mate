@@ -10,8 +10,9 @@ from src.agents.nodes.guardrail import INSUFFICIENT_MESSAGE, GuardrailNode
 from src.agents.nodes.retrieve import RetrieveNode
 from src.agents.nodes.router import RouterNode
 from src.agents.state import Intent, initial_state
-from src.data.contracts import Chunk, RetrievalResult
+from src.data.contracts import Chunk
 from src.models.chat import MessageRole
+from src.rag.contracts import RetrievalResult
 from tests.conftest import FAKE_REPLY
 
 
