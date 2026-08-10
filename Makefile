@@ -81,8 +81,11 @@ infra-down:
 test:
 	$(PY) -m pytest tests/
 
+# Không `cd` rồi gọi ../../python: cmd.exe không chạy được đường dẫn kiểu đó,
+# nên target vỡ khi gọi make từ PowerShell. `-c` trỏ thẳng pytest.ini của backend
+# và đặt rootdir về đó, nhờ vậy `pythonpath = .` trong file vẫn đúng.
 test-api:
-	cd interface/backend && ../../$(PY) -m pytest tests/
+	$(PY) -m pytest interface/backend/tests/ -c interface/backend/pytest.ini
 
 cov:
 	$(PY) -m pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=60

@@ -1,0 +1,173 @@
+"""Test cơ chế tự gọi tool: binding trong registry và ToolsNode.
+
+Dùng registry RIÊNG cho từng test thay vì bảng toàn cục — thêm tool thật vào
+bảng chung sẽ làm test này phụ thuộc vào việc dự án có bao nhiêu tool.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+
+from src.agents.contracts import AgentTool, ToolResult
+from src.agents.nodes.tools import ToolsNode
+from src.agents.state import Intent
+from src.agents.tools.registry import ToolRegistry, register_tool
+from src.agents.tools.registry import registry as global_registry
+
+
+class _EchoTool(AgentTool):
+    """Tool giả trả lại đúng tham số nhận được."""
+
+    name = "echo"
+    description = "Tool thử. Câu thứ hai không được vào title."
+
+    def __init__(self, *, ok: bool = True, data: Any = None) -> None:
+        self._ok = ok
+        self._data = data if data is not None else [{"unit_code": "VOP345", "price_label": "2,7 tỷ"}]
+
+    async def run(self, **kwargs: Any) -> ToolResult:
+        if not self._ok:
+            return ToolResult.failure("hỏng có chủ đích")
+        return ToolResult(ok=True, data=self._data, source="test:db")
+
+
+def _registry_with(tool: AgentTool, *, intents=(Intent.LISTING,), build_args=None) -> ToolRegistry:
+    reg = ToolRegistry()
+    reg.add(tool, _binding(intents, build_args or (lambda q: {"q": q})))
+    return reg
+
+
+def _binding(intents, build_args):
+    from src.agents.tools.registry import ToolBinding
+
+    return ToolBinding(intents=frozenset(intents), build_args=build_args)
+
+
+# ---------- Registry ----------
+
+
+def test_binding_loc_theo_intent():
+    reg = _registry_with(_EchoTool(), intents=(Intent.LISTING,))
+
+    assert [t.name for t, _ in reg.for_intent(Intent.LISTING)] == ["echo"]
+    assert reg.for_intent(Intent.LEGAL) == []
+    assert reg.for_intent(None) == []
+
+
+def test_tool_dang_ky_tran_thi_khong_tu_goi():
+    """Vẫn nằm trong registry cho LLM thấy, nhưng agent không tự chạy."""
+    reg = ToolRegistry()
+    reg.add(_EchoTool())
+
+    assert reg.get("echo") is not None
+    assert reg.for_intent(Intent.LISTING) == []
+
+
+def test_khai_intents_ma_thieu_build_args_thi_bao_loi_ngay():
+    with pytest.raises(ValueError, match="build_args"):
+
+        @register_tool(intents={Intent.LISTING})
+        class _Thieu(AgentTool):
+            name = "thieu_build_args"
+
+            async def run(self, **kwargs: Any) -> ToolResult:
+                return ToolResult(ok=True, data=[])
+
+
+def test_decorator_dang_tran_van_chay_duoc():
+    """Dạng `@register_tool` không ngoặc phải giữ nguyên hành vi cũ."""
+    assert global_registry.get("inventory_lookup") is not None
+
+
+# ---------- ToolsNode ----------
+
+
+@pytest.mark.asyncio
+async def test_khong_co_tool_nao_nhan_intent_thi_tra_rong():
+    node = ToolsNode(_registry_with(_EchoTool(), intents=(Intent.LISTING,)))
+
+    out = await node({"intent": Intent.LEGAL, "query": "thủ tục sang tên"})
+
+    assert out["tool_context"] == ""
+    assert out["tool_citations"] == []
+
+
+@pytest.mark.asyncio
+async def test_build_args_tra_none_thi_tool_khong_chay():
+    """Tầng lọc tinh: cùng intent nhưng câu hỏi không đủ dữ kiện."""
+    node = ToolsNode(_registry_with(_EchoTool(), build_args=lambda q: None))
+
+    out = await node({"intent": Intent.LISTING, "query": "tìm căn 2 phòng ngủ"})
+
+    assert out["tool_context"] == ""
+
+
+@pytest.mark.asyncio
+async def test_chay_tool_va_dua_so_lieu_vao_context():
+    node = ToolsNode(_registry_with(_EchoTool()))
+
+    out = await node({"intent": Intent.LISTING, "query": "căn VOP345"})
+
+    assert "VOP345" in out["tool_context"]
+    assert "2,7 tỷ" in out["tool_context"]
+
+
+@pytest.mark.asyncio
+async def test_nguon_tu_tool_duoc_danh_dau_kind_db():
+    node = ToolsNode(_registry_with(_EchoTool()))
+
+    out = await node({"intent": Intent.LISTING, "query": "căn VOP345"})
+
+    citation = out["tool_citations"][0]
+    assert citation.kind == "db"
+    assert citation.doc_id == "test:db"
+    # title lay cau dau cua description, khong nuot ca doan
+    assert citation.title == "Tool thử"
+
+
+@pytest.mark.asyncio
+async def test_tool_hong_thi_khong_lam_dut_luong():
+    node = ToolsNode(_registry_with(_EchoTool(ok=False)))
+
+    out = await node({"intent": Intent.LISTING, "query": "căn VOP345"})
+
+    assert out["tool_context"] == ""
+    assert "error" not in out
+
+
+@pytest.mark.asyncio
+async def test_tool_khong_tim_thay_gi_thi_khong_dung_context():
+    """Rỗng KHÁC hỏng: không được bịa ra context từ danh sách trống."""
+    node = ToolsNode(_registry_with(_EchoTool(data=[])))
+
+    out = await node({"intent": Intent.LISTING, "query": "căn VOP999"})
+
+    assert out["tool_context"] == ""
+
+
+@pytest.mark.asyncio
+async def test_mot_tool_hong_khong_chan_tool_con_lai():
+    reg = ToolRegistry()
+    reg.add(_EchoTool(ok=False), _binding((Intent.LISTING,), lambda q: {"q": q}))
+
+    class _Khac(_EchoTool):
+        name = "khac"
+
+    reg.add(_Khac(), _binding((Intent.LISTING,), lambda q: {"q": q}))
+
+    out = await ToolsNode(reg)({"intent": Intent.LISTING, "query": "căn VOP345"})
+
+    assert "VOP345" in out["tool_context"]
+    assert len(out["tool_citations"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_node_van_do_thoi_gian_chay():
+    """ToolsNode không được trả sẵn khoá metadata — sẽ nuốt số đo của BaseNode."""
+    node = ToolsNode(_registry_with(_EchoTool()))
+
+    out = await node({"intent": Intent.LISTING, "query": "căn VOP345", "metadata": {}})
+
+    assert "tools_ms" in out["metadata"]

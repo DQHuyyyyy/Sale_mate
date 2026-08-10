@@ -93,21 +93,52 @@ vẫn dùng in-memory, web app đứt khỏi dữ liệu nhiều ngày mà khôn
 ## Luồng agent
 
 ```
-START → router ─┬─(cần tài liệu)→ retrieve → generate → guardrail → END
-                └─(không cần)──────────────→ generate → guardrail → END
+START → router → tools ─┬─(cần tài liệu)→ retrieve → generate → guardrail → END
+                        └─(không cần)──────────────→ generate → guardrail → END
 ```
 
 - `router` — luật từ khoá trước, model rẻ sau. Nhãn lạ thì fallback `general`.
+- `tools` — chạy tool khai là phục vụ nhãn hiện tại. Nằm trên đường đi chung và
+  tự thoát khi không có tool nào nhận, nên thêm tool không phải sửa `graph.py`.
 - `retrieve` — chỉ gọi `Retriever` Protocol, không biết gì về Qdrant.
-- `generate` — model mạnh; có context thì ép grounding.
-- `guardrail` — độ phủ thấp → trả "chưa đủ dữ liệu"; gắn cờ nội dung nhạy cảm.
+- `generate` — model mạnh; có context thì ép grounding. Số liệu tool đứng
+  **trước** tài liệu trong prompt: tool đọc nguồn sự thật lúc hỏi, vector store
+  chỉ là bản chụp.
+- `guardrail` — độ phủ thấp → trả "chưa đủ dữ liệu"; gắn cờ nhạy cảm; gộp nguồn
+  tài liệu với nguồn tool. Có kết quả tool thì **không** từ chối dù độ phủ 0.
 
 Thêm node: kế thừa `BaseNode`, chỉ viết `execute()` — try/except, log, đo thời
-gian đã có sẵn ở lớp cha.
+gian đã có sẵn ở lớp cha. Node **không** trả khoá `metadata`, lớp cha đang dùng
+khoá đó để gắn thời gian chạy.
 
-Thêm tool: tạo file trong `src/agents/tools/`, gắn `@register_tool`, thêm một
-dòng import vào `tools/__init__.py`. Tool **không raise** — trả
-`ToolResult.failure(...)`.
+## Thêm một tool
+
+Ba việc, không đụng `graph.py` lẫn `nodes/`:
+
+1. Tạo file trong `src/agents/tools/`, class kế thừa `AgentTool`.
+2. Gắn `@register_tool(intents={...}, build_args=...)`.
+3. Thêm một dòng import vào `tools/__init__.py`.
+
+Hai tầng lọc quyết định khi nào tool chạy:
+
+| | Lọc gì | Chi phí |
+|---|---|---|
+| `intents` | thô, theo nhãn router | không tốn gì |
+| `build_args(query)` | tinh — trả `None` là tool không chạy | không tốn gì |
+
+Nhờ tầng hai mà `intents` khai rộng vẫn an toàn: "tìm căn 2 phòng ngủ" và "căn
+VOP345 còn không" cùng nhãn `listing`, nhưng chỉ câu sau rút được mã căn.
+
+`@register_tool` trần (không tham số) vẫn đăng ký tool cho LLM thấy qua
+`specs()` nhưng agent **không** tự gọi — dùng cho tool chỉ chạy khi được yêu cầu
+tường minh.
+
+Tool **không raise** — trả `ToolResult.failure(...)`. Một tool hỏng không chặn
+các tool khác trong cùng lượt.
+
+**Dữ liệu có cấu trúc (giá, tình trạng căn) đi qua tool, không nhét vào Qdrant.**
+RAG luôn là bản chụp; giá và tình trạng đổi hàng ngày. Trộn hai đường là tự tạo
+hai nguồn số liệu lệch nhau.
 
 ## Lệnh
 

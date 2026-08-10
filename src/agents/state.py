@@ -36,6 +36,9 @@ class AgentState(TypedDict, total=False):
         chunks: Các đoạn tài liệu đã truy hồi.
         coverage: Độ phủ truy hồi (0-1) — dưới ngưỡng thì phải từ chối.
         context: Chunk đã ghép thành text để nhét vào prompt.
+        tool_context: Kết quả tool đã ghép thành text, tách khỏi `context` vì
+            node retrieve chạy sau và ghi đè `context`.
+        tool_citations: Nguồn từ tool (kind="db"), guardrail gộp vào citations.
         answer: Câu trả lời cuối.
         citations: Nguồn kèm theo câu trả lời.
         is_sensitive: Có chứa giá/cam kết cần người duyệt không.
@@ -53,6 +56,9 @@ class AgentState(TypedDict, total=False):
     chunks: list[Chunk]
     coverage: float
     context: str
+
+    tool_context: str
+    tool_citations: list[Citation]
 
     answer: str
     citations: list[Citation]
@@ -74,6 +80,8 @@ def initial_state(
         history=history or [],
         chunks=[],
         citations=[],
+        tool_context="",
+        tool_citations=[],
         coverage=0.0,
         is_sensitive=False,
         metadata={},

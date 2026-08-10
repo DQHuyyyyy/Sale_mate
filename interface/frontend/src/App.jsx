@@ -19,19 +19,30 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
 
-        {/* Mọi trang dưới đây đều phải đăng nhập. Route admin chặn thêm theo role. */}
-        <Route
-          element={
-            <ProtectedRoute>
-              <Layout />
-            </ProtectedRoute>
-          }
-        >
+        <Route element={<Layout />}>
+          {/* Công khai — khách vãng lai xem được, backend cũng mở các endpoint này. */}
           <Route path="/" element={<Search />} />
           <Route path="/zones" element={<Zones />} />
-          <Route path="/documents" element={<Documents />} />
           <Route path="/apartments/:maCan" element={<ApartmentDetail />} />
-          <Route path="/profile" element={<Profile />} />
+
+          {/* Nội bộ — phải đăng nhập. Route admin chặn thêm theo role.
+              Đây chỉ là lớp trải nghiệm; backend mới là nơi thực thi. */}
+          <Route
+            path="/documents"
+            element={
+              <ProtectedRoute>
+                <Documents />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/my-sales"
             element={
