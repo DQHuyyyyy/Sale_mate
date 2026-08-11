@@ -10,6 +10,15 @@ Quy ước front-matter (nằm giữa 2 dòng `---` ở đầu file):
     title: Tên tài liệu
     section: Nhóm nội dung, vd "Chính sách bán hàng"
     visibility: internal | public
+    project: (tuỳ chọn) Dự án cụ thể tài liệu áp dụng, vd "Vinhomes Ocean Park 2
+        (The Empire)". Không khai thì mặc định "Vinhomes Ocean Park Gia Lâm"
+        (OCP1) — giữ tương thích ngược với các file cũ viết trước khi dự án mở
+        rộng sang OCP2/OCP3.
+
+Vì sao cần `project`: chính sách/giá/tiến độ khác nhau theo TỪNG dự án
+(OCP1/OCP2/OCP3) — trộn chung một "project" mặc định sẽ khiến RetrievalFilter
+không lọc được, và câu hỏi về OCP2 có thể lẫn số liệu OCP1. Xem
+`RetrievalFilter.project` ở `src/data/contracts.py`.
 
 File nguồn nằm ở data/raw/knowledge/ (bị .gitignore — mỗi máy tự có, xem
 README/hướng dẫn nội bộ).
@@ -29,6 +38,7 @@ DEFAULT_KNOWLEDGE_DIR = REPO_ROOT / "data" / "raw" / "knowledge"
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n?(.*)$", re.DOTALL)
 _VALID_VISIBILITY = {"internal", "public"}
 _REQUIRED_FRONTMATTER_KEYS = {"title", "section", "visibility"}
+_DEFAULT_PROJECT = "Vinhomes Ocean Park Gia Lâm"  # OCP1 — mặc định cho file cũ chưa khai "project"
 
 
 def _parse_frontmatter(raw: str, filename: str) -> tuple[dict[str, str], str]:
@@ -77,7 +87,7 @@ def load_knowledge_file(path: Path) -> LoadedDocument:
         metadata={
             "visibility": meta["visibility"],
             "section": meta["section"],
-            "project": "Vinhomes Ocean Park Gia Lâm",
+            "project": meta.get("project") or _DEFAULT_PROJECT,
             "source_site": "noi-bo",
             "image_urls": [],
             "version": datetime.now(UTC).date().isoformat(),

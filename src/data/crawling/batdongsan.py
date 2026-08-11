@@ -99,11 +99,18 @@ def _to_markdown(title: str, address: str, specs: dict[str, str], description: s
     return (f"# {title}\n\n## Địa chỉ\n{address}\n\n## Thông số\n{specs_block}\n\n## Mô tả\n{description}").strip()
 
 
-def parse_listing_detail(html: str, url: str) -> LoadedDocument | None:
+DEFAULT_PROJECT = "Vinhomes Ocean Park Gia Lâm"  # OCP1 — mặc định giữ tương thích ngược
+
+
+def parse_listing_detail(html: str, url: str, project: str = DEFAULT_PROJECT) -> LoadedDocument | None:
     """Chuyển HTML trang chi tiết thành LoadedDocument.
 
     Trả None nếu trang không có tiêu đề — coi như crawl lỗi (trang bị gỡ,
     redirect sang trang khác...), bỏ qua thay vì tạo tài liệu rỗng.
+
+    `project` gắn thẳng vào metadata — không tự suy đoán từ nội dung trang,
+    vì trang lưu tay không có category chuẩn hoá như meeyland. Người gọi
+    (`load_saved_detail_pages`) phải chỉ định đúng dự án theo thư mục nguồn.
     """
     soup = BeautifulSoup(html, "html.parser")
 
@@ -150,8 +157,8 @@ def parse_listing_detail(html: str, url: str) -> LoadedDocument | None:
         metadata={
             "image_urls": image_urls,
             "visibility": "public",
-            "section": "Vinhomes Ocean Park Gia Lâm",
-            "project": "Vinhomes Ocean Park Gia Lâm",
+            "section": project,
+            "project": project,
             "source_site": "batdongsan.com.vn",
             "version": datetime.now(UTC).date().isoformat(),
         },
@@ -169,12 +176,16 @@ def _extract_source_url(html: str) -> str | None:
     return match.group(1) if match else None
 
 
-def load_saved_detail_pages(directory: Path) -> list[LoadedDocument]:
+def load_saved_detail_pages(directory: Path, project: str = DEFAULT_PROJECT) -> list[LoadedDocument]:
     """Đọc các trang chi tiết đã lưu thủ công từ trình duyệt (Ctrl+S → "Chỉ HTML").
 
     Dùng khi crawl tự động bị chặn (xem docstring module) — người dùng tự
     duyệt web bình thường và lưu trang, hàm này chỉ xử lý file có sẵn trên
     máy, không gọi mạng, không né tránh gì cả.
+
+    Không đọc đệ quy (`glob`, không `rglob`) — cố ý, để mỗi dự án nằm trong
+    một thư mục riêng ("khu nào ra khu đấy") và người gọi tự chỉ đúng
+    `project` khớp thư mục, thay vì đoán dự án từ nội dung trang.
     """
     html_paths = sorted(directory.glob("*.html"))
     documents: list[LoadedDocument] = []
@@ -186,14 +197,16 @@ def load_saved_detail_pages(directory: Path) -> list[LoadedDocument]:
             logger.warning("Không tìm được URL gốc trong %s — bỏ qua file này", path.name)
             continue
 
-        document = parse_listing_detail(html, url)
+        document = parse_listing_detail(html, url, project)
         if document is None:
             logger.warning("Không parse được nội dung từ %s", path.name)
             continue
 
         documents.append(document)
 
-    logger.info("Đọc được %d/%d file HTML hợp lệ từ %s", len(documents), len(html_paths), directory)
+    logger.info(
+        "Đọc được %d/%d file HTML hợp lệ từ %s (dự án: %s)", len(documents), len(html_paths), directory, project
+    )
     return documents
 
 

@@ -1,4 +1,4 @@
-"""Crawler meeyland.com — tin đăng Vinhomes Ocean Park Gia Lâm.
+"""Crawler meeyland.com — tin đăng Vinhomes Ocean Park (OCP1/OCP2/OCP3).
 
 Trang dùng Astro (JS-hydrate) — dữ liệu chi tiết (giá dạng số, diện tích...)
 chỉ nằm trong JSON nội bộ khó parse ổn định lâu dài (tên component đổi mỗi
@@ -10,20 +10,33 @@ mà không cần chạy JS:
 - div.article-description — đoạn mô tả đầy đủ do người đăng viết
 
 Trang không bị chặn bot (không có cf-mitigated: challenge như batdongsan).
-Có category riêng cho Vinhomes Ocean Park nên không cần lọc từ khoá thủ công.
 
 Đúng luồng Parsing -> text thô -> Markdown: mỗi tin lấy được ghi 1 file text
 thô vào data/raw/meeyland_crawl_raw/ (gitignore, chỉ để đối chiếu/audit)
 TRƯỚC khi dựng thành Markdown có heading — không chỉ nối chuỗi phẳng như
 trước. Ảnh (image_urls) vẫn lấy đủ như cũ, giữ trong metadata, không chèn
 vào text (RAG chỉ cần mô tả bằng chữ).
+
+Ba dự án — ba category khác nhau trên meeyland, "khu nào ra khu đấy":
+
+- OCP1 (Gia Lâm): category riêng cho Vinhomes Ocean Park, không lẫn dự án
+  khác — không cần lọc thêm.
+- OCP2 (The Empire, Văn Giang): category riêng cho đúng dự án — không cần
+  lọc thêm.
+- OCP3 (The Crown, Văn Lâm): CHƯA có category "căn hộ chung cư" riêng (kiểm
+  tra thật 10/08/2026: 0 tin đăng — các toà căn hộ chưa bàn giao, chưa có thị
+  trường thứ cấp). Trang danh mục biệt thự/liền kề gần nhất là cấp HUYỆN
+  (Văn Lâm), có thể lẫn dự án khác không phải Vinhomes — bắt buộc lọc lại
+  bằng `must_mention` (kiểm tra tiêu đề/mô tả có nhắc đúng tên dự án) trước
+  khi gắn nhãn project, tránh gán nhầm tin của dự án khác thành OCP3.
 """
 
 from __future__ import annotations
 
 import asyncio
 import re
-from dataclasses import dataclass
+import unicodedata
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -39,9 +52,43 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 RAW_TEXT_DIR = REPO_ROOT / "data" / "raw" / "meeyland_crawl_raw"
 
 BASE_URL = "https://meeyland.com"
-SEARCH_PATH = "/ban-can-ho-chung-cu-vinhomes-ocean-park-100000004-gia-lam-ha-noi-l14422"
-
 REQUEST_DELAY_S = 1.5
+
+
+@dataclass(frozen=True)
+class ProjectConfig:
+    """Một dự án cụ thể trên meeyland — quyết định crawl gì và gắn nhãn gì."""
+
+    key: str  # dùng làm phần thư mục raw-text, vd "ocp2"
+    project_name: str  # ghi vào metadata["project"] — PHẢI khớp tên dùng ở knowledge docs
+    search_path: str  # trang danh mục (category) của đúng dự án
+    must_mention: tuple[str, ...] = field(default_factory=tuple)
+    """Khi khác rỗng: tiêu đề+mô tả PHẢI chứa ít nhất 1 cụm trong danh sách này
+    (không phân biệt hoa/thường/dấu) thì mới nhận là thuộc dự án — bắt buộc
+    với category cấp huyện (không riêng dự án) như OCP3, tránh gán nhầm tin
+    của dự án/CĐT khác."""
+
+
+PROJECT_OCP1 = ProjectConfig(
+    key="ocp1",
+    project_name="Vinhomes Ocean Park Gia Lâm",
+    search_path="/ban-can-ho-chung-cu-vinhomes-ocean-park-100000004-gia-lam-ha-noi-l14422",
+)
+
+PROJECT_OCP2 = ProjectConfig(
+    key="ocp2",
+    project_name="Vinhomes Ocean Park 2 (The Empire)",
+    search_path="/ban-can-ho-chung-cu-vinhomes-ocean-park-2-the-empire-van-giang-hung-yen-l14622",
+)
+
+PROJECT_OCP3 = ProjectConfig(
+    key="ocp3",
+    project_name="Vinhomes Ocean Park 3 (The Crown)",
+    # Chưa có category riêng cho OCP3 (0 tin căn hộ, xem docstring) — dùng
+    # category cấp huyện (biệt thự liền kề Văn Lâm) rồi lọc lại bằng must_mention.
+    search_path="/ban-biet-thu-lien-ke-van-lam-hung-yen-i1422",
+    must_mention=("ocean park 3", "the crown"),
+)
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; SalesMateEduBot/0.1; VinUni AI20K Cohort 3 project)",
@@ -84,12 +131,30 @@ def _extract_listing_id(url: str) -> str:
     return match.group(1) if match else url
 
 
-def _save_raw_text(listing_id: str, title: str, meta_desc: str, description: str) -> None:
+def _fold(text: str) -> str:
+    """Bỏ dấu tiếng Việt + hạ chữ thường, dùng để so khớp must_mention không phân biệt dấu/hoa-thường."""
+    no_mark = unicodedata.normalize("NFD", text)
+    return "".join(ch for ch in no_mark if unicodedata.category(ch) != "Mn").lower()
+
+
+def _matches_project(project: ProjectConfig, title: str, meta_desc: str, description: str) -> bool:
+    """Category cấp huyện (không riêng dự án, vd OCP3) cần lọc lại bằng nội dung.
+
+    Không có must_mention (category đã riêng cho đúng dự án) thì luôn khớp.
+    """
+    if not project.must_mention:
+        return True
+    haystack = _fold(f"{title} {meta_desc} {description}")
+    return any(_fold(keyword) in haystack for keyword in project.must_mention)
+
+
+def _save_raw_text(project: ProjectConfig, listing_id: str, title: str, meta_desc: str, description: str) -> None:
     """Lưu text thô (trước khi dựng Markdown) — bước 'PDF/Word -> text thô'."""
     try:
-        RAW_TEXT_DIR.mkdir(parents=True, exist_ok=True)
-        raw = f"Nguồn: {BASE_URL}\nTiêu đề: {title}\nMeta: {meta_desc}\nMô tả: {description}\n"
-        (RAW_TEXT_DIR / f"{listing_id}.txt").write_text(raw, encoding="utf-8")
+        out_dir = RAW_TEXT_DIR / project.key
+        out_dir.mkdir(parents=True, exist_ok=True)
+        raw = f"Nguồn: {BASE_URL}\nDự án: {project.project_name}\nTiêu đề: {title}\nMeta: {meta_desc}\nMô tả: {description}\n"
+        (out_dir / f"{listing_id}.txt").write_text(raw, encoding="utf-8")
     except OSError as exc:  # không chặn crawl nếu máy hết dung lượng/quyền ghi
         logger.warning("Không lưu được text thô cho %s: %s", listing_id, exc)
 
@@ -99,10 +164,12 @@ def _to_markdown(title: str, meta_desc: str, description: str) -> str:
     return (f"# {title}\n\n## Thông tin tóm tắt\n{meta_desc}\n\n## Mô tả chi tiết\n{description}").strip()
 
 
-def parse_listing_detail(html: str, url: str) -> LoadedDocument | None:
+def parse_listing_detail(html: str, url: str, project: ProjectConfig = PROJECT_OCP1) -> LoadedDocument | None:
     """Chuyển HTML trang chi tiết thành LoadedDocument.
 
-    Trả None nếu không có og:title — coi như trang lỗi/đã gỡ.
+    Trả None nếu không có og:title (trang lỗi/đã gỡ) HOẶC nếu nội dung không
+    nhắc đúng tên dự án theo `project.must_mention` (tránh gán nhầm tin của
+    dự án/CĐT khác vào category cấp huyện dùng chung, vd OCP3).
     """
     soup = BeautifulSoup(html, "html.parser")
 
@@ -117,13 +184,19 @@ def parse_listing_detail(html: str, url: str) -> LoadedDocument | None:
 
     description = _PHONE_RE.sub("***", _text(soup.select_one("div.article-description p")))
 
+    if not _matches_project(project, title, meta_desc, description):
+        return None
+
     image_urls = sorted(set(_IMAGE_RE.findall(html)))
 
     listing_id = _extract_listing_id(url)
-    _save_raw_text(listing_id, title, meta_desc, description)
+    _save_raw_text(project, listing_id, title, meta_desc, description)
     text = _to_markdown(title, meta_desc, description)
 
     return LoadedDocument(
+        # listing_id là ID nội bộ của meeyland, đã duy nhất trên toàn site nên
+        # không cần thêm project.key — giữ format cũ để tin OCP1 hiện có trên
+        # Qdrant re-ingest đúng doc_id cũ (không tạo bản trùng).
         doc_id=f"meeyland:{listing_id}",
         title=title,
         text=text,
@@ -131,23 +204,25 @@ def parse_listing_detail(html: str, url: str) -> LoadedDocument | None:
         metadata={
             "image_urls": image_urls,
             "visibility": "public",
-            "section": "Vinhomes Ocean Park Gia Lâm",
-            "project": "Vinhomes Ocean Park Gia Lâm",
+            "section": project.project_name,
+            "project": project.project_name,
             "source_site": "meeyland.com",
             "version": datetime.now(UTC).date().isoformat(),
         },
     )
 
 
-async def crawl_vinhomes_ocean_park(limits: CrawlLimits | None = None) -> list[LoadedDocument]:
-    """Crawl tin đăng Vinhomes Ocean Park qua category riêng của meeyland."""
+async def crawl_vinhomes_ocean_park(
+    limits: CrawlLimits | None = None, project: ProjectConfig = PROJECT_OCP1
+) -> list[LoadedDocument]:
+    """Crawl tin đăng Vinhomes Ocean Park qua category của meeyland cho đúng 1 dự án."""
     limits = limits or CrawlLimits()
     documents: list[LoadedDocument] = []
 
     async with httpx.AsyncClient(base_url=BASE_URL, headers=_HEADERS, follow_redirects=True, timeout=20.0) as client:
         listing_paths: list[str] = []
         for page in range(1, limits.max_search_pages + 1):
-            path = SEARCH_PATH if page == 1 else f"{SEARCH_PATH}?page={page}"
+            path = project.search_path if page == 1 else f"{project.search_path}?page={page}"
             try:
                 response = await client.get(path)
                 response.raise_for_status()
@@ -179,10 +254,15 @@ async def crawl_vinhomes_ocean_park(limits: CrawlLimits | None = None) -> list[L
                 logger.warning("Không tải được %s: %s", full_url, exc)
                 continue
 
-            document = parse_listing_detail(response.text, full_url)
+            document = parse_listing_detail(response.text, full_url, project)
             if document is not None:
                 documents.append(document)
             await asyncio.sleep(REQUEST_DELAY_S)
 
-    logger.info("Crawl meeyland xong: %d/%d tin lấy được nội dung", len(documents), len(listing_paths))
+    logger.info(
+        "Crawl meeyland (%s) xong: %d/%d tin lấy được nội dung (đã lọc must_mention)",
+        project.project_name,
+        len(documents),
+        len(listing_paths),
+    )
     return documents

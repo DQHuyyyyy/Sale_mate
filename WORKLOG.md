@@ -102,6 +102,19 @@
 
 ---
 
+## 2026-08-11
+
+| Member | Task | Status | Output | Time |
+|--------|------|--------|--------|------|
+| Viet | Leader (Huy) test thật phát hiện RAG lẫn khu vực khi hỏi chính sách chung chung — điều tra + sửa "khu nào ra khu đấy" cho cả 3 dự án Vinhomes Ocean Park | ✅ Done | Root cause: `load_knowledge_file()` hardcode `project="Vinhomes Ocean Park Gia Lâm"` cho MỌI tài liệu kiến thức, và `meeyland.py`/`batdongsan.py` cũng hardcode tương tự — toàn bộ dữ liệu trước nay chỉ scope đúng OCP1 (Gia Lâm), dù dự án Vinhomes Ocean Park thật có 3 khu tách biệt (OCP1 Gia Lâm, OCP2 The Empire/Văn Giang, OCP3 The Crown/Văn Lâm). Research xác nhận: OCP2 có thị trường căn hộ thứ cấp thật trên meeyland; **OCP3 CHƯA có căn hộ chung cư rao bán** (kiểm tra trực tiếp category = 0 tin, khớp tiến độ xây dựng — các toà căn hộ chưa bàn giao), chỉ có biệt thự/liền kề/shophouse — đã ghi rõ trong tài liệu, không bịa dữ liệu căn hộ cho khu này | — |
+| Viet | Sửa `knowledge_docs.py`: `project` đọc từ front-matter (tuỳ chọn, mặc định OCP1 để tương thích ngược) | ✅ Done | Tách `tien-do-xay-dung.md` (từng trộn cả 3 dự án trong 1 file — nguồn hallucination rõ nhất) thành 3 file riêng theo dự án; xoá doc_id cũ `knowledge:tien-do-xay-dung` khỏi Qdrant (không bị tự xoá vì source file không còn tồn tại để re-ingest). Viết mới 4 tài liệu: bảng giá dịch vụ OCP2/OCP3 (nguồn chính thức market.vinhomes.vn, gộp cả 3 dự án trong 1 bài) và chính sách bán hàng OCP2/OCP3 (nguồn broker, ghi rõ độ tin cậy thấp hơn văn bản CSBH chính thức OCP1 đang có, không chọn đại số liệu khi nhiều nguồn lệch nhau) | — |
+| Viet | Tổng quát hoá `meeyland.py` (`ProjectConfig` — search_path + must_mention lọc chống gán nhầm dự án cho category cấp huyện dùng chung như OCP3) và `batdongsan.py` (project theo thư mục, không đệ quy) để crawl/nạp đúng từng dự án, giữ nguyên hành vi OCP1 (doc_id không đổi, tránh tạo bản trùng trên Qdrant) | ✅ Done | 4 test mới (project metadata đúng, must_mention khớp/không khớp). 165/165 test pass, ruff sạch. Tạo `data/raw/batdongsan_ocp2/`, `batdongsan_ocp3/` — batdongsan chặn bot nên phần OCP2/OCP3 cần user tự lưu HTML tay như trước, chưa có file nào | — |
+| Viet | Crawl thật + ingest OCP1/OCP2/OCP3 lên Qdrant Cloud (2 lần chạy nền bị hệ thống ngắt giữa chừng — không mất dữ liệu vì đổi sang ghi Qdrant ngay sau mỗi dự án thay vì gộp cả 3 rồi mới ghi 1 lần) | ✅ Done | meeyland: OCP1 370 tin (re-crawl, cập nhật giá/tình trạng mới), OCP2 9 tin, OCP3 4 tin (đã lọc must_mention khỏi category cấp huyện dùng chung). knowledge: 12 tài liệu → 66 chunk. Qdrant Cloud: 870 → **952 chunk**. Verify trực tiếp: sample chunk OCP2/OCP3 đúng nội dung đúng dự án (không lẫn), đếm theo `project` khớp đúng (852 umbrella-project + 100 tồn kho theo toà = 952) | — |
+
+**Tổng kết ngày:** Sửa gốc rễ lỗi "RAG lẫn khu vực" mà leader phát hiện khi test — không phải lỗi làm sạch dữ liệu (đã verify text sạch từ đầu), mà là thiếu phân biệt dự án trong metadata suốt từ trước tới giờ. Mở rộng dữ liệu từ chỉ-OCP1 sang đủ 3 dự án Vinhomes Ocean Park (OCP1/2/3), có cơ chế chống gán nhầm dự án khi category nguồn không tách riêng theo dự án (OCP3). Phát hiện và ghi nhận rõ: OCP3 chưa có thị trường thứ cấp căn hộ chung cư — tránh hệ thống bịa dữ liệu cho phần chưa tồn tại. batdongsan OCP2/OCP3 còn thiếu (cần user lưu HTML tay, đã chuẩn bị sẵn thư mục + code đọc). **Việc CHƯA làm — ngoài phạm vi module data, cần báo agents/Huy:** `RetrieveNode` trong `src/agents/graph.py` mặc định `visibility=["public"]`, không có cơ chế nào trong đường chat thật mở khoá `internal` — nghĩa là 4/6 nhóm tài liệu kiến thức chung (đã tăng lên nhiều file hơn hôm nay) vẫn KHÔNG được dùng để trả lời chat thật dù ingest đúng, dù đã sửa đúng metadata project hôm nay. Sửa metadata là điều kiện CẦN nhưng chưa ĐỦ để hết lẫn khu — phải sửa cả bug retrieval này thì tác dụng thật mới phát huy trên chatbot. 165/165 test pass.
+
+---
+
 <!--
 Mẫu cho ngày làm việc tiếp theo:
 

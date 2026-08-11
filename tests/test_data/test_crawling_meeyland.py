@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from src.data.crawling import meeyland
-from src.data.crawling.meeyland import _extract_listing_paths, parse_listing_detail
+from src.data.crawling.meeyland import PROJECT_OCP2, PROJECT_OCP3, _extract_listing_paths, parse_listing_detail
 
 
 @pytest.fixture(autouse=True)
@@ -87,9 +87,38 @@ def test_luu_text_tho_ra_file_truoc_khi_dung_markdown(tmp_path, monkeypatch):
     doc = parse_listing_detail(_DETAIL_HTML, "https://meeyland.com/test/306086850")
 
     assert doc is not None
-    raw_file = raw_dir / "306086850.txt"
+    raw_file = raw_dir / "ocp1" / "306086850.txt"
     assert raw_file.exists()
     assert "Căn góc thoáng sáng" in raw_file.read_text(encoding="utf-8")
+
+
+def test_project_config_gan_dung_project_vao_metadata():
+    doc = parse_listing_detail(_DETAIL_HTML, "https://meeyland.com/test/306086850", PROJECT_OCP2)
+
+    assert doc is not None
+    assert doc.metadata["project"] == "Vinhomes Ocean Park 2 (The Empire)"
+    # doc_id KHÔNG đổi theo project — listing_id của meeyland đã duy nhất toàn site,
+    # đổi format sẽ làm tin OCP1 cũ trên Qdrant bị trùng thay vì re-ingest đúng chỗ.
+    assert doc.doc_id == "meeyland:306086850"
+
+
+def test_must_mention_khop_thi_nhan_tin():
+    html = _DETAIL_HTML.replace(
+        "Vinhomes Ocean Park - căn góc 2PN",
+        "Vinhomes Ocean Park 3 - The Crown - căn góc 2PN",
+    )
+
+    doc = parse_listing_detail(html, "https://meeyland.com/test/306086850", PROJECT_OCP3)
+
+    assert doc is not None
+    assert doc.metadata["project"] == "Vinhomes Ocean Park 3 (The Crown)"
+
+
+def test_must_mention_khong_khop_thi_bo_qua_tranh_gan_nham_du_an():
+    """Category cấp huyện của OCP3 có thể lẫn dự án khác — không nhắc đúng tên thì phải bỏ qua."""
+    doc = parse_listing_detail(_DETAIL_HTML, "https://meeyland.com/test/306086850", PROJECT_OCP3)
+
+    assert doc is None
 
 
 def test_extract_listing_paths_loc_dung_va_bo_trung():
