@@ -91,27 +91,36 @@ make infra-down
 
 Mặc định hệ thống dùng vector store trong bộ nhớ nên **không cần Docker** để dev.
 
-### 4. Nạp dữ liệu RAG thật vào Qdrant (tuỳ chọn)
+### 4. Nạp dữ liệu RAG vào Qdrant (tuỳ chọn)
 
 Qdrant (local hoặc Cloud — xem `QDRANT_URL`/`QDRANT_API_KEY` trong `.env`) lúc
-mới bật là **rỗng** — mỗi máy phải tự nạp dữ liệu, `git pull` code không tự có
-sẵn data. Có 4 nguồn, chạy theo thứ tự:
+mới bật là **rỗng**. `git pull` chỉ lấy code, không lấy dữ liệu — mỗi máy phải
+tự nạp.
+
+Mọi thao tác dữ liệu đi qua **một dòng lệnh duy nhất**:
 
 ```bash
-PYTHONUTF8=1 PYTHONPATH=. python scripts/ingest_inventory.py       # tồn kho căn hộ (CSV + ảnh) — internal
-PYTHONUTF8=1 PYTHONPATH=. python scripts/ingest_batdongsan.py      # tin batdongsan.com.vn (lưu tay) — public
-PYTHONUTF8=1 PYTHONPATH=. python scripts/ingest_more_sources.py    # tin meeyland.com (crawl trực tiếp) — public
-PYTHONUTF8=1 PYTHONPATH=. python scripts/ingest_knowledge_docs.py  # chính sách/pháp lý/tiện ích (.md) — internal hoặc public tuỳ file
+python -m src.cli status                 # vector store đang có gì
+python -m src.cli ingest --all           # nạp cả 4 nguồn
+python -m src.cli ingest inventory       # nạp một nguồn
+python -m src.cli search "câu hỏi"       # thử truy hồi
+python -m src.cli eval retrieval         # đo trên bộ câu hỏi vàng
 ```
 
-`ingest_more_sources.py` (meeyland) crawl thẳng từ web nên chạy được ngay, không
-cần gì thêm. `ingest_inventory.py`/`ingest_batdongsan.py` đọc file trong
-`data/raw/` — thư mục này nằm trong `.gitignore` nên **không có trong repo**,
-cần xin Viet file CSV/ảnh (Drive) và bộ HTML batdongsan đã lưu tay để bỏ vào
-đúng chỗ trước khi chạy. `ingest_knowledge_docs.py` đọc file `.md` trong
-`data/raw/knowledge/` (cũng gitignore) — mỗi file bắt buộc front-matter
-`title`/`section`/`visibility: internal|public` ở đầu, xem
-`src/data/sources/knowledge_docs.py` để biết định dạng.
+| Nguồn | Nội dung | Quyền | Cần gì |
+|---|---|---|---|
+| `meeyland` | Tin đăng meeyland.com | public | Chạy được ngay — crawl thẳng từ web |
+| `inventory` | Tồn kho 100 căn (CSV) | internal | `data/raw/inventory.csv` |
+| `batdongsan` | Tin batdongsan.com.vn lưu tay | public | `data/raw/*.html` |
+| `knowledge` | Chính sách · pháp lý · tiện ích | tuỳ file | `data/raw/knowledge/**.md` |
+
+`data/raw/` nằm trong `.gitignore` nên **không có trong repo** — xin Viet qua
+Drive trước khi chạy ba nguồn cuối. File `.md` bắt buộc có front-matter
+`title`/`section`/`visibility` ở đầu; xem `src/data/sources/knowledge_docs.py`.
+
+> Nạp dữ liệu **bắt buộc có `OPENAI_API_KEY` hợp lệ**. Trước đây script tự rơi
+> về embedding giả lập khi thiếu key — vector 64 chiều ghi vào collection 1536
+> chiều, hỏng dữ liệu. Nay thiếu key là dừng ngay với thông báo rõ ràng.
 
 ---
 

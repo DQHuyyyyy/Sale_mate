@@ -10,8 +10,9 @@ from typing import Any
 
 from src.agents.nodes.base import BaseNode
 from src.agents.state import AgentState
-from src.data.contracts import RetrievalFilter, Retriever
+from src.data.contracts import RetrievalFilter
 from src.models.chat import Citation
+from src.rag.contracts import Retriever
 
 
 class RetrieveNode(BaseNode):

@@ -5,13 +5,14 @@ from __future__ import annotations
 import pytest
 
 from src.agents.nodes.base import BaseNode
-from src.agents.nodes.generate import GenerateNode, build_messages
+from src.agents.nodes.generate import GenerateNode, build_messages, merged_context
 from src.agents.nodes.guardrail import INSUFFICIENT_MESSAGE, GuardrailNode
 from src.agents.nodes.retrieve import RetrieveNode
 from src.agents.nodes.router import RouterNode
 from src.agents.state import Intent, initial_state
-from src.data.contracts import Chunk, RetrievalResult
-from src.models.chat import MessageRole
+from src.data.contracts import Chunk
+from src.models.chat import Citation, MessageRole
+from src.rag.contracts import RetrievalResult
 from tests.conftest import FAKE_REPLY
 
 
@@ -139,6 +140,26 @@ async def test_generate_tra_ve_cau_tra_loi(scripted_llm):
     assert result["answer"] == FAKE_REPLY
 
 
+def test_merged_context_dat_so_lieu_tool_truoc_tai_lieu():
+    """Khi tool và tài liệu nói khác nhau, cái model đọc trước phải là số liệu
+    đọc thẳng từ nguồn sự thật, không phải bản chụp trong vector store."""
+    state = initial_state("Giá căn VOP345?", "s1")
+    state["tool_context"] = "SO_LIEU_TOOL"
+    state["context"] = "TAI_LIEU"
+
+    merged = merged_context(state)
+
+    assert merged.index("SO_LIEU_TOOL") < merged.index("TAI_LIEU")
+
+
+def test_merged_context_bo_phan_rong():
+    state = initial_state("Xin chào", "s1")
+    state["tool_context"] = ""
+    state["context"] = "TAI_LIEU"
+
+    assert merged_context(state) == "TAI_LIEU"
+
+
 # ---------------- Guardrail ----------------
 
 
@@ -187,3 +208,32 @@ async def test_guardrail_khong_gan_co_khi_chi_co_gia():
     result = await GuardrailNode(0.35)(state)
 
     assert result["is_sensitive"] is False
+
+
+@pytest.mark.asyncio
+async def test_guardrail_khong_tu_choi_khi_tool_da_co_so_lieu():
+    """Hỏi giá một căn cụ thể: nhãn bật needs_retrieval nhưng kho tài liệu
+    không chứa giá từng căn, nên độ phủ luôn 0. Tool đã cầm số đúng thì không
+    được từ chối."""
+    state = initial_state("Giá căn VOP345?", "s1")
+    state["needs_retrieval"] = True
+    state["chunks"] = []
+    state["coverage"] = 0.0
+    state["tool_context"] = '[inventory_lookup] ...\n{"unit_code": "VOP345"}'
+    state["answer"] = "Căn VOP345 giá 2,7 tỷ, còn trống."
+
+    result = await GuardrailNode(0.35)(state)
+
+    assert "answer" not in result
+
+
+@pytest.mark.asyncio
+async def test_guardrail_gop_nguon_tai_lieu_va_nguon_tool():
+    state = initial_state("Giá căn VOP345?", "s1")
+    state["citations"] = [Citation(doc_id="d1", title="Bảng giá", kind="doc")]
+    state["tool_citations"] = [Citation(doc_id="inventory:postgres", title="Tồn kho", kind="db")]
+    state["answer"] = "Căn VOP345 giá 2,7 tỷ."
+
+    result = await GuardrailNode(0.35)(state)
+
+    assert [c.kind for c in result["citations"]] == ["doc", "db"]

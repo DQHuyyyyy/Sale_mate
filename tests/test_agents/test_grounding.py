@@ -9,7 +9,7 @@ from src.agents.nodes.generate import build_messages
 from src.agents.nodes.guardrail import INSUFFICIENT_MESSAGE, GuardrailNode
 from src.agents.prompts import system_prompt
 from src.agents.state import initial_state
-from src.data.retrieval.retriever import EmptyRetriever
+from src.rag.retriever import EmptyRetriever
 
 
 @pytest.mark.asyncio

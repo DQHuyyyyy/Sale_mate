@@ -8,9 +8,9 @@ KHÔNG tải và KHÔNG đẩy file — ảnh vẫn nằm trên Drive, DB chỉ 
 Nhờ vậy không tốn dung lượng Supabase (free tier 1GB) dù mỗi căn bao nhiêu ảnh.
 
 Chạy:
-    python scripts/link_drive_images.py --dry-run --limit 5   # xem thử
-    python scripts/link_drive_images.py --dry-run             # xem toàn bộ
-    python scripts/link_drive_images.py                       # ghi vào DB
+    python interface/backend/scripts/link_drive_images.py --dry-run --limit 5
+    python interface/backend/scripts/link_drive_images.py --dry-run
+    python interface/backend/scripts/link_drive_images.py      # ghi vào DB
 
 Chạy lại bao nhiêu lần cũng không nhân đôi bản ghi.
 
@@ -31,6 +31,7 @@ import os
 import re
 import sys
 from collections import defaultdict
+from pathlib import Path
 
 from dotenv import load_dotenv
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -133,7 +134,7 @@ def save_images(supabase, records: list[dict]) -> int:
 
 
 def main() -> int:
-    load_dotenv()
+    load_dotenv(Path(__file__).resolve().parents[3] / ".env")
     parser = argparse.ArgumentParser(description="Nối ảnh Drive vào apartment_images")
     parser.add_argument("--dry-run", action="store_true", help="Chỉ in, không ghi DB")
     parser.add_argument("--limit", type=int, help="Chỉ xử lý N căn đầu")

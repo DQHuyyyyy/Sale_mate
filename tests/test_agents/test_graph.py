@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from src.agents.graph import build_graph, build_nodes, route_after_router
+from src.agents.graph import build_graph, build_nodes, route_after_tools
+from src.agents.nodes.tools import ToolsNode
 from src.agents.state import initial_state
-from src.data.retrieval.retriever import EmptyRetriever
+from src.rag.retriever import EmptyRetriever
 from tests.conftest import FAKE_REPLY
 
 
@@ -14,14 +15,14 @@ def test_route_can_tra_cuu_thi_di_retrieve():
     state = initial_state("Chính sách?", "s1")
     state["needs_retrieval"] = True
 
-    assert route_after_router(state) == "retrieve"
+    assert route_after_tools(state) == "retrieve"
 
 
 def test_route_khong_can_thi_di_thang_generate():
     state = initial_state("Xin chào", "s1")
     state["needs_retrieval"] = False
 
-    assert route_after_router(state) == "generate"
+    assert route_after_tools(state) == "generate"
 
 
 def test_route_co_loi_van_di_generate_de_tra_loi_nguoi_dung():
@@ -30,7 +31,7 @@ def test_route_co_loi_van_di_generate_de_tra_loi_nguoi_dung():
     state["needs_retrieval"] = True
     state["error"] = "router hỏng"
 
-    assert route_after_router(state) == "generate"
+    assert route_after_tools(state) == "generate"
 
 
 @pytest.mark.asyncio
@@ -53,3 +54,45 @@ async def test_graph_tu_choi_khi_can_tai_lieu_ma_khong_co_gi(scripted_llm, setti
     result = await graph.ainvoke(initial_state("Thủ tục sang tên sổ đỏ?", "s1"))
 
     assert "chưa có đủ dữ liệu" in result["answer"].lower()
+
+
+@pytest.mark.asyncio
+async def test_graph_hoi_can_cu_the_thi_so_lieu_tu_tool_di_vao_prompt(scripted_llm, settings, monkeypatch):
+    """Luồng đầu-cuối cho chính ca đã hỏng trên production: hỏi một mã căn.
+
+    Không có tool thì retrieve rỗng ⇒ guardrail từ chối. Có tool thì số liệu
+    phải vào context và câu trả lời đi qua được.
+    """
+    from src.agents.contracts import AgentTool, ToolResult
+    from src.agents.state import Intent
+    from src.agents.tools.registry import ToolBinding, ToolRegistry
+
+    class _Ton(AgentTool):
+        name = "ton_kho_gia"
+        description = "Tra tồn kho."
+
+        async def run(self, **kwargs):
+            return ToolResult(
+                ok=True, data=[{"unit_code": kwargs["unit_code"], "price_label": "2,7 tỷ"}], source="test:db"
+            )
+
+    reg = ToolRegistry()
+    reg.add(
+        _Ton(),
+        ToolBinding(
+            intents=frozenset({Intent.LISTING, Intent.PRICE}),
+            build_args=lambda q: {"unit_code": "VOP345"} if "VOP345" in q else None,
+        ),
+    )
+
+    nodes = build_nodes(scripted_llm, EmptyRetriever(), settings)
+    nodes["tools"] = ToolsNode(reg)
+    graph = build_graph(nodes)
+
+    result = await graph.ainvoke(initial_state("Giá căn VOP345 bao nhiêu?", "s1"))
+
+    assert "VOP345" in result["tool_context"]
+    assert "2,7 tỷ" in result["tool_context"]
+    # Khong bi guardrail chan du EmptyRetriever khong tra chunk nao
+    assert "chưa có đủ dữ liệu" not in result["answer"].lower()
+    assert [c.kind for c in result["citations"]] == ["db"]

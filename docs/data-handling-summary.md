@@ -1,3 +1,7 @@
+> ⚠️ **Cập nhật 2026-08-08:** toàn bộ script ingest/eval đã chuyển từ `scripts/`
+> vào `src/data/ingest/` + `src/data/cli.py` + `src/eval/`. Lệnh cũ trong tài liệu
+> này không còn chạy — dùng `python -m src.cli ingest --all` thay thế.
+
 # Data Handling — Tổng hợp thay đổi (Viet, cập nhật 2026-08-05)
 
 > Ghi lại toàn bộ thay đổi thuộc module **Data Handling** để leader review và
@@ -20,7 +24,7 @@ Postgres, đúng kiến trúc "có cấu trúc → Postgres" mà leader yêu c�
 | File | Tác dụng |
 |---|---|
 | `src/data/stores/inventory_db.py` (mới) | `InventoryDB` — SQLAlchemy Core, upsert bằng DELETE+INSERT (portable giữa SQLite test và Postgres thật, không dùng cú pháp riêng của Postgres) |
-| `scripts/migrate_inventory_to_postgres.py` (mới) | Nạp 100 căn từ CSV vào Postgres — idempotent, chạy lại an toàn |
+| `interface/backend/scripts/migrate_inventory.py` (mới) | Nạp 100 căn từ CSV vào Postgres — idempotent, chạy lại an toàn |
 | `src/agents/tools/inventory.py` (sửa) | Query Postgres qua `asyncio.to_thread` thay vì đọc CSV |
 | `src/data/sources/inventory.py` (không đổi) | Vẫn là nguồn CSV gốc — chỉ dùng để migrate, không còn được tool gọi trực tiếp |
 
@@ -96,9 +100,9 @@ Cloud (Docker local không cần). Đã sửa 5 script ingest để truyền đ�
 
 | File | Tác dụng |
 |---|---|
-| `scripts/ingest_more_sources.py` | Crawl + ingest toàn bộ tin meeyland.com vào Qdrant. Sau khi ingest, tự động so tin hiện có với tin đang active trong Qdrant — tin nào bị gỡ khỏi site thì đánh dấu `is_active=False` (không xoá, giữ làm lịch sử). |
-| `scripts/ingest_knowledge_docs.py` | Đọc toàn bộ `.md` trong `data/raw/knowledge/`, validate schema, ingest vào Qdrant qua `IngestPipeline` có sẵn (không cần sửa chunker/embedder/store). |
-| `scripts/eval_retrieval.py` | Chạy `Retriever` thật (embed → search Qdrant → rerank) trên bộ câu hỏi vàng (`eval/golden_dataset.json`), đo hit@5 + coverage, ghi kết quả ra `eval/results/retrieval_eval.json`. Dùng filter `[public, internal]` để đo đúng năng lực retrieval, tách biệt khỏi bài toán phân quyền. |
+| `src/data/ingest/sources.py (nguồn meeyland)` | Crawl + ingest toàn bộ tin meeyland.com vào Qdrant. Sau khi ingest, tự động so tin hiện có với tin đang active trong Qdrant — tin nào bị gỡ khỏi site thì đánh dấu `is_active=False` (không xoá, giữ làm lịch sử). |
+| `src/data/ingest/sources.py (nguồn knowledge)` | Đọc toàn bộ `.md` trong `data/raw/knowledge/`, validate schema, ingest vào Qdrant qua `IngestPipeline` có sẵn (không cần sửa chunker/embedder/store). |
+| `src/eval/retrieval.py` | Chạy `Retriever` thật (embed → search Qdrant → rerank) trên bộ câu hỏi vàng (`eval/golden_dataset.json`), đo hit@5 + coverage, ghi kết quả ra `eval/results/retrieval_eval.json`. Dùng filter `[public, internal]` để đo đúng năng lực retrieval, tách biệt khỏi bài toán phân quyền. |
 
 ### 2.3. Dữ liệu eval (`eval/`)
 
@@ -135,8 +139,8 @@ thẳng làm buffer mới. Verify lại: 0/803 chunk vượt 900 trên Qdrant th
 
 ### 3.2. Scripts ingest — thêm `api_key` cho Qdrant Cloud
 
-`scripts/chat_demo_rag.py`, `scripts/ingest_batdongsan.py`,
-`scripts/ingest_inventory.py` (+ 2 file mới ở mục 2.2): tất cả đổi
+`python -m src.cli search`, `src/data/ingest/sources.py (nguồn batdongsan)`,
+`src/data/ingest/sources.py (nguồn inventory)` (+ 2 file mới ở mục 2.2): tất cả đổi
 
 ```python
 QdrantVectorStore(settings.qdrant_url, settings.qdrant_collection)
@@ -226,7 +230,7 @@ script nào chạy được ngay (crawl trực tiếp).
 2. Câu hỏi tiện ích đôi khi bị LLM router phân sai thành `LISTING` thay vì
    `DOCUMENT`, dù chính prompt của router liệt kê "tiện ích" thuộc `document`.
 
-**Cách tái hiện:** chạy `scripts/chat_demo_rag.py`, hỏi "Cho tôi thông tin căn
+**Cách tái hiện:** chạy `python -m src.cli search`, hỏi "Cho tôi thông tin căn
 hộ 3 phòng ngủ" → trả lời "chưa đủ dữ liệu" dù Qdrant có hàng trăm tin phù hợp.
 
 ### 4.2. `src/services/portal.py` — data hư cấu tương tự, khác phạm vi
@@ -268,15 +272,12 @@ cp .env.example .env
 # 3. Xin data/raw/ (inventory.csv, photos/, *.html, knowledge/) từ Viet qua Drive
 
 # 4. Ingest lần lượt (thứ tự không bắt buộc, trừ ingest_more_sources hơi lâu ~15 phút)
-PYTHONUTF8=1 PYTHONPATH=. python scripts/ingest_inventory.py
-PYTHONUTF8=1 PYTHONPATH=. python scripts/ingest_batdongsan.py
-PYTHONUTF8=1 PYTHONPATH=. python scripts/ingest_more_sources.py
-PYTHONUTF8=1 PYTHONPATH=. python scripts/ingest_knowledge_docs.py
+python -m src.cli ingest --all       # hoac tung nguon: ingest inventory
 
 # 5. Verify
 PYTHONUTF8=1 PYTHONPATH=. python -m pytest tests/ -q
-PYTHONUTF8=1 PYTHONPATH=. python scripts/eval_retrieval.py
-PYTHONUTF8=1 PYTHONPATH=. python scripts/chat_demo_rag.py   # cần OPENAI_API_KEY
+python -m src.cli eval retrieval
+python -m src.cli search "thu tuc sang ten so do"   # can OPENAI_API_KEY
 ```
 
 ---

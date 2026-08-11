@@ -80,7 +80,9 @@ services:
       - key: APP_ENV
         value: production
       # Bỏ trống cũng chạy: bootstrap.py rơi về ScriptedProvider, chat trả lời
-      # theo kịch bản sẵn thay vì gọi model thật.
+      # theo kịch bản sẵn thay vì gọi model thật. Nhưng RAG thì hỏng câm: thiếu
+      # key là rơi về FakeEmbedder, vector giả không khớp gì với dữ liệu đã nhúng
+      # bằng model thật, nên truy hồi luôn rỗng mà KHÔNG báo lỗi.
       - key: OPENAI_API_KEY
         sync: false
       - key: LLM_MODEL_FAST
@@ -89,3 +91,22 @@ services:
         value: gpt-4o-mini
       - key: LOG_LEVEL
         value: INFO
+
+      # ---- Vector store cho RAG ----
+      # Thiếu ba biến này thì qdrant_url rơi về http://localhost:6333, trong
+      # container không có Qdrant nào ⇒ mọi câu hỏi cần tài liệu trả 502
+      # "Truy vấn Qdrant thất bại".
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      - key: QDRANT_COLLECTION
+        value: documents_chunks
+
+      # ---- Postgres cho tool tồn kho ----
+      # Tool inventory_lookup đọc bảng inventory_units để trả giá và tình trạng
+      # căn theo thời gian thực. Thiếu biến này thì database_url rơi về
+      # sqlite:///./data/app.db — một file rỗng trong container, tool không tìm
+      # thấy căn nào và trợ lý trả lời "chưa đủ dữ liệu".
+      - key: DATABASE_URL
+        sync: false

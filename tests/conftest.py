@@ -1,7 +1,7 @@
 """Fixture dùng chung cho toàn bộ test.
 
-Nguyên tắc: KHÔNG test nào được gọi OpenAI hay Qdrant thật. Container được dựng
-lại với implementation giả lập trước mỗi test.
+Nguyên tắc: KHÔNG test nào được gọi OpenAI, Qdrant hay Postgres thật. Container
+được dựng lại với implementation giả lập trước mỗi test.
 """
 
 from __future__ import annotations
@@ -43,6 +43,31 @@ def configured_container(settings: Settings):
     container.override(LLMProvider, ScriptedProvider(FAKE_REPLY, delay_s=0))
     yield container
     container.reset()
+
+
+@pytest.fixture(autouse=True)
+def _chan_postgres_that(monkeypatch):
+    """Tồn kho luôn là SQLite RỖNG trong bộ nhớ, trừ khi test tự nạp dữ liệu.
+
+    Tool tồn kho gọi `get_inventory_db()`, hàm này đọc `get_settings()` toàn
+    cục — tức là `.env` của máy, tức là Supabase THẬT. Không chặn ở đây thì bất
+    kỳ test nào vô tình chạm vào tool đều bắn thẳng vào database production, và
+    nó đã xảy ra thật: thêm tool `inventory_search` làm một test grounding cũ
+    bỗng nhiên gọi Supabase rồi đổi kết quả.
+
+    Test nào cần dữ liệu tồn kho thì tự monkeypatch `get_inventory_db` trong
+    module của mình, đè lên fixture này.
+    """
+    from sqlalchemy import create_engine
+    from sqlalchemy.pool import StaticPool
+
+    from src.data.stores.inventory_db import InventoryDB
+
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    db = InventoryDB("sqlite:///:memory:", engine=engine)
+    db.ensure_table()
+    for module in ("src.agents.tools.inventory", "src.agents.tools.search"):
+        monkeypatch.setattr(f"{module}.get_inventory_db", lambda: db)
 
 
 @pytest_asyncio.fixture

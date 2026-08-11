@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.data.parsers import (
+from src.data.ingestion.parsers import (
     clean_text,
     format_price_label,
     normalize_layout_label,

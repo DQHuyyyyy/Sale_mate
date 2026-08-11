@@ -170,14 +170,10 @@ class TestKhongCoToken:
         for path in ("/api/apartments", "/api/zones", "/api/towers"):
             assert client.get(path).status_code == 200, path
 
-    def test_token_rac_tren_route_cong_khai_van_xem_duoc(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_token_rac_tren_route_cong_khai_van_xem_duoc(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Token hỏng thì coi như khách, không chặn — trang này vốn không cần đăng nhập."""
         _khong_cham_database(monkeypatch)
-        response = TestClient(app).get(
-            "/api/apartments", headers={"Authorization": "Bearer khong-phai-token"}
-        )
+        response = TestClient(app).get("/api/apartments", headers={"Authorization": "Bearer khong-phai-token"})
         assert response.status_code == 200
 
     def test_them_can_ho_van_chi_admin(self) -> None:
