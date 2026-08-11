@@ -117,25 +117,25 @@
     "id": "EV-012",
     "category": "so_sanh_nhieu_can",
     "category_name": "So sánh nhiều căn & Chính sách",
-    "question": "Chính sách chiết khấu 8% thanh toán sớm áp dụng cho căn hộ nào?",
-    "expected_doc_id": "POL-001",
-    "source": "Chính sách chiết khấu"
+    "question": "Chính sách chiết khấu thanh toán sớm áp dụng cho căn hộ nào?",
+    "expected_doc_id": "knowledge:chinh-sach-ban-hang",
+    "source": "Chính sách chiết khấu OCP1 — SỬA: bản cũ dùng doc_id giả \"POL-001\" không khớp doc_id thật nào, luôn MISS bất kể retrieval tốt hay xấu, đã đổi sang doc_id thật"
   },
   {
     "id": "EV-013",
     "category": "so_sanh_nhieu_can",
     "category_name": "So sánh nhiều căn & Chính sách",
-    "question": "Nên chọn gói chiết khấu 8% hay gói hỗ trợ vay ngân hàng 0% lãi suất?",
-    "expected_doc_id": "POL-002",
-    "source": "So sánh chính sách"
+    "question": "Nên chọn gói chiết khấu hay gói hỗ trợ lãi suất 0%?",
+    "expected_doc_id": "knowledge:chinh-sach-ban-hang",
+    "source": "So sánh chính sách OCP1 — SỬA: bản cũ dùng doc_id giả \"POL-002\""
   },
   {
     "id": "EV-014",
     "category": "so_sanh_nhieu_can",
     "category_name": "So sánh nhiều căn & Chính sách",
     "question": "Thủ tục sang tên sổ đỏ và khoản thuế phí hết bao nhiêu tiền?",
-    "expected_doc_id": "POL-004",
-    "source": "Pháp lý & Sổ đỏ"
+    "expected_doc_id": "knowledge:phap-ly-thu-tuc",
+    "source": "Pháp lý & Sổ đỏ (public) — SỬA: bản cũ dùng doc_id giả \"POL-004\""
   },
   {
     "id": "EV-015",
@@ -168,5 +168,137 @@
     "question": "Dự án Ecopark Hưng Yên căn 2 phòng ngủ giá bao nhiêu?",
     "expected_doc_id": null,
     "source": "Dự án ngoài Ecopark Hưng Yên"
+  },
+  {
+    "id": "EV-019",
+    "category": "phan_biet_du_an",
+    "category_name": "Phân biệt dự án OCP1/OCP2/OCP3",
+    "question": "Phí dịch vụ khu Sapphire tại Vinhomes Ocean Park (Gia Lâm) là bao nhiêu một tháng?",
+    "expected_doc_id": "knowledge:bang-gia-van-ban",
+    "source": "Bảng giá dịch vụ OCP1 — không được lẫn số của OCP2/OCP3",
+    "must_not_mention": ["Vinhomes Ocean Park 2", "Vinhomes Ocean Park 3", "The Empire", "The Crown"]
+  },
+  {
+    "id": "EV-020",
+    "category": "phan_biet_du_an",
+    "category_name": "Phân biệt dự án OCP1/OCP2/OCP3",
+    "question": "Phí dịch vụ Vinhomes Ocean Park 2 The Empire là bao nhiêu một tháng?",
+    "expected_doc_id": "knowledge:bang-gia-van-ban-ocp2",
+    "source": "Bảng giá dịch vụ OCP2 — trước đây bị trả lời bằng số của OCP1 do project bị hardcode",
+    "must_not_mention": ["Sapphire", "Zenpark", "Pavilion", "Vinhomes Ocean Park 3", "The Crown"]
+  },
+  {
+    "id": "EV-021",
+    "category": "phan_biet_du_an",
+    "category_name": "Phân biệt dự án OCP1/OCP2/OCP3",
+    "question": "Phí dịch vụ Vinhomes Ocean Park 3 The Crown là bao nhiêu một tháng?",
+    "expected_doc_id": "knowledge:bang-gia-van-ban-ocp3",
+    "source": "Bảng giá dịch vụ OCP3",
+    "must_not_mention": ["Sapphire", "Zenpark", "Pavilion", "Vinhomes Ocean Park 2", "The Empire"]
+  },
+  {
+    "id": "EV-022",
+    "category": "phan_biet_du_an",
+    "category_name": "Phân biệt dự án OCP1/OCP2/OCP3",
+    "question": "Chính sách chiết khấu thanh toán sớm của Vinhomes Ocean Park 2 The Empire là bao nhiêu?",
+    "expected_doc_id": "knowledge:chinh-sach-ban-hang-ocp2",
+    "source": "Chính sách bán hàng OCP2 (nguồn broker — độ tin cậy thấp hơn OCP1, đã ghi rõ trong tài liệu)"
+  },
+  {
+    "id": "EV-023",
+    "category": "phan_biet_du_an",
+    "category_name": "Phân biệt dự án OCP1/OCP2/OCP3",
+    "question": "Chính sách bán hàng Vinhomes Ocean Park 3 The Crown có chiết khấu bao nhiêu?",
+    "expected_doc_id": "knowledge:chinh-sach-ban-hang-ocp3",
+    "source": "Chính sách bán hàng OCP3 (nguồn broker)"
+  },
+  {
+    "id": "EV-024",
+    "category": "phan_biet_du_an",
+    "category_name": "Phân biệt dự án OCP1/OCP2/OCP3",
+    "question": "Tiến độ xây dựng Vinhomes Ocean Park 1 Gia Lâm hiện tại thế nào?",
+    "expected_doc_id": "knowledge:tien-do-xay-dung-ocp1",
+    "source": "Tiến độ OCP1 — tài liệu này từng bị trộn chung cả 3 dự án trong 1 file, đã tách",
+    "must_not_mention": ["The Empire", "The Crown"]
+  },
+  {
+    "id": "EV-025",
+    "category": "phan_biet_du_an",
+    "category_name": "Phân biệt dự án OCP1/OCP2/OCP3",
+    "question": "Tiến độ xây dựng Vinhomes Ocean Park 2 The Empire hiện tại thế nào?",
+    "expected_doc_id": "knowledge:tien-do-xay-dung-ocp2",
+    "source": "Tiến độ OCP2"
+  },
+  {
+    "id": "EV-026",
+    "category": "phan_biet_du_an",
+    "category_name": "Phân biệt dự án OCP1/OCP2/OCP3",
+    "question": "Vinhomes Ocean Park 3 The Crown hiện có căn hộ chung cư nào đang rao bán không?",
+    "expected_doc_id": "knowledge:tien-do-xay-dung-ocp3",
+    "source": "Kiểm tra thật 10/08/2026: category căn hộ chung cư OCP3 trên meeyland = 0 tin — câu trả lời ĐÚNG phải nói rõ CHƯA có, không được bịa ra một căn hộ cụ thể nào"
+  },
+  {
+    "id": "EV-027",
+    "category": "tra_cuu_don",
+    "category_name": "Tra cứu đơn",
+    "question": "Có căn 1 phòng ngủ nào ở Vinhomes Ocean Park 2 giá khoảng 2,7 tỷ đang rao bán không?",
+    "expected_doc_id": "meeyland:307421561",
+    "source": "meeyland.com — tin đăng OCP2 thật"
+  },
+  {
+    "id": "EV-028",
+    "category": "tra_cuu_don",
+    "category_name": "Tra cứu đơn",
+    "question": "Biệt thự Park Masion tại Vinhomes Ocean Park 3 giá bao nhiêu?",
+    "expected_doc_id": "meeyland:307489244",
+    "source": "meeyland.com — tin đăng OCP3 thật (biệt thự, OCP3 chưa có chung cư)"
+  },
+  {
+    "id": "EV-029",
+    "category": "cau_hoi_bay_out_of_context",
+    "category_name": "Câu hỏi bẫy (Out-of-context)",
+    "question": "Căn hộ Lumière Ocean Crest của Masterise Homes tại Ocean City giá bao nhiêu?",
+    "expected_doc_id": null,
+    "source": "Regression test — bug thật 10/08/2026: tin dự án Masterise Homes (KHÔNG phải Vinhomes) từng bị crawler gắn nhầm project=\"Vinhomes Ocean Park 2\" vì meta_desc của meeyland tự gắn category sai. Đã xoá khỏi Qdrant + sửa crawler (exclude_mentions). Câu này phải MISS (không có dữ liệu), nếu PASS với 1 doc nào đó nghĩa là bug tái diễn"
+  },
+  {
+    "id": "EV-030",
+    "category": "cau_hoi_bay_out_of_context",
+    "category_name": "Câu hỏi bẫy (Out-of-context)",
+    "question": "Dự án The Parkland của MIK Group/Imperia tại Ocean City có căn hộ nào giá tốt không?",
+    "expected_doc_id": null,
+    "source": "Regression test — cùng bug với EV-029, dự án khác (MIK Group/Imperia), câu này phải MISS"
+  },
+  {
+    "id": "EV-031",
+    "category": "moi_nguon_du_lieu",
+    "category_name": "Phủ đủ 4 nguồn dữ liệu",
+    "question": "Tiến độ thanh toán chia thành mấy đợt, phạt chậm thanh toán bao nhiêu phần trăm?",
+    "expected_doc_id": "knowledge:tien-do-thanh-toan",
+    "source": "Nguồn: knowledge (OCP1) — CHƯA có case nào test tài liệu này trước đây dù đã ingest từ 07/08"
+  },
+  {
+    "id": "EV-032",
+    "category": "moi_nguon_du_lieu",
+    "category_name": "Phủ đủ 4 nguồn dữ liệu",
+    "question": "Vinhomes Ocean Park có những trường học, bệnh viện nào gần đó?",
+    "expected_doc_id": "knowledge:tien-ich-noi-khu",
+    "source": "Nguồn: knowledge, tài liệu public — kiểm tra câu hỏi public không bị chặn nhầm thành internal"
+  },
+  {
+    "id": "EV-033",
+    "category": "trang_thai_tin_dang",
+    "category_name": "Trạng thái tin đăng (active/đã gỡ)",
+    "question": "Căn 2PN 2WC góc hướng Đông Nam - Đông Bắc giá 4,3 tỷ tại The Paris OCP1 trên meeyland còn bán không?",
+    "expected_doc_id": null,
+    "source": "Kiểm tra thật 11/08/2026: tin meeyland:307399217 đã bị đánh is_active=False (gỡ khỏi site, mục 6 Data Handling) — mặc định RetrievalFilter.is_active=True nên câu này PHẢI MISS (không được trả lời bằng tin đã hết hiệu lực). Nếu ai đổi is_active mặc định thì case này bắt được ngay"
+  },
+  {
+    "id": "EV-034",
+    "category": "phan_quyen",
+    "category_name": "Phân quyền public/internal (kiểm tra thủ công, ngoài phạm vi eval script)",
+    "question": "Chính sách chiết khấu thanh toán sớm của Vinhomes Ocean Park 2 là bao nhiêu?",
+    "expected_doc_id": "knowledge:chinh-sach-ban-hang-ocp2",
+    "source": "Verify thật 11/08/2026 qua `python -m src.cli search \"...\"` (không --internal): 5 kết quả đầu toàn tin đăng public, tài liệu chính sách internal KHÔNG lộ ra — đúng nguyên tắc phân quyền. Thêm `--internal` thì tài liệu này mới xuất hiện (coverage 0.808). LƯU Ý: `src/eval/retrieval.py` hiện dùng CỐ ĐỊNH visibility=[public,internal] cho mọi câu nên KHÔNG tự động hoá được test này — phải chạy tay 2 lần `src.cli search` để so sánh, đã làm và xác nhận đúng"
   }
 ]

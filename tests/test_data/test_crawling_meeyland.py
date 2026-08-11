@@ -114,6 +114,22 @@ def test_must_mention_khop_thi_nhan_tin():
     assert doc.metadata["project"] == "Vinhomes Ocean Park 3 (The Crown)"
 
 
+def test_exclude_mentions_loai_tin_cua_cdt_khac_du_category_rieng():
+    """Bug thật 10/08/2026: category "riêng" OCP2 vẫn lẫn tin của CĐT khác
+    (MIK Group/Imperia, dự án "The Parkland") — meta_desc do meeyland tự sinh
+    LUÔN nhắc "Vinhomes Ocean Park 2" theo category dù CĐT thật trong mô tả
+    (do người bán viết) là một CĐT hoàn toàn khác, không tự nhận thuộc OCP
+    nào cả."""
+    html = _DETAIL_HTML.replace(
+        "Căn góc thoáng sáng, sổ đỏ cầm tay, nội thất đầy đủ.",
+        "Sở hữu căn hộ cao cấp tại The Parkland - Imperia Ocean City, sổ đỏ cầm tay.",
+    )
+
+    doc = parse_listing_detail(html, "https://meeyland.com/test/306086850", PROJECT_OCP2)
+
+    assert doc is None
+
+
 def test_must_mention_khong_khop_thi_bo_qua_tranh_gan_nham_du_an():
     """Category cấp huyện của OCP3 có thể lẫn dự án khác — không nhắc đúng tên thì phải bỏ qua."""
     doc = parse_listing_detail(_DETAIL_HTML, "https://meeyland.com/test/306086850", PROJECT_OCP3)

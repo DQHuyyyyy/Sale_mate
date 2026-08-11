@@ -54,6 +54,14 @@ RAW_TEXT_DIR = REPO_ROOT / "data" / "raw" / "meeyland_crawl_raw"
 BASE_URL = "https://meeyland.com"
 REQUEST_DELAY_S = 1.5
 
+# CỐ Ý không có "masterise": xác minh thật thấy Masterise Homes cũng là đơn vị
+# xây một số phân khu CHÍNH THỨC bên trong OCP1 (vd "Lumiere Orient Pearl" tự
+# nhận rõ "tại Ocean Park 1"/"OCP1" dù do Masterise xây) — loại theo tên này
+# sẽ xoá oan tin thật. "MIK Group"/"Imperia" ("The Parkland") thì khác: tin
+# xác nhận là dự án riêng, gắn nhãn "Ocean City" chung chung, KHÔNG tự nhận
+# thuộc Ocean Park 1/2/3 nào — loại được an toàn hơn.
+_OTHER_DEVELOPERS: tuple[str, ...] = ("mik group", "imperia")
+
 
 @dataclass(frozen=True)
 class ProjectConfig:
@@ -67,6 +75,16 @@ class ProjectConfig:
     (không phân biệt hoa/thường/dấu) thì mới nhận là thuộc dự án — bắt buộc
     với category cấp huyện (không riêng dự án) như OCP3, tránh gán nhầm tin
     của dự án/CĐT khác."""
+    exclude_mentions: tuple[str, ...] = field(default_factory=lambda: _OTHER_DEVELOPERS)
+    """Tên CĐT KHÁC — có thì loại NGAY dù category tưởng là "riêng" cho dự án
+    này. Phát hiện thật 10/08/2026: category "Vinhomes Ocean Park 2" trên
+    meeyland lẫn cả tin của Masterise Homes ("Lumière Ocean Crest") và MIK
+    Group/Imperia ("The Parkland") — 2 dự án khác, cùng nằm trong vùng
+    "Ocean City" rộng nhưng KHÔNG phải Vinhomes. Đáng lưu ý: KHÔNG dùng riêng
+    từ "Lumiere"/"Lumière" để loại — Vinhomes tự đặt tên vài toà của chính họ
+    trùng chữ này (vd "Lumiere Orient Pearl" ở OCP1, "Lumiere SpringBay" ở
+    OCP2, cả hai đã tự xác nhận rõ "(Vinhomes Ocean Park ...)" trong mô tả) —
+    loại theo "Lumiere" sẽ xoá oan tin thật. Phải loại theo TÊN CĐT tường minh."""
 
 
 PROJECT_OCP1 = ProjectConfig(
@@ -138,13 +156,19 @@ def _fold(text: str) -> str:
 
 
 def _matches_project(project: ProjectConfig, title: str, meta_desc: str, description: str) -> bool:
-    """Category cấp huyện (không riêng dự án, vd OCP3) cần lọc lại bằng nội dung.
+    """Lọc đúng dự án — kiểm tra exclude_mentions TRƯỚC must_mention.
 
-    Không có must_mention (category đã riêng cho đúng dự án) thì luôn khớp.
+    exclude_mentions luôn được kiểm tra dù category "tưởng riêng" cho dự án
+    (must_mention rỗng) — meta_desc do meeyland tự sinh theo category nên
+    LUÔN nhắc đúng tên dự án dù tin thật của CĐT khác (xem docstring
+    ProjectConfig), phải đọc `description` (do người bán tự viết) mới phát
+    hiện được CĐT thật.
     """
+    haystack = _fold(f"{title} {meta_desc} {description}")
+    if any(_fold(keyword) in haystack for keyword in project.exclude_mentions):
+        return False
     if not project.must_mention:
         return True
-    haystack = _fold(f"{title} {meta_desc} {description}")
     return any(_fold(keyword) in haystack for keyword in project.must_mention)
 
 
