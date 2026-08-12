@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { getApartment, streamChatMessage } from '../api';
+import CauTraLoi from './CauTraLoi';
 import { CloseIcon, SendIcon } from './Icons';
 
 const QUICK_ASKS = ['Căn 2PN dưới 4 tỷ', 'Căn còn ở tòa S1', 'Tư vấn view đẹp'];
@@ -20,6 +21,26 @@ function tieuDeCan(maCan, can) {
   if (!can) return `Căn ${maCan}`;
   const phan = [can.loai_can, can.dien_tich, can.toa && `Tòa ${can.toa}`, can.gia].filter(Boolean);
   return phan.length ? `Căn ${maCan} — ${phan.join(' · ')}` : `Căn ${maCan}`;
+}
+
+const CO_MA_CAN = /\b[A-Za-z]{2,4}\d{2,5}\b/;
+
+/**
+ * Gắn mã căn đang mở vào câu hỏi khi người dùng nói trống không.
+ *
+ * "Phân tích cho tôi căn hiện tại" không có mã căn nào, nên tool tra tồn kho
+ * không rút được tham số và im lặng — trợ lý đành trả lời "chưa đủ dữ liệu"
+ * dù mã căn đang hiện ngay trên màn hình.
+ *
+ * Chỉ gắn khi câu hỏi CHƯA có mã căn: người dùng hỏi về căn khác trong lúc
+ * đang mở một căn là chuyện bình thường, không được ghi đè ý họ.
+ *
+ * Bong bóng chat vẫn hiện nguyên văn người dùng gõ — phần gắn thêm chỉ đi theo
+ * request, không sửa lời của họ trên màn hình.
+ */
+function themNguCanh(message, maCan) {
+  if (!maCan || CO_MA_CAN.test(message)) return message;
+  return `${message} (căn đang xem: ${maCan})`;
 }
 
 /** Câu hỏi gợi ý khi người dùng đang mở một căn cụ thể. */
@@ -72,6 +93,8 @@ export default function ChatSidebar({ open, onToggle }) {
   const [sending, setSending] = useState(false);
   // Dòng trạng thái "trợ lý đang làm gì", thay cho màn hình đứng im.
   const [buoc, setBuoc] = useState('');
+  // Chữ đầu tiên đã về chưa — mốc để tắt chấm nhấp nháy.
+  const [dangTraLoi, setDangTraLoi] = useState(false);
   // Lõi AI cấp ở lượt đầu, gửi lại các lượt sau để log gom về một phiên.
   const sessionRef = useRef(null);
   // Đã mời phân tích căn nào rồi — không mời lại căn đó trong cùng phiên.
@@ -152,16 +175,18 @@ export default function ChatSidebar({ open, onToggle }) {
     setInput('');
     setSending(true);
     setBuoc('');
+    setDangTraLoi(false);
 
     if (maCanDangXem) daMoiRef.current.add(maCanDangXem);
 
     try {
       await streamChatMessage(
-        message,
+        themNguCanh(message, maCanDangXem),
         history,
         (event) => {
           if (event.session_id && !sessionRef.current) sessionRef.current = event.session_id;
           if (event.type === 'token') {
+            setDangTraLoi(true);
             setBuoc('');
             setMessages((prev) =>
               prev.map((item) =>
@@ -183,6 +208,7 @@ export default function ChatSidebar({ open, onToggle }) {
     } finally {
       setSending(false);
       setBuoc('');
+      setDangTraLoi(false);
     }
   };
 
@@ -267,14 +293,19 @@ export default function ChatSidebar({ open, onToggle }) {
               key={item.id ?? index}
               className={item.role === 'user' ? 'cmsg u' : item.error ? 'cmsg a err' : 'cmsg a'}
             >
-              {item.content}
+              {/* Tin của người dùng giữ nguyên văn — họ gõ gì hiện đúng thế.
+                  Chỉ câu trả lời của trợ lý mới dựng markdown. */}
+              {item.role === 'user' ? item.content : <CauTraLoi text={item.content} />}
             </div>
           ))}
 
-        {sending && buoc && <div className="cstep">{buoc}</div>}
-
-        {sending && !buoc && (
+        {/* Chấm nhấp nháy chạy SUỐT từ lúc gửi tới lúc chữ đầu tiên hiện ra,
+            kể cả trong lúc agent đang chọn tool. Trước đây dòng trạng thái thay
+            chỗ chấm, nên mỗi lần đổi bước lại đứng im một nhịp — trông như treo.
+            Nay hai thứ đi cùng nhau trong một bong bóng. */}
+        {sending && !dangTraLoi && (
           <div className="ctyping">
+            {buoc && <span className="ctyping-buoc">{buoc}</span>}
             <i />
             <i />
             <i />
