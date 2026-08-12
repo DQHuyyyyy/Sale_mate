@@ -42,6 +42,11 @@ class GuardrailNode(BaseNode):
         self._threshold = coverage_threshold
 
     async def execute(self, state: AgentState) -> dict[str, Any]:
+        # Agent chủ động hỏi lại thì câu trả lời VỐN LÀ một câu hỏi — thiếu dữ
+        # liệu là chuyện đương nhiên, không được thay bằng thông điệp từ chối.
+        if state.get("plan_action") == "clarify":
+            return {"is_sensitive": False, "citations": []}
+
         if state.get("needs_retrieval") and not self._has_enough_context(state):
             return {
                 "answer": INSUFFICIENT_MESSAGE,

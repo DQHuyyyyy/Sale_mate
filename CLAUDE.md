@@ -36,11 +36,11 @@ src/
 ├── data/         contracts.py + ingestion/ stores/ retrieval/  → dat
 ├── agents/       contracts.py + graph · nodes/ · tools/        → viet
 ├── api/          deps · errors · v1/                           → phuc
-├── services/     adapter ra ngoài: llm.py · portal.py
+├── services/     adapter ra ngoài: llm.py
 ├── bootstrap.py  🔑 NƠI DUY NHẤT gắn Protocol ↔ implementation
 └── main.py
 interface/        FE + API sản phẩm, gộp một chỗ cho dễ quản lý
-├── frontend/     Next.js — portal + AIWidget                   → huy
+├── frontend/     Vite + React (JavaScript) — portal + widget    → huy
 └── backend/      API sản phẩm :8000, gọi lõi AI qua AI_CORE_URL
 ```
 
@@ -50,10 +50,21 @@ interface/        FE + API sản phẩm, gộp một chỗ cho dễ quản lý
   **Không bao giờ** import class cụ thể (`QdrantVectorStore`, `OpenAIProvider`…).
 - `src/models/` và mọi `contracts.py` **đóng băng**. Muốn sửa → PR riêng vào
   `develop`, cả team review, không lẫn vào PR tính năng.
-- Sửa `src/models/` thì phải sửa `interface/frontend/src/lib/types.ts` trong
-  **cùng một PR**.
+- Sửa `src/models/` thì phải kiểm luôn phía FE đọc nó ở
+  `interface/frontend/src/api/client.js` — frontend là JavaScript thuần, không
+  có file type riêng để đồng bộ.
 
 Lý do: [ADR-004](docs/adr/ADR-004-module-contracts.md).
+
+### Cần thêm trường hoặc loại event mới?
+
+**Dùng `ChatEvent.data` trước.** Nó là `dict[str, Any]` tự do, thêm gì cũng
+không đụng hợp đồng. Chỉ mở PR contract khi `data` thật sự không diễn đạt nổi.
+
+Ví dụ đang chạy: sự kiện tiến trình của agent (router → tools → retrieve) đều
+phát dưới nhãn `ROUTE` có sẵn, chi tiết nằm ở `data.step`. `ChatEventType` khai
+sẵn `ROUTE` · `SOURCES` · `SENSITIVE` chính là để mở rộng kiểu này mà không phải
+sửa hợp đồng — đọc docstring của nó.
 
 ## Cắm implementation ở đâu
 
@@ -80,22 +91,44 @@ Một dòng lệnh duy nhất cho mọi thao tác dữ liệu:
 
 ```bash
 python -m src.cli status            # vector store đang có gì
-python -m src.cli ingest --all      # nạp 4 nguồn
+python -m src.cli ingest --all      # nạp mọi nguồn
 python -m src.cli search "câu hỏi"  # thử truy hồi
-python -m src.cli eval retrieval    # đo trên bộ câu hỏi vàng
+python -m src.cli eval              # đo trên bộ câu hỏi vàng
 ```
 
-Thêm nguồn mới: viết hàm `ingest_<tên>()` trong `src/data/ingest/sources.py`
-rồi thêm một dòng vào `SOURCES`. **Không tạo script rời** — bài học cũ: bốn
+Thêm nguồn mới: viết hàm `ingest_<tên>()` trong `src/data/ingest.py` rồi thêm
+một dòng vào `SOURCES` cuối file đó. **Không tạo script rời** — bài học cũ: bốn
 script tự dựng `QdrantVectorStore` riêng nên chạy tốt, trong khi `bootstrap.py`
 vẫn dùng in-memory, web app đứt khỏi dữ liệu nhiều ngày mà không ai phát hiện.
 
+**Dữ liệu tồn kho KHÔNG đi đường này.** Giá và tình trạng căn nằm ở Postgres,
+tool đọc trực tiếp — xem mục "Thêm một tool". `inventory_units` là VIEW trên
+`salemate_v1` ([migration 005](interface/backend/migrations/005_inventory_units_view.sql)),
+nên chatbot và portal luôn nói cùng một con số. Trước đó nó là bảng sao chép và
+đã trôi lệch 4 căn sai giá.
+
 ## Luồng agent
+
+Hai chế độ, chọn bằng `ENABLE_AGENT_LOOP`.
+
+**Tắt (mặc định) — pipeline tất định:**
 
 ```
 START → router → tools ─┬─(cần tài liệu)→ retrieve → generate → guardrail → END
                         └─(không cần)──────────────→ generate → guardrail → END
 ```
+
+**Bật — vòng lặp agent:**
+
+```
+START → router → tools ─┬→ retrieve ─┐
+                        └────────────┴→ plan ─┬→ act ──┐ (quay lại plan)
+                                              │        │
+                                              └→ generate → guardrail → END
+```
+
+`plan` vừa quan sát vừa quyết định — nó chạy lại sau mỗi hành động và nhìn toàn
+bộ bằng chứng đã gom, nên không cần node `observe` riêng cho cùng một việc.
 
 - `router` — luật từ khoá trước, model rẻ sau. Nhãn lạ thì fallback `general`.
 - `tools` — chạy tool khai là phục vụ nhãn hiện tại. Nằm trên đường đi chung và
@@ -107,9 +140,32 @@ START → router → tools ─┬─(cần tài liệu)→ retrieve → generate
 - `guardrail` — độ phủ thấp → trả "chưa đủ dữ liệu"; gắn cờ nhạy cảm; gộp nguồn
   tài liệu với nguồn tool. Có kết quả tool thì **không** từ chối dù độ phủ 0.
 
+- `plan` *(chỉ khi bật vòng lặp)* — model chọn một trong ba: `act` gọi thêm
+  tool · `clarify` hỏi ngược người dùng · `answer` đã đủ.
+- `act` *(chỉ khi bật vòng lặp)* — chạy tool plan chọn, cộng dồn bằng chứng.
+
 Thêm node: kế thừa `BaseNode`, chỉ viết `execute()` — try/except, log, đo thời
 gian đã có sẵn ở lớp cha. Node **không** trả khoá `metadata`, lớp cha đang dùng
 khoá đó để gắn thời gian chạy.
+
+### Bốn chốt chặn của vòng lặp
+
+Không có chúng thì agent đốt quota hoặc bịa. Đừng gỡ cái nào khi thêm tính năng:
+
+| Chốt | Ở đâu | Chặn chuyện gì |
+|---|---|---|
+| Trần `agent_max_iterations` | `PlanNode` | model đòi gọi tool mãi |
+| Tool phải có trong registry | `PlanNode` | model bịa tên tool |
+| Không lặp lại hành động đã thử | `PlanNode` + `da_thu` | agent kẹt, xin đi xin lại một thứ |
+| Làm sạch tham số rỗng | `ActNode._lam_sach` | model điền `""` cho trường không dùng |
+
+Chốt cuối tưởng vặt nhưng đã gây lỗi thật: model trả
+`{"unit_code": "VOP397", "building": ""}`, tool dịch `""` thành `ILIKE ''` nên
+không khớp gì, agent tưởng thiếu dữ liệu rồi lặp cho hết trần.
+
+Cũng **cố ý không có** đường tắt "tool tất định đã chạy ⇒ trả lời luôn". Từng
+có, và nó giết chính vòng lặp: "so sánh VOP345 và VOP397" thì `ToolsNode` chỉ
+bắt được mã đầu, plan thấy đã có dữ liệu nên dừng — trả lời một căn rồi im.
 
 ## Thêm một tool
 
@@ -140,15 +196,54 @@ các tool khác trong cùng lượt.
 RAG luôn là bản chụp; giá và tình trạng đổi hàng ngày. Trộn hai đường là tự tạo
 hai nguồn số liệu lệch nhau.
 
+## Streaming và hiện suy luận
+
+Widget đọc SSE để chữ hiện dần, kèm dòng trạng thái "trợ lý đang làm gì".
+
+```
+lõi AI  /api/v1/chat/stream      phát start · route* · token* · sources · done
+   ↓
+backend /api/chat/stream         dẫn nguyên ống, KHÔNG parse
+   ↓
+FE      streamChat()             fetch + ReadableStream, không dùng EventSource
+                                 (EventSource chỉ gửi được GET)
+```
+
+Sự kiện tiến trình đều mang nhãn `ROUTE`, phân biệt bằng `data.step`:
+`router` · `tools` · `retrieve`. `/api/chat` bản không stream vẫn giữ nguyên
+contract `{message, history} -> {reply}` cho client đơn giản và cho test.
+
+**Đường stream không chạy qua graph** — nó cần chen event vào giữa các bước. Bù
+lại nó lấy thứ tự node từ `CONTEXT_NODES` trong `graph.py`, nên thêm node mới
+vào graph là stream tự chạy theo. Đừng liệt kê tay node ở `service.py`: đã có
+lần làm vậy và đường stream lặng lẽ bỏ qua node `tools`.
+
+## Tracing
+
+`trace()` trong `src/core/logging.py` dùng `ContextVar` — mọi dòng log phát ra
+trong một lượt hỏi tự mang `session_id`. Lọc log theo một session là thấy đủ
+đường đi: router → tools → retrieve → generate, kèm thời gian từng chặng.
+
+```python
+with trace(session_id=sid, mode="stream"):
+    ...   # mọi log bên trong đều có hai trường này
+```
+
+Hai người hỏi cùng lúc không trộn log của nhau vì `ContextVar` tách theo task.
+
 ## Lệnh
 
 ```bash
-make run        # backend  http://localhost:8000/docs
-make fe         # frontend http://localhost:3000
-make infra      # Qdrant + Postgres
-make check      # lint + format + test — CHẠY TRƯỚC KHI PUSH
+make run-api    # API sản phẩm  http://localhost:8000/docs
+make run-ai     # lõi AI + RAG  http://localhost:8001/docs
+make fe         # frontend      http://localhost:5173
+make infra      # Qdrant + Postgres bằng Docker
+make check      # lint + format + test lõi AI — CHẠY TRƯỚC KHI PUSH
+make check-all  # check + test API sản phẩm
 make cov        # test + coverage (gate 60%)
 ```
+
+Windows: `make` cần thêm vào PATH sau khi cài — xem [RUN.md](RUN.md).
 
 ## Quy ước code
 
@@ -156,17 +251,40 @@ make cov        # test + coverage (gate 60%)
 không hardcode secret. Lỗi nghiệp vụ raise lớp trong `src/core/exceptions.py`,
 **không** raise `HTTPException` ngoài tầng `api/`.
 
-**TypeScript** — strict mode, component nhỏ, gọi API qua `src/lib/`.
+**JavaScript** — React function component, component nhỏ, mọi lời gọi API đi qua
+`interface/frontend/src/api/`. Không có TypeScript trong dự án này.
 
 **Giao diện** — tiếng Việt, câu chủ động, sentence case. Màu/bo góc/font lấy từ
-token trong `interface/frontend/src/app/globals.css`, không hardcode trong
+biến CSS trong `interface/frontend/src/styles/global.css`, không hardcode trong
 component.
 
 **Thông điệp lỗi** — nói rõ chuyện gì và cách khắc phục. Không xin lỗi sáo rỗng,
 không lộ stack trace ra ngoài.
 
-**Test** — không test nào được gọi OpenAI hay Qdrant thật. Dùng `FakeEmbedder`,
-`ScriptedProvider`, `InMemoryVectorStore`, hoặc `container.override(...)`.
+**Test** — không test nào được gọi OpenAI, Qdrant hay **Postgres** thật. Dùng
+`FakeEmbedder`, `ScriptedProvider`, `InMemoryVectorStore`, hoặc
+`container.override(...)`. `tests/conftest.py` có fixture autouse cấp SQLite
+rỗng cho tool tồn kho — cần dữ liệu thì tự `monkeypatch` `get_inventory_db`
+trong module test của mình.
+
+Vì sao có fixture đó: `get_inventory_db()` đọc `get_settings()` toàn cục, tức
+`.env` của máy, tức Supabase **production**. Đã có lần thêm một tool làm test cũ
+bắn thẳng vào database thật rồi đổi kết quả.
+
+## Deploy
+
+Chi tiết ở [DEPLOY.md](DEPLOY.md). Ba điều cần biết trước khi đụng vào:
+
+**Có repo thứ hai.** Render không cài được GitHub App lên org của BTC, nên có
+bản sao một chiều ở tài khoản cá nhân, chỉ để Render và Vercel đọc. Repo org vẫn
+là nguồn sự thật duy nhất — **không commit vào mirror**. Đồng bộ bằng
+`make sync-deploy`, nhớ chạy sau mỗi lần merge PR.
+
+**Chỉ deploy nhánh `develop`.** Nhánh `main` còn là bản cũ chưa có thư mục
+`interface/`, trỏ service vào đó là build hỏng.
+
+**Một Supabase project dùng chung** cho mọi môi trường. Sửa dữ liệu khi test là
+người dùng thấy ngay, và chạy migration là chạy thẳng lên production.
 
 ## Git
 

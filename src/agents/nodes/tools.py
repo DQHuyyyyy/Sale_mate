@@ -27,7 +27,7 @@ from src.models.chat import Citation
 
 logger = get_logger(__name__)
 
-_EMPTY: dict[str, Any] = {"tool_context": "", "tool_citations": []}
+_EMPTY: dict[str, Any] = {"tool_context": "", "tool_citations": [], "tools_ran": []}
 
 
 def _format(tool: AgentTool, result: ToolResult) -> str:
@@ -57,6 +57,7 @@ class ToolsNode(BaseNode):
         query = state.get("query", "")
         blocks: list[str] = []
         citations: list[Citation] = []
+        ran: list[str] = []
 
         for tool, binding in candidates:
             args = binding.build_args(query)
@@ -65,6 +66,7 @@ class ToolsNode(BaseNode):
 
             # Không ghi args vào log: chúng đến từ câu người dùng gõ.
             logger.info("Chạy tool %s", tool.name)
+            ran.append(tool.name)
             result = await tool.run(**args)
 
             if not result.ok:
@@ -84,8 +86,14 @@ class ToolsNode(BaseNode):
             )
 
         if not blocks:
-            return _EMPTY
+            # Vẫn báo tool nào đã chạy dù không ra dữ liệu — stream cần biết để
+            # nói "đã tra nhưng không thấy", khác hẳn với "chưa tra gì".
+            return {**_EMPTY, "tools_ran": ran}
 
         # Không trả "metadata" ở đây: BaseNode dùng setdefault để gắn thời gian
         # chạy, trả sẵn khoá đó là nuốt mất số đo của mọi node.
-        return {"tool_context": "\n\n".join(blocks), "tool_citations": citations}
+        return {
+            "tool_context": "\n\n".join(blocks),
+            "tool_citations": citations,
+            "tools_ran": ran,
+        }

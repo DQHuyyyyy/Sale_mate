@@ -1,13 +1,15 @@
 """Facade mà tầng API gọi — API không biết gì về LangGraph.
 
 Hai đường:
-- answer(): chạy full graph (router → retrieve → generate → guardrail), không stream.
-- stream(): phát ChatEvent để widget hiển thị dần.
+- answer(): chạy full graph, trả một lần.
+- stream(): chạy dãy node lấy context rồi phát ChatEvent để widget hiện dần.
 
-GIAI ĐOẠN HIỆN TẠI enable_rag=False: stream() đi thẳng LLM, chưa tra tài liệu —
-đúng phạm vi đã chốt. Khi module Data có dữ liệu thật, bật enable_rag=True thì
-stream() chạy router + retrieve trước rồi mới sinh chữ, và phát thêm event
-`route` + `sources`. FE không phải đổi gì vì hợp đồng ChatEvent đã có sẵn chỗ.
+stream() KHÔNG chạy qua graph vì cần chen event vào giữa các bước. Bù lại, nó
+lấy thứ tự node từ `CONTEXT_NODES` trong graph.py để hai đường không lệch nhau —
+thêm node mới vào graph là đường stream tự chạy theo.
+
+Event tiến trình đều dùng nhãn ROUTE, chi tiết nằm trong `data.step`, vì
+`ChatEventType` là hợp đồng đóng băng.
 """
 
 from __future__ import annotations
@@ -17,12 +19,13 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from src.agents.contracts import LLMProvider
+from src.agents.graph import CONTEXT_NODES
 from src.agents.nodes.generate import build_messages
 from src.agents.nodes.guardrail import INSUFFICIENT_MESSAGE
 from src.agents.state import AgentState, initial_state
 from src.core.config import Settings
 from src.core.exceptions import SalesMateError, UpstreamError
-from src.core.logging import get_logger
+from src.core.logging import get_logger, trace
 from src.models.chat import ChatEvent, ChatEventType, ChatRequest, ChatResponse, Citation
 
 logger = get_logger(__name__)
@@ -51,25 +54,44 @@ class LangGraphAgentService:
     async def answer(self, request: ChatRequest) -> ChatResponse:
         """Chạy toàn bộ graph, trả về một lần."""
         session_id = request.session_id or new_session_id()
-        state = initial_state(request.message, session_id, request.history)
 
-        result = await self._graph.ainvoke(state)
+        with trace(session_id=session_id, mode="answer"):
+            state = initial_state(request.message, session_id, request.history)
+            result = await self._graph.ainvoke(state)
 
-        if result.get("error"):
-            logger.error("Agent lỗi: %s", result["error"])
-            raise UpstreamError("Trợ lý chưa xử lý được câu hỏi này.")
+            if result.get("error"):
+                logger.error("Agent lỗi: %s", result["error"])
+                raise UpstreamError("Trợ lý chưa xử lý được câu hỏi này.")
 
-        return ChatResponse(
-            message=result.get("answer", ""),
-            session_id=session_id,
-            citations=list(result.get("citations", [])),
-        )
+            logger.info(
+                "Trả lời xong",
+                extra={
+                    "context": {
+                        "intent": str(result.get("intent") or ""),
+                        "tools_ran": list(result.get("tools_ran", [])),
+                        "chunks": len(result.get("chunks") or []),
+                        "coverage": round(float(result.get("coverage", 0.0)), 3),
+                        "timings_ms": result.get("metadata", {}),
+                    }
+                },
+            )
+
+            return ChatResponse(
+                message=result.get("answer", ""),
+                session_id=session_id,
+                citations=list(result.get("citations", [])),
+            )
 
     # ---------------- Stream ----------------
 
     async def stream(self, request: ChatRequest) -> AsyncIterator[ChatEvent]:
-        """Phát ChatEvent: start → [route] → token* → [sources] → done."""
+        """Phát ChatEvent: start → route* → token* → sources → done."""
         session_id = request.session_id or new_session_id()
+        with trace(session_id=session_id, mode="stream"):
+            async for event in self._stream(request, session_id):
+                yield event
+
+    async def _stream(self, request: ChatRequest, session_id: str) -> AsyncIterator[ChatEvent]:
         yield ChatEvent(type=ChatEventType.START, session_id=session_id)
 
         state = initial_state(request.message, session_id, request.history)
@@ -83,7 +105,20 @@ class LangGraphAgentService:
                     else:
                         yield event
 
-                if state.get("needs_retrieval") and not state.get("chunks"):
+                # Agent chủ động hỏi lại: câu hỏi ngược đã có sẵn, phát thẳng.
+                # Gọi model để diễn đạt lại chỉ tốn tiền và tạo cơ hội bịa thêm.
+                if state.get("plan_action") == "clarify":
+                    yield ChatEvent(
+                        type=ChatEventType.TOKEN,
+                        content=state.get("plan_reason", ""),
+                        session_id=session_id,
+                    )
+                    yield ChatEvent(type=ChatEventType.DONE, session_id=session_id)
+                    return
+
+                # Có dữ liệu từ tool thì KHÔNG từ chối, dù truy hồi tài liệu
+                # rỗng — cùng luật với GuardrailNode._has_enough_context.
+                if state.get("needs_retrieval") and not state.get("chunks") and not state.get("tool_context"):
                     yield ChatEvent(
                         type=ChatEventType.TOKEN,
                         content=INSUFFICIENT_MESSAGE,
@@ -126,32 +161,138 @@ class LangGraphAgentService:
             )
 
     async def _prepare_context(self, state: AgentState, session_id: str) -> AsyncIterator[ChatEvent]:
-        """Chạy router + retrieve trực tiếp (không qua graph) để lấy context.
+        """Chạy dãy node lấy context (không qua graph) rồi phát event tiến trình.
 
-        Sửa state tại chỗ rồi phát event route/sources cho FE hiển thị.
+        Dãy node lấy từ `CONTEXT_NODES` trong graph.py, KHÔNG tự liệt kê ở đây.
+        Trước kia hàm này gọi tay router rồi retrieve, nên khi thêm node `tools`
+        thì đường stream lặng lẽ bỏ qua tool — câu trả lời khi stream tệ hơn khi
+        không stream mà không có dấu hiệu gì.
         """
-        router = self._nodes.get("router")
-        retrieve = self._nodes.get("retrieve")
-        if router is None or retrieve is None:
-            return
+        for name in CONTEXT_NODES:
+            node = self._nodes.get(name)
+            if node is None:
+                continue
 
-        state.update(await router(state))
-        intent = state.get("intent")
-        if intent is not None:
-            yield ChatEvent(
-                type=ChatEventType.ROUTE,
-                content=intent.value,
-                session_id=session_id,
-                data={"needs_retrieval": bool(state.get("needs_retrieval"))},
-            )
+            state.update(await node(state))
 
-        state.update(await retrieve(state))
-        if state.get("citations"):
+            for event in self._progress_events(name, state, session_id):
+                yield event
+
+        async for event in self._chay_vong_lap(state, session_id):
+            yield event
+
+        citations = [*state.get("citations", []), *state.get("tool_citations", [])]
+        if citations:
             yield ChatEvent(
                 type=ChatEventType.SOURCES,
                 session_id=session_id,
-                citations=list(state["citations"]),
+                citations=citations,
             )
+
+    async def _chay_vong_lap(self, state: AgentState, session_id: str) -> AsyncIterator[ChatEvent]:
+        """Chạy vòng plan ⇄ act, phát ra suy luận từng bước.
+
+        Đường stream không đi qua graph nên phải tự lái vòng lặp, nhưng dùng
+        CHÍNH các node object của graph — logic quyết định và trần lần lặp nằm
+        trong `PlanNode`, ở đây chỉ là bộ lái. Nhờ vậy stream và graph không thể
+        cho ra hành vi khác nhau.
+
+        Không có plan/act trong `nodes` nghĩa là `enable_agent_loop` đang tắt —
+        thoát ngay, đường tất định cũ giữ nguyên.
+        """
+        plan = self._nodes.get("plan")
+        act = self._nodes.get("act")
+        if plan is None or act is None:
+            return
+
+        # Trần thứ hai, phòng khi PlanNode bị sửa hỏng: bộ lái này không được
+        # quay vòng vô hạn dù kế hoạch có nói gì.
+        for _ in range(self._settings.agent_max_iterations + 1):
+            state.update(await plan(state))
+
+            ly_do = state.get("plan_reason", "")
+            if ly_do:
+                yield ChatEvent(
+                    type=ChatEventType.ROUTE,
+                    content=ly_do,
+                    session_id=session_id,
+                    data={"step": "plan", "action": state.get("plan_action", "")},
+                )
+
+            if state.get("plan_action") != "act":
+                return
+
+            state.update(await act(state))
+            yield ChatEvent(
+                type=ChatEventType.ROUTE,
+                content=state.get("plan_tool", ""),
+                session_id=session_id,
+                data={
+                    "step": "act",
+                    "tool": state.get("plan_tool", ""),
+                    "iteration": int(state.get("iterations", 0)),
+                },
+            )
+
+    def _progress_events(self, node: str, state: AgentState, session_id: str) -> list[ChatEvent]:
+        """Mô tả việc vừa làm để FE hiện dòng trạng thái.
+
+        Dùng ROUTE cho mọi bước vì `ChatEventType` là hợp đồng ĐÓNG BĂNG, không
+        được thêm nhãn mới trong PR tính năng. Chi tiết đi trong `data` — trường
+        này vốn là dict tự do, FE đọc `data.step` để biết đang ở bước nào.
+        """
+        if node == "router":
+            intent = state.get("intent")
+            if intent is None:
+                return []
+            return [
+                ChatEvent(
+                    type=ChatEventType.ROUTE,
+                    content=intent.value,
+                    session_id=session_id,
+                    data={
+                        "step": "router",
+                        "needs_retrieval": bool(state.get("needs_retrieval")),
+                    },
+                )
+            ]
+
+        if node == "tools":
+            ran = list(state.get("tools_ran", []))
+            if not ran:
+                return []
+            return [
+                ChatEvent(
+                    type=ChatEventType.ROUTE,
+                    content=", ".join(ran),
+                    session_id=session_id,
+                    data={
+                        "step": "tools",
+                        "tools": ran,
+                        # Phân biệt "đã tra nhưng không thấy" với "chưa tra gì".
+                        "found": bool(state.get("tool_context")),
+                    },
+                )
+            ]
+
+        if node == "retrieve":
+            chunks = state.get("chunks") or []
+            if not chunks:
+                return []
+            return [
+                ChatEvent(
+                    type=ChatEventType.ROUTE,
+                    content=f"{len(chunks)} đoạn tài liệu",
+                    session_id=session_id,
+                    data={
+                        "step": "retrieve",
+                        "chunks": len(chunks),
+                        "coverage": round(float(state.get("coverage", 0.0)), 3),
+                    },
+                )
+            ]
+
+        return []
 
 
 def new_session_id() -> str:

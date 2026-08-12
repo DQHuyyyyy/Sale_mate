@@ -67,6 +67,33 @@ class TestGenerateReply:
         assert "Chào bạn" in str(goi_loi_ai.ghi_nhan["body"])
 
     @pytest.mark.asyncio
+    async def test_gui_lai_session_id_de_log_gom_ve_mot_phien(self, goi_loi_ai) -> None:
+        goi_loi_ai(200, {"message": "ok", "session_id": "s1"})
+
+        await chat_service.generate_reply("Câu thứ hai", [], "phien-abc")
+
+        assert "phien-abc" in str(goi_loi_ai.ghi_nhan["body"])
+
+    @pytest.mark.asyncio
+    async def test_khong_co_session_id_thi_khong_gui_khoa_do(self, goi_loi_ai) -> None:
+        """Gửi None sẽ khiến lõi AI nhận session_id=null thay vì tự sinh."""
+        goi_loi_ai(200, {"message": "ok", "session_id": "s1"})
+
+        await chat_service.generate_reply("Câu đầu", [])
+
+        assert "session_id" not in str(goi_loi_ai.ghi_nhan["body"])
+
+    @pytest.mark.asyncio
+    async def test_loi_ai_tra_400_thi_khong_bao_la_dang_ban(self, goi_loi_ai) -> None:
+        """4xx là request sai — bảo người dùng 'thử lại sau' là đẩy vào vòng vô ích."""
+        goi_loi_ai(422, {"detail": "sai body"})
+
+        with pytest.raises(chat_service.ChatError) as loi:
+            await chat_service.generate_reply("Hỏi gì đó", [])
+
+        assert "không hợp lệ" in str(loi.value)
+
+    @pytest.mark.asyncio
     async def test_loi_ai_tra_loi_500_thi_bao_loi_co_noi_dung(self, goi_loi_ai) -> None:
         goi_loi_ai(500, {"detail": "sap"})
 

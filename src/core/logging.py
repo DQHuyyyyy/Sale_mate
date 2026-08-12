@@ -9,10 +9,33 @@ from __future__ import annotations
 import json
 import logging
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import Any
 
 _NOISY_LIBRARIES = ("httpx", "httpcore", "urllib3", "openai", "qdrant_client")
+
+# Context của lượt hỏi hiện tại, tự động gắn vào mọi dòng log trong lượt đó.
+# Dùng ContextVar chứ không dùng biến toàn cục: mỗi request async có bản riêng,
+# hai người hỏi cùng lúc không trộn log của nhau.
+trace_context: ContextVar[dict[str, Any]] = ContextVar("trace_context", default={})
+
+
+@contextmanager
+def trace(**fields: Any) -> Iterator[None]:
+    """Gắn các trường này vào mọi log phát ra bên trong khối.
+
+    Dùng:
+        with trace(session_id=sid):
+            ...   # mọi log ở đây đều có session_id
+    """
+    token = trace_context.set({**trace_context.get(), **fields})
+    try:
+        yield
+    finally:
+        trace_context.reset(token)
 
 
 class JSONFormatter(logging.Formatter):
@@ -29,7 +52,10 @@ class JSONFormatter(logging.Formatter):
             "line": record.lineno,
         }
 
-        context = getattr(record, "context", None)
+        # Gộp context của lượt hỏi (session_id) với context riêng của dòng log.
+        # Nhờ vậy lọc log theo một session là thấy đủ đường đi của câu hỏi đó:
+        # router → tools → retrieve → generate, kèm thời gian từng chặng.
+        context = {**trace_context.get(), **(getattr(record, "context", None) or {})}
         if context:
             entry["context"] = context
 

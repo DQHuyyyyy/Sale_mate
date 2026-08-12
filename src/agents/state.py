@@ -39,6 +39,17 @@ class AgentState(TypedDict, total=False):
         tool_context: Kết quả tool đã ghép thành text, tách khỏi `context` vì
             node retrieve chạy sau và ghi đè `context`.
         tool_citations: Nguồn từ tool (kind="db"), guardrail gộp vào citations.
+        tools_ran: Tên các tool đã chạy — để stream báo cho người dùng biết
+            trợ lý đang làm gì thay vì ngồi nhìn màn hình trống.
+        plan_action: Quyết định của node plan: "act" · "answer" · "clarify".
+        plan_reason: Lý do ngắn gọn, hiện thẳng cho người dùng thấy agent
+            đang nghĩ gì.
+        plan_tool: Tool mà plan chọn gọi (chỉ có nghĩa khi plan_action="act").
+        plan_args: Tham số cho tool đó.
+        iterations: Số vòng plan → act đã chạy. Có trần cứng để một câu hỏi xấu
+            không đốt sạch quota.
+        da_thu: Chữ ký các hành động đã thử — để nhận ra agent đang lặp lại
+            chính nó và cắt sớm.
         answer: Câu trả lời cuối.
         citations: Nguồn kèm theo câu trả lời.
         is_sensitive: Có chứa giá/cam kết cần người duyệt không.
@@ -59,6 +70,14 @@ class AgentState(TypedDict, total=False):
 
     tool_context: str
     tool_citations: list[Citation]
+    tools_ran: list[str]
+
+    plan_action: str
+    plan_reason: str
+    plan_tool: str
+    plan_args: dict[str, Any]
+    iterations: int
+    da_thu: list[str]
 
     answer: str
     citations: list[Citation]
@@ -82,6 +101,9 @@ def initial_state(
         citations=[],
         tool_context="",
         tool_citations=[],
+        tools_ran=[],
+        iterations=0,
+        da_thu=[],
         coverage=0.0,
         is_sensitive=False,
         metadata={},
