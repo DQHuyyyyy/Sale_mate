@@ -17,7 +17,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Any
 
-from sqlalchemy import JSON, Column, MetaData, String, Table, create_engine, select
+from sqlalchemy import JSON, Column, MetaData, Numeric, String, Table, create_engine, select
 from sqlalchemy.engine import Engine
 
 from src.core.config import get_settings
@@ -41,6 +41,12 @@ inventory_units_table = Table(
     Column("furniture", String),
     Column("status", String),
     Column("photos", JSON),
+    # Hai cột SỐ, do view sinh từ salemate_v1 (migration 007). Có chúng thì lọc
+    # theo khoảng giá / diện tích dùng số thật, không phải parse "2,120 tỷ".
+    # Nullable: SQLite trong test không có view nên để trống, và tool coi
+    # None là "không rõ" chứ không phải 0.
+    Column("price_value", Numeric),  # đơn vị: tỷ đồng
+    Column("area_value", Numeric),  # đơn vị: m2
 )
 
 
