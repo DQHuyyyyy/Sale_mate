@@ -183,7 +183,7 @@ class TestKhongCoToken:
 
 class TestHanMucChat:
     def test_khach_bi_chan_sau_khi_vuot_han_muc(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        async def fake_reply(message, history):
+        async def fake_reply(message, history, session_id=None):
             return "trả lời mẫu"
 
         monkeypatch.setattr(chat_router, "generate_reply", fake_reply)

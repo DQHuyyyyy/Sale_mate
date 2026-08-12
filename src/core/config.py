@@ -63,6 +63,19 @@ class Settings(BaseSettings):
     # (~2GB) — xem docs/adr/ADR-002 về lý do không đưa vào phụ thuộc mặc định.
     reranker: Literal["keyword", "cross_encoder", "passthrough"] = "keyword"
 
+    # ---------- Vòng lặp agent ----------
+    # Bật thì agent tự quyết gọi tool nào, lặp tối đa `agent_max_iterations`
+    # lượt để gom đủ dữ kiện. Tắt thì chạy đường tất định cũ: router → tools →
+    # retrieve → generate, mỗi node đúng một lần.
+    #
+    # Mặc định TẮT. Vòng lặp tốn thêm lượt gọi model và có thể trả lời chậm hơn;
+    # bật ở dev trước, đo rồi mới bật production. Tắt được bằng biến môi trường
+    # là cứu hoả không cần deploy lại.
+    enable_agent_loop: bool = False
+    # Trần cứng, không phải gợi ý. Không có nó thì một câu hỏi xấu đốt sạch quota:
+    # model cứ thấy thiếu dữ liệu là gọi thêm tool, gọi mãi.
+    agent_max_iterations: int = Field(default=2, ge=1, le=5)
+
     # ---------- Database ----------
     database_url: str = "sqlite:///./data/app.db"
 

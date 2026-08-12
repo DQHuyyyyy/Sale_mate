@@ -60,6 +60,12 @@ class GenerateNode(BaseNode):
         self._max_tokens = max_tokens
 
     async def execute(self, state: AgentState) -> dict[str, Any]:
+        # Kế hoạch quyết định hỏi lại: câu hỏi ngược đã nằm sẵn ở `plan_reason`,
+        # dùng thẳng. Gọi model lần nữa để "diễn đạt lại" chỉ tốn tiền và tạo
+        # cơ hội cho nó bịa thêm dữ kiện chưa có.
+        if state.get("plan_action") == "clarify":
+            return {"answer": state.get("plan_reason", "").strip()}
+
         answer = await self._llm.complete(
             build_messages(state),
             model=self._model,

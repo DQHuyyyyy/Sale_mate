@@ -12,6 +12,7 @@ không phải sửa gì — đúng như thiết kế ban đầu của file này.
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
 
 import httpx
 
@@ -25,19 +26,66 @@ class ChatError(RuntimeError):
     """Gọi lõi AI thất bại — router bắt lại và trả lỗi có nội dung cho người dùng."""
 
 
-def _build_payload(message: str, history: list[ChatMessage]) -> dict[str, object]:
+def _loi_tu_status(status_code: int) -> str:
+    """Thông điệp theo ĐÚNG loại lỗi, không gộp mọi thứ thành 'đang bận'.
+
+    4xx là request sai — thử lại bao nhiêu lần cũng vậy, nói 'thử lại sau ít
+    phút' là đẩy người dùng vào vòng lặp vô ích. 5xx mới là trục trặc tạm thời.
+    """
+    if status_code == 429:
+        return "Trợ lý S đang quá tải. Đợi một chút rồi hỏi lại nhé."
+    if 400 <= status_code < 500:
+        return "Câu hỏi gửi lên không hợp lệ. Thử mở lại cuộc trò chuyện rồi hỏi lại."
+    return "Trợ lý S đang bận. Thử lại sau ít phút."
+
+
+def _build_payload(message: str, history: list[ChatMessage], session_id: str | None = None) -> dict[str, object]:
     """Ghép body theo `ChatRequest` của lõi AI (src/models/chat.py).
 
-    Hai contract gần như trùng nhau; lõi AI có thêm `session_id` tuỳ chọn nên
-    bỏ trống để nó tự sinh.
+    `session_id` chỉ gửi khi client có — bỏ trống thì lõi AI tự sinh và trả về
+    trong event `start` để client giữ lại cho lượt sau.
     """
-    return {
+    payload: dict[str, object] = {
         "message": message,
         "history": [{"role": item.role, "content": item.content} for item in history],
     }
+    if session_id:
+        payload["session_id"] = session_id
+    return payload
 
 
-async def generate_reply(message: str, history: list[ChatMessage]) -> str:
+async def stream_reply(message: str, history: list[ChatMessage], session_id: str | None = None) -> AsyncIterator[bytes]:
+    """Dẫn nguyên luồng SSE từ lõi AI về client.
+
+    Backend cố ý KHÔNG parse event: lõi AI đã định dạng SSE đúng chuẩn, và mọi
+    loại event mới thêm sau này (tiến trình suy luận, nguồn trích dẫn) tự chảy
+    qua mà không phải sửa file này.
+
+    Không dùng `stream_reply` cho client đơn giản — `/api/chat` bản không stream
+    vẫn giữ nguyên contract cũ.
+    """
+    if not settings.chat_enabled:
+        raise ChatError("Chatbot chưa được cấu hình. Điền AI_CORE_URL trong .env ở gốc repo rồi khởi động lại backend.")
+
+    url = f"{settings.ai_core_url.rstrip('/')}/api/v1/chat/stream"
+    payload = _build_payload(message, history, session_id)
+
+    try:
+        async with httpx.AsyncClient(timeout=settings.ai_core_timeout) as client:
+            async with client.stream("POST", url, json=payload) as response:
+                if response.status_code >= 400:
+                    body = (await response.aread())[:500]
+                    logger.error("Lõi AI trả %s khi stream: %s", response.status_code, body)
+                    raise ChatError(_loi_tu_status(response.status_code))
+
+                async for chunk in response.aiter_bytes():
+                    yield chunk
+    except httpx.HTTPError as exc:
+        logger.exception("Không stream được từ lõi AI tại %s", url)
+        raise ChatError("Trợ lý S đang không kết nối được. Thử lại sau ít phút.") from exc
+
+
+async def generate_reply(message: str, history: list[ChatMessage], session_id: str | None = None) -> str:
     if not settings.chat_enabled:
         raise ChatError("Chatbot chưa được cấu hình. Điền AI_CORE_URL trong .env ở gốc repo rồi khởi động lại backend.")
 
@@ -45,7 +93,7 @@ async def generate_reply(message: str, history: list[ChatMessage]) -> str:
 
     try:
         async with httpx.AsyncClient(timeout=settings.ai_core_timeout) as client:
-            response = await client.post(url, json=_build_payload(message, history))
+            response = await client.post(url, json=_build_payload(message, history, session_id))
     except httpx.HTTPError as exc:
         logger.exception("Không gọi được lõi AI tại %s", url)
         raise ChatError(
@@ -54,7 +102,7 @@ async def generate_reply(message: str, history: list[ChatMessage]) -> str:
 
     if response.status_code >= 400:
         logger.error("Lõi AI trả %s: %s", response.status_code, response.text[:500])
-        raise ChatError("Trợ lý S đang bận. Thử lại sau ít phút.")
+        raise ChatError(_loi_tu_status(response.status_code))
 
     try:
         return str(response.json()["message"]).strip()

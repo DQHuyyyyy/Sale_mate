@@ -88,3 +88,65 @@ export async function request(path, { method = 'GET', body, params, formData } =
   if (response.status === 204) return null;
   return response.json();
 }
+
+/**
+ * Hỏi trợ lý theo kiểu stream — chữ hiện dần thay vì đợi cả đoạn rồi mới hiện.
+ *
+ * Dùng `fetch` chứ không dùng `EventSource`: EventSource chỉ gửi được GET, mà
+ * câu hỏi kèm lịch sử hội thoại phải nằm trong body POST.
+ *
+ * `onEvent(event)` được gọi cho từng event lõi AI phát ra:
+ *   start · route (tiến trình suy luận) · token · sources · done · error
+ */
+export async function streamChat(message, history, onEvent, signal, sessionId) {
+  const headers = { 'Content-Type': 'application/json' };
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  let response;
+  try {
+    response = await fetch(buildUrl('/api/chat/stream'), {
+      method: 'POST',
+      headers,
+      // session_id gửi lại để log của cả cuộc trò chuyện gom về một ID, thay vì
+      // mỗi lượt một ID khác. Lượt đầu chưa có thì bỏ trống, lõi AI tự sinh.
+      body: JSON.stringify({ message, history, session_id: sessionId ?? null }),
+      signal,
+    });
+  } catch {
+    throw new ApiError('Không kết nối được máy chủ. Kiểm tra backend đã chạy chưa.', 0);
+  }
+
+  if (!response.ok || !response.body) {
+    throw new ApiError(await readError(response), response.status);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    // SSE ngăn hai event bằng một DÒNG TRỐNG, mà dòng trống đó có thể là
+    // "\n\n" hoặc "\r\n\r\n" tuỳ server. sse-starlette (lõi AI) dùng CRLF, nên
+    // tách bằng "\n\n" là không khớp gì cả: buffer phình mãi, không event nào
+    // được phát, và stream kết thúc lặng lẽ không token không lỗi.
+    const parts = buffer.split(/\r?\n\r?\n/);
+    // Phần đuôi có thể chưa trọn vẹn — chunk mạng cắt ở đâu cũng được.
+    buffer = parts.pop() ?? '';
+
+    for (const part of parts) {
+      const dataLine = part.split(/\r?\n/).find((line) => line.startsWith('data:'));
+      if (!dataLine) continue;
+      try {
+        onEvent(JSON.parse(dataLine.slice(5).trim()));
+      } catch {
+        // Một event hỏng thì bỏ qua nó, không làm đứt cả câu trả lời.
+      }
+    }
+  }
+}
