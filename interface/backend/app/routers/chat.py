@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 
 from app.core.deps import get_optional_user
 from app.core.ratelimit import RateLimiter
 from app.schemas.auth import CurrentUser
 from app.schemas.chat import ChatRequest, ChatResponse
-from app.services.chat import ChatError, generate_reply
+from app.services.chat import ChatError, generate_reply, stream_reply
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -54,7 +57,46 @@ async def chat(
     _kiem_tra_han_muc(request, user)
 
     try:
-        reply = await generate_reply(payload.message, payload.history)
+        reply = await generate_reply(payload.message, payload.history, payload.session_id)
     except ChatError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     return ChatResponse(reply=reply)
+
+
+@router.post("/stream")
+async def chat_stream(
+    payload: ChatRequest,
+    request: Request,
+    user: CurrentUser | None = Depends(get_optional_user),
+) -> StreamingResponse:
+    """Như `/api/chat` nhưng trả SSE — người dùng thấy chữ chạy dần.
+
+    Cùng hạn mức với bản không stream: một lượt hỏi là một lượt, dù đọc kiểu nào.
+
+    Backend chỉ dẫn ống. Lõi AI phát `start` / `route` / `token` / `sources` /
+    `done`; event `route` mang `data.step` để widget hiện trợ lý đang làm gì.
+    """
+    _kiem_tra_han_muc(request, user)
+
+    try:
+        stream = stream_reply(payload.message, payload.history, payload.session_id)
+        first = await anext(stream)
+    except ChatError as exc:
+        # Bắt lỗi TRƯỚC khi mở luồng: khi đã trả 200 và bắt đầu stream thì không
+        # đổi được status code nữa, client sẽ nhận một luồng rỗng khó hiểu.
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+    async def body() -> AsyncIterator[bytes]:
+        yield first
+        async for chunk in stream:
+            yield chunk
+
+    return StreamingResponse(
+        body(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Nginx/proxy: đừng gom buffer, hỏng streaming
+        },
+    )

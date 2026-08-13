@@ -130,3 +130,5 @@ export function sendChatMessage(message, history) {
     body: { message, history },
   });
 }
+
+export { streamChat as streamChatMessage } from './client';

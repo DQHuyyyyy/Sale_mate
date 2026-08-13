@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str = ""
     qdrant_collection: str = "documents_chunks"
+    # qdrant-client mặc định 5 giây — quá ngắn cho lần gọi đầu tới Qdrant Cloud
+    # sau một lúc không dùng. Xem chú thích ở QdrantVectorStore.__init__.
+    qdrant_timeout_s: float = Field(default=20.0, gt=0)
     embedding_model: str = "text-embedding-3-small"
     embedding_dim: int = Field(default=1536, gt=0)
 
@@ -62,6 +65,19 @@ class Settings(BaseSettings):
     # cross_encoder: chính xác hơn nhưng kéo theo sentence-transformers + torch
     # (~2GB) — xem docs/adr/ADR-002 về lý do không đưa vào phụ thuộc mặc định.
     reranker: Literal["keyword", "cross_encoder", "passthrough"] = "keyword"
+
+    # ---------- Vòng lặp agent ----------
+    # Bật thì agent tự quyết gọi tool nào, lặp tối đa `agent_max_iterations`
+    # lượt để gom đủ dữ kiện. Tắt thì chạy đường tất định cũ: router → tools →
+    # retrieve → generate, mỗi node đúng một lần.
+    #
+    # Mặc định TẮT. Vòng lặp tốn thêm lượt gọi model và có thể trả lời chậm hơn;
+    # bật ở dev trước, đo rồi mới bật production. Tắt được bằng biến môi trường
+    # là cứu hoả không cần deploy lại.
+    enable_agent_loop: bool = False
+    # Trần cứng, không phải gợi ý. Không có nó thì một câu hỏi xấu đốt sạch quota:
+    # model cứ thấy thiếu dữ liệu là gọi thêm tool, gọi mãi.
+    agent_max_iterations: int = Field(default=2, ge=1, le=5)
 
     # ---------- Database ----------
     database_url: str = "sqlite:///./data/app.db"

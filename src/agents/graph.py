@@ -20,14 +20,21 @@ from __future__ import annotations
 from langgraph.graph import END, START, StateGraph
 
 from src.agents.contracts import LLMProvider
+from src.agents.nodes.act import ActNode
 from src.agents.nodes.generate import GenerateNode
 from src.agents.nodes.guardrail import GuardrailNode
+from src.agents.nodes.plan import ACT, PlanNode
 from src.agents.nodes.retrieve import RetrieveNode
 from src.agents.nodes.router import RouterNode
 from src.agents.nodes.tools import ToolsNode
 from src.agents.state import AgentState
 from src.core.config import Settings
 from src.rag.contracts import Retriever
+
+# Các node chạy TRƯỚC khi sinh chữ, theo đúng thứ tự. Khai một chỗ duy nhất vì
+# đường stream (agents/service.py) phải chạy lại đúng dãy này để lấy context —
+# trước đây nó tự liệt kê router+retrieve và âm thầm bỏ sót node tools mới thêm.
+CONTEXT_NODES: tuple[str, ...] = ("router", "tools", "retrieve")
 
 
 def route_after_tools(state: AgentState) -> str:
@@ -37,13 +44,24 @@ def route_after_tools(state: AgentState) -> str:
     return "retrieve" if state.get("needs_retrieval") else "generate"
 
 
+def route_after_plan(state: AgentState) -> str:
+    """Kế hoạch nói gì thì đi đó. Lỗi hoặc nhãn lạ đều về generate.
+
+    Không có nhánh nào quay lại `plan` từ đây — vòng lặp đóng ở `act`, và trần
+    lần lặp nằm trong chính `plan`. Một chỗ chặn duy nhất, không thể quên.
+    """
+    if state.get("error"):
+        return "generate"
+    return "act" if state.get("plan_action") == ACT else "generate"
+
+
 def build_nodes(
     llm: LLMProvider,
     retriever: Retriever,
     settings: Settings,
 ) -> dict[str, object]:
     """Tạo các node dùng chung cho cả graph lẫn đường streaming."""
-    return {
+    nodes: dict[str, object] = {
         "router": RouterNode(llm, model=settings.llm_model_fast),
         "tools": ToolsNode(),
         "retrieve": RetrieveNode(retriever),
@@ -56,22 +74,64 @@ def build_nodes(
         "guardrail": GuardrailNode(settings.coverage_threshold),
     }
 
+    if settings.enable_agent_loop:
+        nodes["plan"] = PlanNode(
+            llm,
+            max_iterations=settings.agent_max_iterations,
+            model=settings.llm_model_fast,
+        )
+        nodes["act"] = ActNode()
+
+    return nodes
+
 
 def build_graph(nodes: dict[str, object]):
-    """Dựng và compile graph từ các node đã tạo. Gọi một lần lúc app khởi động."""
-    graph = StateGraph(AgentState)
+    """Dựng và compile graph từ các node đã tạo. Gọi một lần lúc app khởi động.
 
-    for name in ("router", "tools", "retrieve", "generate", "guardrail"):
+    Có vòng lặp agent hay không tuỳ `nodes` — `build_nodes` chỉ tạo plan/act khi
+    `enable_agent_loop` bật. Nhờ vậy tắt cờ là quay về đúng đường tất định cũ,
+    không phải giữ hai bản graph song song.
+
+        tắt:  router → tools ─┬→ retrieve → generate → guardrail → END
+                              └──────────→ generate → ...
+
+        bật:  router → tools ─┬→ retrieve ─┐
+                              └────────────┴→ plan ─┬→ act ──┐
+                                              ↑             │
+                                              └─────────────┘
+                                                    └→ generate → guardrail → END
+    """
+    graph = StateGraph(AgentState)
+    co_vong_lap = "plan" in nodes and "act" in nodes
+
+    ten_node = ["router", "tools", "retrieve", "generate", "guardrail"]
+    if co_vong_lap:
+        ten_node += ["plan", "act"]
+    for name in ten_node:
         graph.add_node(name, nodes[name])
 
     graph.add_edge(START, "router")
     graph.add_edge("router", "tools")
+
+    # Đích sau khi gom xong context: có vòng lặp thì để plan quyết, không thì
+    # sinh chữ luôn.
+    sau_context = "plan" if co_vong_lap else "generate"
     graph.add_conditional_edges(
         "tools",
         route_after_tools,
-        {"retrieve": "retrieve", "generate": "generate"},
+        {"retrieve": "retrieve", "generate": sau_context},
     )
-    graph.add_edge("retrieve", "generate")
+    graph.add_edge("retrieve", sau_context)
+
+    if co_vong_lap:
+        graph.add_conditional_edges(
+            "plan",
+            route_after_plan,
+            {"act": "act", "generate": "generate"},
+        )
+        # Chạy xong quay lại plan để nó nhìn bằng chứng mới rồi quyết tiếp.
+        graph.add_edge("act", "plan")
+
     graph.add_edge("generate", "guardrail")
     graph.add_edge("guardrail", END)
 

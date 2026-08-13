@@ -1,8 +1,81 @@
 import { useEffect, useRef, useState } from 'react';
-import { sendChatMessage } from '../api';
+import { useLocation } from 'react-router-dom';
+import { getApartment, streamChatMessage } from '../api';
+import CauTraLoi from './CauTraLoi';
 import { CloseIcon, SendIcon } from './Icons';
 
 const QUICK_ASKS = ['Căn 2PN dưới 4 tỷ', 'Căn còn ở tòa S1', 'Tư vấn view đẹp'];
+
+// Backend chặn history ở 20 lượt (40 tin nhắn) và trả 422 nếu vượt. Lịch sử
+// giữ nguyên trong sidebar suốt phiên nên sẽ chạm trần đó — cắt bớt trước khi
+// gửi, giữ 30 tin gần nhất để còn biên an toàn.
+const MAX_HISTORY = 30;
+
+/**
+ * Tiêu đề cho lời mời, ghép từ dữ liệu THẬT của căn.
+ *
+ * Chưa tải xong hoặc gọi hỏng thì hiện mã căn trơn — không bịa tên, không để
+ * ô trống nhấp nháy.
+ */
+function tieuDeCan(maCan, can) {
+  if (!can) return `Căn ${maCan}`;
+  const phan = [can.loai_can, can.dien_tich, can.toa && `Tòa ${can.toa}`, can.gia].filter(Boolean);
+  return phan.length ? `Căn ${maCan} — ${phan.join(' · ')}` : `Căn ${maCan}`;
+}
+
+const CO_MA_CAN = /\b[A-Za-z]{2,4}\d{2,5}\b/;
+
+/**
+ * Gắn mã căn đang mở vào câu hỏi khi người dùng nói trống không.
+ *
+ * "Phân tích cho tôi căn hiện tại" không có mã căn nào, nên tool tra tồn kho
+ * không rút được tham số và im lặng — trợ lý đành trả lời "chưa đủ dữ liệu"
+ * dù mã căn đang hiện ngay trên màn hình.
+ *
+ * Chỉ gắn khi câu hỏi CHƯA có mã căn: người dùng hỏi về căn khác trong lúc
+ * đang mở một căn là chuyện bình thường, không được ghi đè ý họ.
+ *
+ * Bong bóng chat vẫn hiện nguyên văn người dùng gõ — phần gắn thêm chỉ đi theo
+ * request, không sửa lời của họ trên màn hình.
+ */
+function themNguCanh(message, maCan) {
+  if (!maCan || CO_MA_CAN.test(message)) return message;
+  return `${message} (căn đang xem: ${maCan})`;
+}
+
+/** Câu hỏi gợi ý khi người dùng đang mở một căn cụ thể. */
+const goiYTheoCan = (maCan) => [
+  `Phân tích chi tiết căn ${maCan}`,
+  `Căn ${maCan} còn không, giá bao nhiêu?`,
+  `Có căn nào tương tự ${maCan} không?`,
+];
+
+const TEN_TOOL = {
+  inventory_lookup: 'thông tin căn',
+  inventory_search: 'danh sách căn',
+};
+
+/** Đổi event tiến trình của lõi AI thành một câu người đọc hiểu được. */
+function moTaBuoc(event) {
+  const { step, tools, found, chunks, action, tool, iteration } = event.data ?? {};
+
+  if (step === 'router') return 'Đang xác định câu hỏi…';
+  if (step === 'tools') {
+    const ten = TEN_TOOL[(tools ?? [])[0]] ?? 'dữ liệu';
+    return found ? `Đã tra ${ten} trong kho dữ liệu` : `Đã tra ${ten}, chưa thấy khớp`;
+  }
+  if (step === 'retrieve') return `Đang đọc ${chunks} đoạn tài liệu…`;
+
+  // Vòng lặp agent: hiện thẳng lý do model tự nêu, đó chính là "suy luận" mà
+  // người dùng muốn thấy. Chỉ ẩn nhánh clarify vì câu hỏi ngược sẽ hiện ngay
+  // sau đó dưới dạng câu trả lời, nói trước là lặp.
+  if (step === 'plan') return action === 'clarify' ? null : event.content || 'Đang cân nhắc bước tiếp theo…';
+  if (step === 'act') {
+    const ten = TEN_TOOL[tool] ?? tool;
+    return `Đang tra ${ten}${iteration > 1 ? ` (lượt ${iteration})` : ''}…`;
+  }
+  return null;
+}
 
 /**
  * Trợ lý S — sidebar bên phải, thu gọn thành nút tròn chữ "S".
@@ -18,8 +91,52 @@ export default function ChatSidebar({ open, onToggle }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  // Dòng trạng thái "trợ lý đang làm gì", thay cho màn hình đứng im.
+  const [buoc, setBuoc] = useState('');
+  // Chữ đầu tiên đã về chưa — mốc để tắt chấm nhấp nháy.
+  const [dangTraLoi, setDangTraLoi] = useState(false);
+  // Lõi AI cấp ở lượt đầu, gửi lại các lượt sau để log gom về một phiên.
+  const sessionRef = useRef(null);
+  // Đã mời phân tích căn nào rồi — không mời lại căn đó trong cùng phiên.
+  const daMoiRef = useRef(new Set());
+  const [boQua, setBoQua] = useState(false);
   const bodyRef = useRef(null);
   const inputRef = useRef(null);
+
+  // Đang xem căn nào thì đọc thẳng từ URL, không cần tầng state dùng chung.
+  const khop = useLocation().pathname.match(/^\/apartments\/([^/]+)/);
+  const maCanDangXem = khop ? decodeURIComponent(khop[1]) : null;
+  const [canDangXem, setCanDangXem] = useState(null);
+
+  // Đổi sang căn khác thì cho phép mời lại, và nạp vài thông tin để lời mời nói
+  // đúng căn nào thay vì chỉ trơ một mã căn.
+  useEffect(() => {
+    setBoQua(false);
+    setCanDangXem(null);
+    if (!maCanDangXem) return;
+
+    let con_hieu_luc = true;
+    getApartment(maCanDangXem)
+      .then((data) => {
+        if (con_hieu_luc) setCanDangXem(data);
+      })
+      .catch(() => {
+        // Không lấy được thì vẫn mời, chỉ là hiện mã căn trơn.
+      });
+    return () => {
+      con_hieu_luc = false;
+    };
+  }, [maCanDangXem]);
+
+  const moiPhanTich = Boolean(
+    maCanDangXem && !boQua && !daMoiRef.current.has(maCanDangXem),
+  );
+
+  /** Mở chat rồi hỏi luôn — người dùng bấm một nút, không phải hai bước. */
+  const phanTichCanDangXem = () => {
+    if (!open) onToggle();
+    ask(`Phân tích chi tiết căn ${maCanDangXem}`);
+  };
 
   useEffect(() => {
     if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
@@ -33,22 +150,65 @@ export default function ChatSidebar({ open, onToggle }) {
     const message = text.trim();
     if (!message || sending) return;
 
-    // history gửi lên là hội thoại TRƯỚC câu này, và bỏ các bong bóng lỗi.
+    // history gửi lên là hội thoại TRƯỚC câu này. Bỏ bong bóng lỗi, và bỏ cả
+    // bong bóng RỖNG — đó là chỗ chờ token của một lượt hỏng giữa chừng. Lõi AI
+    // đặt `min_length=1` cho content nên gửi chuỗi rỗng là cả request bị 422,
+    // tức một lần hỏng sẽ làm hỏng mọi lượt sau.
     const history = messages
-      .filter((item) => !item.error)
+      .filter((item) => !item.error && item.content)
+      .slice(-MAX_HISTORY)
       .map(({ role, content }) => ({ role, content }));
 
-    setMessages((prev) => [...prev, { role: 'user', content: message }]);
+    // Đánh dấu bong bóng bằng id tạo SẴN, không dùng chỉ số mảng. React chạy
+    // hàm cập nhật state lúc nó muốn, nên gán chỉ số bên trong hàm đó là đọc
+    // phải giá trị cũ — khi ấy mọi cập nhật sau đều không khớp dòng nào và
+    // người dùng nhìn thấy một bong bóng rỗng vĩnh viễn.
+    const id = `${Date.now()}-${Math.random()}`;
+    const capNhat = (thayDoi) =>
+      setMessages((prev) => prev.map((item) => (item.id === id ? { ...item, ...thayDoi } : item)));
+
+    setMessages((prev) => [
+      ...prev,
+      { role: 'user', content: message },
+      { id, role: 'assistant', content: '' },
+    ]);
     setInput('');
     setSending(true);
+    setBuoc('');
+    setDangTraLoi(false);
+
+    if (maCanDangXem) daMoiRef.current.add(maCanDangXem);
 
     try {
-      const data = await sendChatMessage(message, history);
-      setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
+      await streamChatMessage(
+        themNguCanh(message, maCanDangXem),
+        history,
+        (event) => {
+          if (event.session_id && !sessionRef.current) sessionRef.current = event.session_id;
+          if (event.type === 'token') {
+            setDangTraLoi(true);
+            setBuoc('');
+            setMessages((prev) =>
+              prev.map((item) =>
+                item.id === id ? { ...item, content: item.content + event.content } : item,
+              ),
+            );
+          } else if (event.type === 'route') {
+            const mo_ta = moTaBuoc(event);
+            if (mo_ta) setBuoc(mo_ta);
+          } else if (event.type === 'error') {
+            capNhat({ content: event.content, error: true });
+          }
+        },
+        undefined,
+        sessionRef.current,
+      );
     } catch (error) {
-      setMessages((prev) => [...prev, { role: 'assistant', content: error.message, error: true }]);
+      capNhat({ content: error.message, error: true });
     } finally {
       setSending(false);
+      setBuoc('');
+      setDangTraLoi(false);
     }
   };
 
@@ -59,13 +219,36 @@ export default function ChatSidebar({ open, onToggle }) {
     }
   };
 
-  if (!open) {
-    return (
-      <div className="fab">
-        <button aria-label="Mở trợ lý S" onClick={onToggle}>
-          S
+  // Lời mời phân tích nổi CẠNH nút chat chứ không nằm trong panel: đặt bên
+  // trong thì chỉ ai đã mở chat mới thấy, mà người đang xem một căn thường
+  // chưa mở. Một nút vừa mở chat vừa hỏi luôn.
+  const loiMoi = moiPhanTich && (
+    <div className="cw-moi" role="dialog" aria-label="Gợi ý từ trợ lý S">
+      <button className="cw-moi-dong" aria-label="Đóng gợi ý" onClick={() => setBoQua(true)}>
+        <CloseIcon />
+      </button>
+      <div className="cw-moi-ava">S</div>
+      <p className="cw-moi-ten">{tieuDeCan(maCanDangXem, canDangXem)}</p>
+      <p className="cw-moi-hoi">Bạn có muốn mình phân tích chi tiết căn này không?</p>
+      <div className="cw-moi-nut">
+        <button onClick={phanTichCanDangXem}>Phân tích chi tiết</button>
+        <button className="phu" onClick={() => setBoQua(true)}>
+          Để sau
         </button>
       </div>
+    </div>
+  );
+
+  if (!open) {
+    return (
+      <>
+        {loiMoi}
+        <div className="fab">
+          <button aria-label="Mở trợ lý S" onClick={onToggle}>
+            S
+          </button>
+        </div>
+      </>
     );
   }
 
@@ -92,7 +275,7 @@ export default function ChatSidebar({ open, onToggle }) {
 
         {messages.length === 0 && (
           <div className="qa">
-            {QUICK_ASKS.map((text) => (
+            {(maCanDangXem ? goiYTheoCan(maCanDangXem) : QUICK_ASKS).map((text) => (
               <button key={text} onClick={() => ask(text)}>
                 {text}
               </button>
@@ -100,17 +283,29 @@ export default function ChatSidebar({ open, onToggle }) {
           </div>
         )}
 
-        {messages.map((item, index) => (
-          <div
-            key={index}
-            className={item.role === 'user' ? 'cmsg u' : item.error ? 'cmsg a err' : 'cmsg a'}
-          >
-            {item.content}
-          </div>
-        ))}
+        {/* Bỏ qua bong bóng còn rỗng: nó là chỗ chờ token đầu tiên, hiện ra
+            trước thì người dùng thấy một ô trắng trống không hiểu là gì. Trong
+            lúc đó đã có dòng trạng thái hoặc chấm nhấp nháy bên dưới. */}
+        {messages
+          .filter((item) => item.content)
+          .map((item, index) => (
+            <div
+              key={item.id ?? index}
+              className={item.role === 'user' ? 'cmsg u' : item.error ? 'cmsg a err' : 'cmsg a'}
+            >
+              {/* Tin của người dùng giữ nguyên văn — họ gõ gì hiện đúng thế.
+                  Chỉ câu trả lời của trợ lý mới dựng markdown. */}
+              {item.role === 'user' ? item.content : <CauTraLoi text={item.content} />}
+            </div>
+          ))}
 
-        {sending && (
+        {/* Chấm nhấp nháy chạy SUỐT từ lúc gửi tới lúc chữ đầu tiên hiện ra,
+            kể cả trong lúc agent đang chọn tool. Trước đây dòng trạng thái thay
+            chỗ chấm, nên mỗi lần đổi bước lại đứng im một nhịp — trông như treo.
+            Nay hai thứ đi cùng nhau trong một bong bóng. */}
+        {sending && !dangTraLoi && (
           <div className="ctyping">
+            {buoc && <span className="ctyping-buoc">{buoc}</span>}
             <i />
             <i />
             <i />

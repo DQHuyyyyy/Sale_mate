@@ -47,12 +47,16 @@ class QdrantVectorStore:
         collection: str,
         *,
         api_key: str = "",
+        timeout: float = 30.0,
         client: AsyncQdrantClient | None = None,
     ) -> None:
         self._collection = collection
-        # timeout mặc định của qdrant-client (5s) hay bị ReadTimeout với Qdrant
-        # Cloud khi upsert/delete cả trăm điểm cùng lúc — nâng lên 30s.
-        self._client = client or AsyncQdrantClient(url=url, api_key=api_key or None, timeout=30)
+        # qdrant-client mặc định chờ 5 giây. Với Qdrant Cloud, lần gọi đầu sau
+        # một lúc không dùng phải bắt tay TLS và đánh thức cluster nên hay vượt
+        # mức đó — biểu hiện là hỏi lần đầu báo "chưa đủ dữ liệu", hỏi lại đúng
+        # câu đó thì trả lời được. Ghi/xoá hàng loạt điểm liên tiếp cũng dễ vượt
+        # mức 5s mặc định — nâng default lên 30s, vẫn cho override qua tham số.
+        self._client = client or AsyncQdrantClient(url=url, api_key=api_key or None, timeout=timeout)
 
     async def ensure_collection(self, dimension: int) -> None:
         try:
@@ -133,18 +137,27 @@ class QdrantVectorStore:
         filters: RetrievalFilter,
         limit: int,
     ) -> list[Chunk]:
-        try:
-            response = await self._client.query_points(
-                collection_name=self._collection,
-                query=vector,
-                query_filter=_to_qdrant_filter(filters),
-                limit=limit,
-                with_payload=True,
-            )
-        except Exception as exc:  # noqa: BLE001
-            raise UpstreamError("Truy vấn Qdrant thất bại.") from exc
+        # Thử lại đúng MỘT lần. Lần gọi đầu tới Qdrant Cloud sau một lúc không
+        # dùng hay hết thời gian chờ, nhưng chính nó đã dựng xong kết nối nên
+        # lần thứ hai gần như luôn nhanh. Không có bước này thì người dùng phải
+        # tự hỏi lại câu vừa hỏi — đúng lỗi đã gặp trên production.
+        loi_cuoi: Exception | None = None
+        for lan in range(2):
+            try:
+                response = await self._client.query_points(
+                    collection_name=self._collection,
+                    query=vector,
+                    query_filter=_to_qdrant_filter(filters),
+                    limit=limit,
+                    with_payload=True,
+                )
+            except Exception as exc:  # noqa: BLE001 - gói lại thành lỗi nghiệp vụ ở dưới
+                loi_cuoi = exc
+                logger.warning("Truy vấn Qdrant hỏng (lần %s/2): %s", lan + 1, exc)
+                continue
+            return [_from_payload(point.payload or {}, point.score) for point in response.points]
 
-        return [_from_payload(point.payload or {}, point.score) for point in response.points]
+        raise UpstreamError("Truy vấn Qdrant thất bại.") from loi_cuoi
 
     async def delete_by_doc(self, doc_id: str) -> int:
         try:
