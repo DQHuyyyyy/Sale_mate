@@ -111,6 +111,86 @@ async def test_da_co_du_lieu_tool_van_hoi_model_de_biet_con_thieu_gi():
     assert ket_qua["plan_args"] == {"unit_code": "VOP397"}
 
 
+# ---------- Luật: mã căn trong câu hỏi mà bằng chứng chưa có ----------
+
+
+def _registry_tra_ma_can(tool: AgentTool | None = None) -> ToolRegistry:
+    """Registry có tool ĐÚNG TÊN inventory_lookup để luật tra mã căn dùng được."""
+    reg = ToolRegistry()
+    t = tool or _ToolGia()
+    t.name = "inventory_lookup"
+    reg.add(t, _binding((Intent.LISTING,), lambda q: None))
+    return reg
+
+
+def _binding(intents, build_args):
+    from src.agents.tools.registry import ToolBinding
+
+    return ToolBinding(intents=frozenset(intents), build_args=build_args)
+
+
+@pytest.mark.asyncio
+async def test_thieu_ma_can_thi_di_lay_khong_hoi_model():
+    """Ca thật đã hỏng: 'so sánh VOP217 và VOP902' — tool tất định chỉ bắt mã
+    đầu, còn model tự nhận nhầm là 'đã có đủ thông tin' rồi dừng."""
+    llm = _KichBanLLM('{"action": "answer", "reason": "Đã có đủ thông tin."}')
+    plan = PlanNode(llm, max_iterations=3, registry=_registry_tra_ma_can())
+
+    state = initial_state("so sánh VOP217 và VOP902", "s1")
+    state["tool_context"] = '[inventory_lookup] {"unit_code": "VOP217"}'
+
+    ket_qua = await plan(state)
+
+    assert ket_qua["plan_action"] == ACT
+    assert ket_qua["plan_args"] == {"unit_code": "VOP902"}
+    assert llm.so_lan_goi == 0  # doi chieu chuoi la du, khong ton luot goi model
+
+
+@pytest.mark.asyncio
+async def test_co_du_moi_ma_roi_thi_moi_hoi_model():
+    llm = _KichBanLLM('{"action": "answer", "reason": "Đủ rồi."}')
+    plan = PlanNode(llm, max_iterations=3, registry=_registry_tra_ma_can())
+
+    state = initial_state("so sánh VOP217 và VOP902", "s1")
+    state["tool_context"] = "VOP217 ... VOP902 ..."
+
+    ket_qua = await plan(state)
+
+    assert ket_qua["plan_action"] == ANSWER
+    assert llm.so_lan_goi == 1
+
+
+@pytest.mark.asyncio
+async def test_da_tra_ma_do_ma_khong_ra_thi_khong_lap_lai():
+    llm = _KichBanLLM('{"action": "answer", "reason": "Không có dữ liệu căn đó."}')
+    plan = PlanNode(llm, max_iterations=3, registry=_registry_tra_ma_can())
+
+    state = initial_state("so sánh VOP217 và VOP902", "s1")
+    state["tool_context"] = "VOP217"
+    state["da_thu"] = ['inventory_lookup({"unit_code": "VOP902"})']
+
+    ket_qua = await plan(state)
+
+    assert ket_qua["plan_action"] == ANSWER
+
+
+@pytest.mark.asyncio
+async def test_ba_can_thi_lay_lan_luot_tung_ma():
+    llm = _KichBanLLM()
+    plan = PlanNode(llm, max_iterations=5, registry=_registry_tra_ma_can())
+
+    state = initial_state("so sánh VOP217, VOP902 và VOP345", "s1")
+    state["tool_context"] = "VOP217"
+
+    ket_qua = await plan(state)
+    assert ket_qua["plan_args"] == {"unit_code": "VOP902"}
+
+    state["tool_context"] += " VOP902"
+    state["da_thu"] = ['inventory_lookup({"unit_code": "VOP902"})']
+    ket_qua = await plan(state)
+    assert ket_qua["plan_args"] == {"unit_code": "VOP345"}
+
+
 # ---------- Model trả rác ----------
 
 

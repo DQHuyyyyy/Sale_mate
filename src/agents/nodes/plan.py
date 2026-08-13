@@ -64,6 +64,12 @@ Trả về DUY NHẤT một object JSON, không giải thích, không bọc tron
 # Model hay bọc JSON trong ```json ... ``` dù đã dặn đừng.
 _JSON_BLOCK = re.compile(r"\{.*\}", re.DOTALL)
 
+# Mã căn trong câu hỏi, dùng cho luật "còn thiếu mã nào thì đi lấy".
+_MA_CAN = re.compile(r"\b[A-Za-z]{2,4}\d{2,5}\b")
+# Tên tool tra theo mã căn. Có nhắc tên cụ thể ở đây, nhưng luôn hỏi registry
+# trước khi dùng — thiếu tool thì rơi về để model tự quyết, không nổ.
+_TOOL_TRA_MA_CAN = "inventory_lookup"
+
 
 def _describe_tools(registry: ToolRegistry) -> str:
     lines = []
@@ -108,6 +114,10 @@ class PlanNode(BaseNode):
             logger.info("Hết trần %s vòng, ép trả lời", self._max_iterations)
             return self._quyet(ANSWER, "Đã đủ số lần tra cứu cho phép.")
 
+        thieu = self._ma_can_con_thieu(state)
+        if thieu is not None:
+            return thieu
+
         # CỐ Ý KHÔNG có đường tắt kiểu "tool tất định đã chạy ⇒ trả lời luôn".
         # Từng có, và nó vô hiệu hoá chính vòng lặp: "so sánh căn VOP345 và
         # VOP397" thì ToolsNode chỉ bắt được mã đầu tiên, plan thấy đã có dữ
@@ -116,6 +126,36 @@ class PlanNode(BaseNode):
         # để agent tự quyết, và chỉ phải trả khi `enable_agent_loop` bật.
         raw = await self._llm.complete([self._prompt(state)], model=self._model, temperature=0.0, max_tokens=200)
         return self._doc_ket_qua(raw, state)
+
+    def _ma_can_con_thieu(self, state: AgentState) -> dict[str, Any] | None:
+        """Câu hỏi nhắc mã căn nào mà bằng chứng chưa có thì đi lấy, KHÔNG hỏi model.
+
+        Vì sao không để model quyết: nó tự nhận nhầm là đã đủ. Ca thật đã gặp —
+        "so sánh VOP217 và VOP902", tool tất định chỉ bắt được mã đầu, nhưng
+        plan trả lời "Đã có đủ thông tin để so sánh VOP217 và VOP902" trong khi
+        bằng chứng chỉ có VOP217. Người dùng nhận câu từ chối, hỏi lại ba lần
+        vẫn vậy.
+
+        "Đã có mã X trong bằng chứng chưa" là câu hỏi có đáp án khách quan, đối
+        chiếu chuỗi là xong — không cần và không nên phụ thuộc phán đoán model.
+        """
+        tool = self._registry.get(_TOOL_TRA_MA_CAN)
+        if tool is None:
+            return None  # Không có tool tra mã căn thì để model tự xoay.
+
+        da_co = state.get("tool_context", "").upper()
+        da_thu = set(state.get("da_thu", []))
+
+        for ma in dict.fromkeys(m.upper() for m in _MA_CAN.findall(state.get("query", ""))):
+            if ma in da_co:
+                continue
+            args = {"unit_code": ma}
+            if _chu_ky(_TOOL_TRA_MA_CAN, args) in da_thu:
+                continue  # Đã tra rồi mà không ra — đừng lặp.
+            logger.info("Câu hỏi nhắc %s nhưng chưa có dữ liệu, tra thêm", ma)
+            return self._quyet(ACT, f"Cần tra thêm thông tin căn {ma}.", tool=_TOOL_TRA_MA_CAN, args=args)
+
+        return None
 
     def _prompt(self, state: AgentState):
         from src.models.chat import ChatMessage, MessageRole

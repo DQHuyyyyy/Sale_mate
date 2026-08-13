@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str = ""
     qdrant_collection: str = "documents_chunks"
+    # qdrant-client mặc định 5 giây — quá ngắn cho lần gọi đầu tới Qdrant Cloud
+    # sau một lúc không dùng. Xem chú thích ở QdrantVectorStore.__init__.
+    qdrant_timeout_s: float = Field(default=20.0, gt=0)
     embedding_model: str = "text-embedding-3-small"
     embedding_dim: int = Field(default=1536, gt=0)
 
