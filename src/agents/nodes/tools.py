@@ -27,7 +27,7 @@ from src.models.chat import Citation
 
 logger = get_logger(__name__)
 
-_EMPTY: dict[str, Any] = {"tool_context": "", "tool_citations": [], "tools_ran": []}
+_EMPTY: dict[str, Any] = {"tool_context": "", "tool_citations": [], "tools_ran": [], "tool_filters": {}}
 
 
 def _format(tool: AgentTool, result: ToolResult) -> str:
@@ -58,6 +58,7 @@ class ToolsNode(BaseNode):
         blocks: list[str] = []
         citations: list[Citation] = []
         ran: list[str] = []
+        tieu_chi: dict[str, Any] = {}
 
         for tool, binding in candidates:
             args = binding.build_args(query)
@@ -67,6 +68,10 @@ class ToolsNode(BaseNode):
             # Không ghi args vào log: chúng đến từ câu người dùng gõ.
             logger.info("Chạy tool %s", tool.name)
             ran.append(tool.name)
+            # Giữ lại tiêu chí đã dùng để tầng trên đồng bộ bộ lọc trên trang
+            # tìm kiếm — người dùng hỏi "căn 2-3 tỷ" thì danh sách bên ngoài
+            # cũng phải hiện đúng khoảng đó, không để hai bên nói hai kiểu.
+            tieu_chi.setdefault(tool.name, args)
             result = await tool.run(**args)
 
             if not result.ok:
@@ -88,7 +93,7 @@ class ToolsNode(BaseNode):
         if not blocks:
             # Vẫn báo tool nào đã chạy dù không ra dữ liệu — stream cần biết để
             # nói "đã tra nhưng không thấy", khác hẳn với "chưa tra gì".
-            return {**_EMPTY, "tools_ran": ran}
+            return {**_EMPTY, "tools_ran": ran, "tool_filters": tieu_chi}
 
         # Không trả "metadata" ở đây: BaseNode dùng setdefault để gắn thời gian
         # chạy, trả sẵn khoá đó là nuốt mất số đo của mọi node.
@@ -96,4 +101,5 @@ class ToolsNode(BaseNode):
             "tool_context": "\n\n".join(blocks),
             "tool_citations": citations,
             "tools_ran": ran,
+            "tool_filters": tieu_chi,
         }

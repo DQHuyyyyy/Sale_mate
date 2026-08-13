@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { getApartment, streamChatMessage } from '../api';
 import CauTraLoi from './CauTraLoi';
 import { CloseIcon, SendIcon } from './Icons';
@@ -55,6 +55,29 @@ const TEN_TOOL = {
   inventory_search: 'danh sách căn',
 };
 
+/**
+ * Đổi tiêu chí `inventory_search` thành tham số URL của trang tìm kiếm.
+ *
+ * Trợ lý trả lời "có 12 căn từ 2 đến 3 tỷ" mà lưới bên ngoài vẫn hiện 97 căn
+ * thì người dùng phải tự đối chiếu bằng mắt. Đẩy đúng bộ lọc đó lên URL để hai
+ * bên nói cùng một tập căn.
+ *
+ * Chỉ lấy những tiêu chí trang tìm kiếm HIỂU được — nó không lọc theo hướng hay
+ * view, đẩy lên cũng vô nghĩa. Trả null nghĩa là không có gì để đồng bộ.
+ */
+function boLocTuTieuChi(filters) {
+  const c = filters?.inventory_search;
+  if (!c) return null;
+
+  const params = {};
+  if (c.price_min != null) params.priceMin = String(c.price_min);
+  if (c.price_max != null) params.priceMax = String(c.price_max);
+  if (c.building) params.tower = c.building;
+  if (c.unit_type) params.type = c.unit_type;
+
+  return Object.keys(params).length ? params : null;
+}
+
 /** Đổi event tiến trình của lõi AI thành một câu người đọc hiểu được. */
 function moTaBuoc(event) {
   const { step, tools, found, chunks, action, tool, iteration } = event.data ?? {};
@@ -104,6 +127,7 @@ export default function ChatSidebar({ open, onToggle }) {
   const inputRef = useRef(null);
 
   // Đang xem căn nào thì đọc thẳng từ URL, không cần tầng state dùng chung.
+  const navigate = useNavigate();
   const khop = useLocation().pathname.match(/^\/apartments\/([^/]+)/);
   const maCanDangXem = khop ? decodeURIComponent(khop[1]) : null;
   const [canDangXem, setCanDangXem] = useState(null);
@@ -196,6 +220,14 @@ export default function ChatSidebar({ open, onToggle }) {
           } else if (event.type === 'route') {
             const mo_ta = moTaBuoc(event);
             if (mo_ta) setBuoc(mo_ta);
+
+            // Trợ lý vừa lọc theo tiêu chí nào thì lưới bên ngoài lọc theo đúng
+            // tiêu chí đó. Chỉ làm khi tool THẬT SỰ tìm thấy căn — lọc ra danh
+            // sách rỗng còn khó hiểu hơn là để nguyên.
+            if (event.data?.step === 'tools' && event.data?.found) {
+              const boLoc = boLocTuTieuChi(event.data.filters);
+              if (boLoc) navigate({ pathname: '/', search: `?${new URLSearchParams(boLoc)}` });
+            }
           } else if (event.type === 'error') {
             capNhat({ content: event.content, error: true });
           }

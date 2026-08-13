@@ -42,6 +42,11 @@ REQUIRED_METADATA_KEYS: frozenset[str] = frozenset(
         "source_site",  # nguồn gốc: "noi-bo" hoặc domain đã crawl, vd "meeyland.com"
         "image_urls",  # list[str] — URL ảnh công khai; [] nếu chưa có hạ tầng phục vụ ảnh
         "version",  # ISO date lấy/crawl dữ liệu — Chunk.version đọc thẳng khoá này
+        # "listing" (tin rao) | "policy" (chính sách, thủ tục, tiện ích).
+        # BẮT BUỘC vì truy hồi lọc theo khoá này: kho vector có hơn 800 chunk
+        # tin rao, thiếu nhãn thì tài liệu chính sách bị chúng lấn át và câu hỏi
+        # về chính sách không bao giờ tìm thấy đúng nguồn.
+        "doc_kind",
     }
 )
 

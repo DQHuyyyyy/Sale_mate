@@ -41,6 +41,8 @@ class AgentState(TypedDict, total=False):
         tool_citations: Nguồn từ tool (kind="db"), guardrail gộp vào citations.
         tools_ran: Tên các tool đã chạy — để stream báo cho người dùng biết
             trợ lý đang làm gì thay vì ngồi nhìn màn hình trống.
+        tool_filters: Tiêu chí từng tool đã dùng, để giao diện đồng bộ bộ lọc
+            trên trang tìm kiếm với thứ trợ lý vừa trả lời.
         plan_action: Quyết định của node plan: "act" · "answer" · "clarify".
         plan_reason: Lý do ngắn gọn, hiện thẳng cho người dùng thấy agent
             đang nghĩ gì.
@@ -71,6 +73,7 @@ class AgentState(TypedDict, total=False):
     tool_context: str
     tool_citations: list[Citation]
     tools_ran: list[str]
+    tool_filters: dict[str, Any]
 
     plan_action: str
     plan_reason: str
@@ -102,6 +105,7 @@ def initial_state(
         tool_context="",
         tool_citations=[],
         tools_ran=[],
+        tool_filters={},
         iterations=0,
         da_thu=[],
         coverage=0.0,

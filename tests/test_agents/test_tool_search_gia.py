@@ -157,3 +157,31 @@ async def test_limit_cat_bot_nhung_van_bao_tong_so():
     assert len(ket_qua.data["danh_sach"]) == 2
     # Tong so khop van la con so THAT, khong phai so da cat
     assert ket_qua.data["tong_so_khop"] == 5
+
+
+# ---------- Người dùng ghi số thay vì "tỷ" ----------
+
+
+@pytest.mark.parametrize(
+    ("query", "mong_doi"),
+    [
+        ("có bao nhiêu căn hộ trên 5.000.000.000", {"price_min": 5.0}),
+        ("trên 5000000000", {"price_min": 5.0}),
+        ("dưới 500 triệu", {"price_max": 0.5}),
+        ("từ 2.000.000.000 đến 3.000.000.000", {"price_min": 2.0, "price_max": 3.0}),
+        ("căn dưới 3", {"price_max": 3.0}),  # khong don vi, so nho -> ty
+        ("căn dưới 3 tỷ", {"price_max": 3.0}),
+    ],
+)
+def test_doc_duoc_moi_cach_ghi_gia(query, mong_doi):
+    """Người dùng gõ '5.000.000.000' hay '5 tỷ' đều phải ra cùng một kết quả."""
+    ket_qua = extract_criteria(query)
+
+    for khoa, gia_tri in mong_doi.items():
+        assert ket_qua[khoa] == gia_tri
+
+
+def test_dau_cham_la_dau_ngan_nghin_dau_phay_la_thap_phan():
+    """Quy ước Việt Nam, và cột giá trong DB cũng ghi kiểu này ('2,120 tỷ')."""
+    assert extract_criteria("dưới 2,5 tỷ")["price_max"] == 2.5
+    assert extract_criteria("dưới 2.500.000.000")["price_max"] == 2.5

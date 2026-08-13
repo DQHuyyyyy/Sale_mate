@@ -9,10 +9,22 @@ from __future__ import annotations
 from typing import Any
 
 from src.agents.nodes.base import BaseNode
-from src.agents.state import AgentState
+from src.agents.state import AgentState, Intent
 from src.data.contracts import RetrievalFilter
 from src.models.chat import Citation
 from src.rag.contracts import Retriever
+
+# Nhãn nào thì chỉ nên đọc tài liệu chính sách, không đọc tin rao vặt.
+#
+# Vì sao cần: kho vector có 864 chunk tin rao ("Chính chủ cần bán…") và chỉ 66
+# chunk chính sách. Hỏi "chính sách bán hàng chiết khấu" thì cả ba kết quả đầu
+# đều là tin rao — chúng dùng chung từ vựng ("chính chủ", "bán", "thanh toán")
+# và đông gấp 13 lần nên luôn thắng. Tài liệu tên đúng y câu hỏi không lọt nổi
+# vào top.
+#
+# Độ phủ vẫn cao trong ca đó, nên guardrail không chặn: câu trả lời đi tiếp với
+# ngữ cảnh sai và model đành nói "chưa đủ dữ liệu". Hỏng câm, không báo lỗi.
+_CHI_DOC_CHINH_SACH = {Intent.LEGAL, Intent.DOCUMENT}
 
 
 class RetrieveNode(BaseNode):
@@ -30,7 +42,10 @@ class RetrieveNode(BaseNode):
 
         result = await self._retriever.retrieve(
             state.get("query", ""),
-            filters=RetrievalFilter(visibility=self._visibility),  # type: ignore[arg-type]
+            filters=RetrievalFilter(
+                visibility=self._visibility,  # type: ignore[arg-type]
+                doc_kind="policy" if state.get("intent") in _CHI_DOC_CHINH_SACH else None,
+            ),
         )
 
         return {

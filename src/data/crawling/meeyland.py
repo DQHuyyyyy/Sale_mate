@@ -108,6 +108,8 @@ def parse_listing_detail(html: str, url: str) -> LoadedDocument | None:
             "section": "Vinhomes Ocean Park Gia Lâm",
             "project": "Vinhomes Ocean Park Gia Lâm",
             "source_site": "meeyland.com",
+            # Tin rao — tách khỏi tài liệu chính sách để truy hồi lọc được.
+            "doc_kind": "listing",
             "version": datetime.now(UTC).date().isoformat(),
         },
     )

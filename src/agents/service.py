@@ -271,6 +271,9 @@ class LangGraphAgentService:
                         "tools": ran,
                         # Phân biệt "đã tra nhưng không thấy" với "chưa tra gì".
                         "found": bool(state.get("tool_context")),
+                        # Tiêu chí đã lọc, để giao diện đồng bộ danh sách bên
+                        # ngoài với câu trả lời trong chat.
+                        "filters": state.get("tool_filters", {}),
                     },
                 )
             ]

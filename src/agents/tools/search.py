@@ -135,35 +135,76 @@ def _match_direction(query: str, values: list[str]) -> str | None:
     return None
 
 
-# Khoảng giá. Đơn vị luôn là tỷ — dữ liệu chỉ có một đơn vị nên không đoán mò.
-# Dấu phẩy là dấu thập phân tiếng Việt: "2,5 tỷ" = 2.5.
-_SO_TY = r"(\d+(?:[.,]\d+)?)\s*(?:tỷ|ty)"
-_KHOANG = re.compile(rf"(?:từ\s*)?{_SO_TY}?\s*(?:-|–|đến|tới)\s*{_SO_TY}", re.IGNORECASE)
-_DUOI = re.compile(rf"(?:dưới|nhỏ hơn|ít hơn|không quá|tối đa|<=?)\s*{_SO_TY}", re.IGNORECASE)
-_TREN = re.compile(rf"(?:trên|lớn hơn|từ|hơn|tối thiểu|>=?)\s*{_SO_TY}", re.IGNORECASE)
+# Số tiền: một con số kèm đơn vị TUỲ CHỌN. Người dùng viết đủ kiểu —
+# "3 tỷ", "2,5 tỷ", "500 triệu", "5.000.000.000", "5000000000".
+_SO = r"(\d[\d.,]*)"
+_DON_VI = r"\s*(tỷ|ty|triệu|trieu|tr|đồng|dong|vnd|vnđ)?"
+_TIEN = rf"{_SO}{_DON_VI}"
+
+_KHOANG = re.compile(rf"(?:từ\s*)?{_TIEN}\s*(?:-|–|—|đến|tới)\s*{_TIEN}", re.IGNORECASE)
+_DUOI = re.compile(rf"(?:dưới|nhỏ hơn|ít hơn|không quá|tối đa|<=?)\s*{_TIEN}", re.IGNORECASE)
+_TREN = re.compile(rf"(?:trên|lớn hơn|từ|hơn|tối thiểu|>=?)\s*{_TIEN}", re.IGNORECASE)
 _RE_NHAT = re.compile(r"rẻ nhất|thấp nhất|giá tốt nhất", re.IGNORECASE)
 _DAT_NHAT = re.compile(r"đắt nhất|cao nhất", re.IGNORECASE)
 
+# Dưới ngưỡng này mà không có đơn vị thì hiểu là "tỷ" (người dùng gõ "dưới 3").
+# Trên ngưỡng thì chắc chắn là đồng ("5.000.000.000").
+_NGUONG_VND = 10_000
 
-def _thap_phan(text: str) -> float:
-    return float(text.replace(",", "."))
+
+def _doc_so(text: str) -> float | None:
+    """Đọc số theo quy ước Việt Nam: dấu phẩy là thập phân, dấu chấm ngăn nghìn.
+
+    Nhờ vậy "2,5" = 2.5 còn "5.000.000.000" = 5000000000. Dữ liệu thật cũng ghi
+    kiểu này — cột giá có "2,120 tỷ" nghĩa là 2.12 tỷ.
+    """
+    sach = text.replace(".", "").replace(",", ".")
+    try:
+        return float(sach)
+    except ValueError:
+        return None
+
+
+def _doc_tien(so_text: str, don_vi: str | None) -> float | None:
+    """Đổi một số tiền bất kỳ về đơn vị TỶ đồng."""
+    so = _doc_so(so_text)
+    if so is None:
+        return None
+
+    dv = (don_vi or "").lower()
+    if dv in ("tỷ", "ty"):
+        return so
+    if dv in ("triệu", "trieu", "tr"):
+        return so / 1_000
+    if dv in ("đồng", "dong", "vnd", "vnđ"):
+        return so / 1_000_000_000
+
+    # Không có đơn vị: số to là đồng, số nhỏ là tỷ.
+    return so / 1_000_000_000 if so >= _NGUONG_VND else so
 
 
 def _rut_gia(query: str, criteria: dict[str, Any]) -> None:
     """Đọc khoảng giá từ câu hỏi. Xét khoảng trước vì nó chứa cả hai đầu."""
     khoang = _KHOANG.search(query)
-    if khoang and khoang.group(2):
-        if khoang.group(1):
-            criteria["price_min"] = _thap_phan(khoang.group(1))
-        criteria["price_max"] = _thap_phan(khoang.group(2))
-        return
+    if khoang:
+        # Vế đầu thường thiếu đơn vị ("từ 2 đến 3 tỷ") — mượn đơn vị của vế sau.
+        thap = _doc_tien(khoang.group(1), khoang.group(2) or khoang.group(4))
+        cao = _doc_tien(khoang.group(3), khoang.group(4))
+        if thap is not None and cao is not None:
+            criteria["price_min"], criteria["price_max"] = thap, cao
+            return
 
     duoi = _DUOI.search(query)
     if duoi:
-        criteria["price_max"] = _thap_phan(duoi.group(1))
+        gia = _doc_tien(duoi.group(1), duoi.group(2))
+        if gia is not None:
+            criteria["price_max"] = gia
+
     tren = _TREN.search(query)
     if tren:
-        criteria["price_min"] = _thap_phan(tren.group(1))
+        gia = _doc_tien(tren.group(1), tren.group(2))
+        if gia is not None:
+            criteria["price_min"] = gia
 
 
 def extract_criteria(query: str) -> dict[str, Any] | None:
