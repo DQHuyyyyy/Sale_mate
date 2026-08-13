@@ -108,7 +108,7 @@ async def ingest_documents(
     return result
 
 
-RAW_DIR = Path(__file__).resolve().parents[3] / "data" / "raw"
+RAW_DIR = Path(__file__).resolve().parents[2] / "data" / "raw"
 
 
 async def ingest_inventory(pipeline: IngestPipeline, store: VectorStore) -> IngestResult:

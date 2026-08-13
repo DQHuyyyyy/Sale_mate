@@ -5,7 +5,13 @@ from __future__ import annotations
 import pytest
 
 from src.data.crawling import meeyland
-from src.data.crawling.meeyland import PROJECT_OCP2, PROJECT_OCP3, _extract_listing_paths, parse_listing_detail
+from src.data.crawling.meeyland import (
+    PROJECT_OCP2,
+    PROJECT_OCP3,
+    _extract_listing_paths,
+    _extract_structured_fields,
+    parse_listing_detail,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -46,6 +52,55 @@ def test_parse_dung_du_truong():
         "https://io.meeymedia.com/meeyland-ai/images/2025/12/anh1_wm.jpg",
         "https://io.meeymedia.com/meeyland-ai/images/2025/12/anh2_wm.jpg",
     ]
+
+
+def test_parse_rut_dung_gia_dien_tich_so_phong_tu_meta_desc_va_tieu_de():
+    doc = parse_listing_detail(_DETAIL_HTML, "https://meeyland.com/test/306086850")
+
+    assert doc is not None
+    assert doc.metadata["area"] == 64.0
+    assert doc.metadata["price"] == 4_200_000_000
+    assert doc.metadata["num_bedrooms"] == 2
+    assert doc.metadata["property_type"] == "Chung cư"
+    assert doc.metadata["doc_kind"] == "listing"
+    # Fixture không nhắc "tòa <mã>" cụ thể — không được suy đoán ra building.
+    assert "building" not in doc.metadata
+
+
+def test_parse_rut_dung_ma_toa_khi_mo_ta_ghi_ro():
+    html = _DETAIL_HTML.replace(
+        "Căn góc thoáng sáng, sổ đỏ cầm tay, nội thất đầy đủ.",
+        "Căn góc thoáng sáng tại tòa S1.12, sổ đỏ cầm tay.",
+    )
+
+    doc = parse_listing_detail(html, "https://meeyland.com/test/306086850")
+
+    assert doc is not None
+    assert doc.metadata["building"] == "S1.12"
+
+
+def test_extract_structured_fields_thieu_thi_khong_gan_field_do():
+    """Không suy đoán khi thiếu — thiếu diện tích/giá thì KHÔNG có khoá đó, không phải 0."""
+    fields = _extract_structured_fields(
+        meta_desc="Meeyland có 3 ảnh về căn hộ. Mã tin rao: 123456.",
+        title="Bán căn hộ đẹp, liên hệ ngay",
+        description="",
+    )
+
+    assert "area" not in fields
+    assert "price" not in fields
+    assert "num_bedrooms" not in fields
+
+
+def test_extract_structured_fields_studio_khong_co_so_phong_ngu():
+    """parse_layout trả (0, 1) cho Studio — 0 phòng ngủ vẫn là số thật, phải gắn field."""
+    fields = _extract_structured_fields(
+        meta_desc="Diện tích 28m², giá 1.800.000.000  VNĐ.",
+        title="Bán Studio Vinhomes Ocean Park full đồ",
+        description="",
+    )
+
+    assert fields["num_bedrooms"] == 0
 
 
 def test_trang_khong_co_og_title_thi_tra_none():

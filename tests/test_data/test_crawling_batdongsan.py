@@ -7,7 +7,12 @@ from pathlib import Path
 import pytest
 
 from src.data.crawling import batdongsan
-from src.data.crawling.batdongsan import _extract_listing_paths, load_saved_detail_pages, parse_listing_detail
+from src.data.crawling.batdongsan import (
+    _extract_listing_paths,
+    _extract_structured_fields,
+    load_saved_detail_pages,
+    parse_listing_detail,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -28,6 +33,14 @@ _DETAIL_HTML = """
 <div class="re__pr-specs-content-item">
     <span class="re__pr-specs-content-item-title">Khoảng giá</span>
     <span class="re__pr-specs-content-item-value">3,45 tỷ</span>
+</div>
+<div class="re__pr-specs-content-item">
+    <span class="re__pr-specs-content-item-title">Diện tích</span>
+    <span class="re__pr-specs-content-item-value">62,5 m²</span>
+</div>
+<div class="re__pr-specs-content-item">
+    <span class="re__pr-specs-content-item-title">Số phòng ngủ</span>
+    <span class="re__pr-specs-content-item-value">2 phòng</span>
 </div>
 <div class="re__pr-specs-content-item">
     <span class="re__pr-specs-content-item-title">Pháp lý</span>
@@ -80,6 +93,40 @@ def test_lay_dung_url_anh_khong_trung_lap():
         "https://file4.batdongsan.com.vn/anh1.jpg",
         "https://file4.batdongsan.com.vn/anh2.jpg",
     ]
+
+
+def test_parse_rut_dung_gia_dien_tich_so_phong_tu_specs():
+    doc = parse_listing_detail(_DETAIL_HTML, "https://batdongsan.com.vn/test-pr123")
+
+    assert doc is not None
+    assert doc.metadata["price"] == 3_450_000_000
+    assert doc.metadata["area"] == 62.5
+    assert doc.metadata["num_bedrooms"] == 2
+    assert doc.metadata["property_type"] == "Chung cư"
+    assert doc.metadata["doc_kind"] == "listing"
+    # Tiêu đề fixture không nhắc "tòa <mã>" cụ thể — không được suy đoán ra building.
+    assert "building" not in doc.metadata
+
+
+def test_parse_rut_dung_ma_toa_khi_dia_chi_ghi_ro():
+    html = _DETAIL_HTML.replace(
+        '<span class="re__address-line-1">Vinhomes Ocean Park, Xã Dương Xá</span>',
+        '<span class="re__address-line-1">Toà S1.12, Vinhomes Ocean Park, Xã Dương Xá</span>',
+    )
+
+    doc = parse_listing_detail(html, "https://batdongsan.com.vn/test-pr123")
+
+    assert doc is not None
+    assert doc.metadata["building"] == "S1.12"
+
+
+def test_extract_structured_fields_thieu_spec_thi_khong_gan_field_do():
+    """Không suy đoán khi thiếu — tin không ghi diện tích/số phòng/loại hình/toà thì KHÔNG có khoá đó."""
+    fields = _extract_structured_fields(
+        {"Khoảng giá": "5 tỷ", "Pháp lý": "Sổ đỏ"}, title="Bán nhà đất", address="", description=""
+    )
+
+    assert fields == {"price": 5_000_000_000}
 
 
 def test_text_la_markdown_co_heading_chuan():

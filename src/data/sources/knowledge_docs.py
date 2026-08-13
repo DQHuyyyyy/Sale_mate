@@ -31,6 +31,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from src.data.contracts import LoadedDocument
+from src.data.ingestion.parsers import sanitize_text
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_KNOWLEDGE_DIR = REPO_ROOT / "data" / "raw" / "knowledge"
@@ -79,10 +80,14 @@ def load_knowledge_file(path: Path) -> LoadedDocument:
     if first_line != expected_heading:
         raise ValueError(f"{path.name}: nội dung phải mở đầu bằng '{expected_heading}' (heading H1 khớp title)")
 
+    # Kiểm tra heading trên `body` GỐC (trước khi làm sạch) — sanitize_text()
+    # giữ nguyên xuống dòng nên không đổi kết quả so khớp, nhưng validate
+    # trước rồi mới làm sạch là thứ tự an toàn hơn, tránh phụ thuộc ngầm vào
+    # việc sanitize không đổi dòng đầu.
     return LoadedDocument(
         doc_id=f"knowledge:{path.stem}",
-        title=meta["title"],
-        text=body,
+        title=sanitize_text(meta["title"]),
+        text=sanitize_text(body),
         source_path=str(path),
         metadata={
             "visibility": meta["visibility"],
@@ -91,6 +96,7 @@ def load_knowledge_file(path: Path) -> LoadedDocument:
             "source_site": "noi-bo",
             "image_urls": [],
             "version": datetime.now(UTC).date().isoformat(),
+            "doc_kind": "policy",
         },
     )
 

@@ -45,6 +45,7 @@ from bs4 import BeautifulSoup, Tag
 
 from src.core.logging import get_logger
 from src.data.contracts import LoadedDocument
+from src.data.ingestion.parsers import detect_property_type, extract_building_code, parse_layout, sanitize_text
 
 logger = get_logger(__name__)
 
@@ -120,6 +121,55 @@ _IMAGE_RE = re.compile(r"https://io\.meeymedia\.com/[^\s\"'<>]+?\.(?:jpg|jpeg|pn
 # markup riêng để loại như batdongsan (data-kyc-name) vì mô tả ở đây là văn
 # bản tự do do người đăng gõ tay, không có thẻ HTML bọc riêng số điện thoại.
 _PHONE_RE = re.compile(r"\b0\d{9}\b")
+
+# meta_desc tự sinh của meeyland luôn có dạng cố định:
+# "... Diện tích 64m², giá 4.200.000.000  VNĐ. Mã tin rao: ..." — số đã ở đơn
+# vị đồng đầy đủ (không phải dạng "X tỷ"/"X triệu" như parsers.parse_price_vnd
+# xử lý), nên tách riêng bằng 2 regex khớp đúng khuôn này thay vì dùng chung.
+_AREA_META_RE = re.compile(r"Diện tích\s*([\d.,]+)\s*m²")
+_PRICE_META_RE = re.compile(r"giá\s*([\d.]+)\s*VNĐ", re.IGNORECASE)
+
+
+def _extract_structured_fields(meta_desc: str, title: str, description: str) -> dict[str, float | int | str]:
+    """Rút giá/diện tích/số phòng ngủ/loại hình/mã toà từ tin đăng để gắn vào
+    `Chunk` (payload gốc trên Qdrant, dùng cho `RetrievalFilter`).
+
+    Không suy đoán khi thiếu — field nào rút được thì gắn, rút không được thì
+    bỏ qua, tuyệt đối không gán giá trị đoán hay mặc định.
+    """
+    fields: dict[str, float | int | str] = {}
+
+    area_match = _AREA_META_RE.search(meta_desc)
+    if area_match:
+        fields["area"] = float(area_match.group(1).replace(",", "."))
+
+    price_match = _PRICE_META_RE.search(meta_desc)
+    if price_match:
+        # Số đã ở đơn vị đồng, chỉ có dấu chấm ngăn nhóm nghìn — bỏ dấu chấm rồi ép int.
+        fields["price"] = int(price_match.group(1).replace(".", ""))
+
+    # meta_desc không có số phòng ngủ — thử tiêu đề (thường ghi "2PN", "3 PN"...).
+    # parse_layout() trả (0, 1) cho "Studio", nên chỉ gắn khi rút được số thật.
+    bedrooms, _bathrooms = parse_layout(title)
+    if bedrooms is not None:
+        fields["num_bedrooms"] = bedrooms
+
+    # CỐ Ý không quét `description` — mô tả tự do do người bán viết hay nhắc
+    # loại hình LÂN CẬN chứ không phải của chính căn (vd "view hồ và biệt thự"
+    # = view NHÌN RA biệt thự, không phải căn này là biệt thự). `meta_desc` là
+    # mô tả TỰ SINH của meeyland theo đúng category tin đăng (luôn ghi "căn hộ
+    # chung cư" hoặc "biệt thự liền kề"...) nên đáng tin hơn nhiều.
+    property_type = detect_property_type(f"{title} {meta_desc}")
+    if property_type is not None:
+        fields["property_type"] = property_type
+
+    # building thì vẫn quét description — yêu cầu đúng cụm "tòa <mã>" nên rủi
+    # ro bắt nhầm thấp hơn hẳn so với property_type quét từ khoá đơn lẻ.
+    building = extract_building_code(f"{title} {description}")
+    if building is not None:
+        fields["building"] = building
+
+    return fields
 
 
 @dataclass
@@ -211,18 +261,31 @@ def parse_listing_detail(html: str, url: str, project: ProjectConfig = PROJECT_O
     if not _matches_project(project, title, meta_desc, description):
         return None
 
+    # Trích price/area/num_bedrooms/property_type/building TRƯỚC khi làm sạch
+    # — _extract_structured_fields() đọc đúng khuôn "Diện tích Xm², giá Y VNĐ"
+    # tự sinh của meeyland trên meta_desc GỐC; sanitize_text() phía dưới XOÁ
+    # cụm quảng cáo/SĐT nên chạy sau mới không ảnh hưởng tới việc trích số.
+    structured_fields = _extract_structured_fields(meta_desc, title, description)
+
+    # Làm sạch (SĐT còn sót có nhãn dẫn, cụm quảng cáo, HTML entity, unicode
+    # ẩn) cho phần TEXT cuối cùng đưa vào RAG — giữ nguyên xuống dòng vì
+    # _to_markdown() dựng heading `##` dựa trên các biến này.
+    clean_title = sanitize_text(title)
+    clean_meta_desc = sanitize_text(meta_desc)
+    clean_description = sanitize_text(description)
+
     image_urls = sorted(set(_IMAGE_RE.findall(html)))
 
     listing_id = _extract_listing_id(url)
-    _save_raw_text(project, listing_id, title, meta_desc, description)
-    text = _to_markdown(title, meta_desc, description)
+    _save_raw_text(project, listing_id, clean_title, clean_meta_desc, clean_description)
+    text = _to_markdown(clean_title, clean_meta_desc, clean_description)
 
     return LoadedDocument(
         # listing_id là ID nội bộ của meeyland, đã duy nhất trên toàn site nên
         # không cần thêm project.key — giữ format cũ để tin OCP1 hiện có trên
         # Qdrant re-ingest đúng doc_id cũ (không tạo bản trùng).
         doc_id=f"meeyland:{listing_id}",
-        title=title,
+        title=clean_title,
         text=text,
         source_path=url,
         metadata={
@@ -232,6 +295,8 @@ def parse_listing_detail(html: str, url: str, project: ProjectConfig = PROJECT_O
             "project": project.project_name,
             "source_site": "meeyland.com",
             "version": datetime.now(UTC).date().isoformat(),
+            "doc_kind": "listing",
+            **structured_fields,
         },
     )
 

@@ -57,15 +57,26 @@ class QdrantVectorStore:
     async def ensure_collection(self, dimension: int) -> None:
         try:
             exists = await self._client.collection_exists(self._collection)
-            if exists:
-                return
-            await self._client.create_collection(
-                collection_name=self._collection,
-                vectors_config=models.VectorParams(
-                    size=dimension,
-                    distance=models.Distance.COSINE,
-                ),
-            )
+            if not exists:
+                await self._client.create_collection(
+                    collection_name=self._collection,
+                    vectors_config=models.VectorParams(
+                        size=dimension,
+                        distance=models.Distance.COSINE,
+                    ),
+                )
+                logger.info("Đã tạo collection Qdrant %s (dim=%d)", self._collection, dimension)
+
+            # Luôn đảm bảo đủ index, kể cả khi collection đã tồn tại từ trước —
+            # KHÔNG return sớm ở nhánh exists=True như bản cũ. Bug thật phát
+            # hiện 11/08/2026: thêm field lọc mới (price/area/num_bedrooms...)
+            # vào danh sách dưới đây không có tác dụng gì trên collection đã
+            # tồn tại, vì nhánh cũ chỉ tạo index lúc tạo MỚI collection — âm
+            # thầm để field lọc không hoạt động cho tới khi ai đó xoá hẳn
+            # collection rồi tạo lại. `create_payload_index` là thao tác
+            # idempotent (gọi lại trên field đã có index không lỗi), nên chạy
+            # lại mỗi lần không tốn kém, không có tác dụng phụ.
+            #
             # Index cho các trường lọc phân quyền, lọc cấu trúc bất động sản,
             # và metadata.source_site — bắt buộc để filter nhanh. Qdrant Cloud
             # (khác local Docker) từ chối filter trên field chưa có index với
@@ -88,7 +99,6 @@ class QdrantVectorStore:
                     field_name=field,
                     field_schema=schema,
                 )
-            logger.info("Đã tạo collection Qdrant %s (dim=%d)", self._collection, dimension)
         except Exception as exc:  # noqa: BLE001 - gói lại thành lỗi nghiệp vụ
             raise UpstreamError("Không kết nối được Qdrant.", detail={"cause": str(exc)}) from exc
 

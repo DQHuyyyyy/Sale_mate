@@ -300,5 +300,13 @@
     "question": "Chính sách chiết khấu thanh toán sớm của Vinhomes Ocean Park 2 là bao nhiêu?",
     "expected_doc_id": "knowledge:chinh-sach-ban-hang-ocp2",
     "source": "Verify thật 11/08/2026 qua `python -m src.cli search \"...\"` (không --internal): 5 kết quả đầu toàn tin đăng public, tài liệu chính sách internal KHÔNG lộ ra — đúng nguyên tắc phân quyền. Thêm `--internal` thì tài liệu này mới xuất hiện (coverage 0.808). LƯU Ý: `src/eval/retrieval.py` hiện dùng CỐ ĐỊNH visibility=[public,internal] cho mọi câu nên KHÔNG tự động hoá được test này — phải chạy tay 2 lần `src.cli search` để so sánh, đã làm và xác nhận đúng"
+  },
+  {
+    "id": "EV-035",
+    "category": "moi_nguon_du_lieu",
+    "category_name": "Phủ đủ 4 nguồn dữ liệu",
+    "question": "Đỗ xe sai quy định bị phạt bao nhiêu tiền?",
+    "expected_doc_id": "knowledge:quy-dinh-toa-noi-quy",
+    "source": "Tài liệu mới 11/08/2026 — trước đó chưa có nội dung nào về nội quy/quy định toà (khác bảng giá dịch vụ). Verify thật: coverage 0.818, top-3 đều đúng tài liệu"
   }
 ]
