@@ -94,6 +94,49 @@ class Settings(BaseSettings):
     chat_max_chars: int = Field(default=2000, gt=0)
     chat_history_limit: int = Field(default=10, ge=0)
 
+    # ---------- Sửa ảnh ----------
+    # Tính năng TỐN TIỀN THẬT mỗi lần gọi, và endpoint mở cho khách chưa đăng
+    # nhập. Ba chốt dưới đây là phanh, không phải tuỳ chọn trang trí.
+    #
+    # Tắt được bằng biến môi trường là cứu hoả không cần deploy lại — đúng cách
+    # đã dùng cho ENABLE_RAG và ENABLE_AGENT_LOOP.
+    enable_image_edit: bool = False
+    image_model: str = "gpt-image-2"
+    # low rẻ hơn high khoảng 15 lần. Vùng ngoài mask do ta ghép lại tại máy nên
+    # không phụ thuộc model giữ chi tiết — xem src/designer/pipeline.py.
+    image_quality: Literal["low", "medium", "high"] = "low"
+    # Gửi mask kèm theo và chỉ ghép lại phần trong khung.
+    #
+    # MẶC ĐỊNH TẮT, và đây là bài học đắt: khung toạ độ do model ngôn ngữ sinh
+    # chỉ đúng khoảng 21,7% số lần, mà bước ghép lại lấy pixel GỐC ở mọi chỗ
+    # ngoài khung. Khung trượt khỏi vật thể thì bước ghép chủ động vẽ vật thể ấy
+    # trở lại — model đã xoá xong cái quạt, ta lại dán nó vào chỗ cũ.
+    #
+    # Bật lại chỉ khi đã có bộ định vị đáng tin. Khi ấy nó là chốt bảo đảm tốt
+    # nhất cho việc "không đổi thứ không được nhắc tới".
+    image_use_mask: bool = False
+    # Giữ chi tiết ảnh gốc khi sửa. ĐỂ TRỐNG là không gửi tham số này.
+    #
+    # Phải để trống với `gpt-image-2`: nó trả 400 kèm đúng câu
+    # "The model 'gpt-image-2' does not support the 'input_fidelity' parameter."
+    # Chỉ `gpt-image-1` và `gpt-image-1.5` nhận. Đổi model thì mới bật lên.
+    image_input_fidelity: Literal["", "low", "high"] = ""
+    # Trần số ảnh sinh ra mỗi ngày cho CẢ hệ thống. ĐẶT 0 LÀ KHÔNG GIỚI HẠN.
+    #
+    # Đang để 0 theo yêu cầu sản phẩm. Cần chặn hẳn thì dùng ENABLE_IMAGE_EDIT —
+    # đó mới là công tắc, còn đây là cái van.
+    #
+    # Nhắc lại rủi ro cho người đọc sau: endpoint này MỞ cho khách chưa đăng
+    # nhập và mỗi lượt tốn tiền thật. Không có trần nghĩa là hoá đơn không có
+    # giới hạn trên.
+    image_daily_limit: int = Field(default=0, ge=0)
+    # Sinh ảnh lâu hơn hẳn sinh chữ.
+    image_timeout_s: float = Field(default=120.0, gt=0)
+    # Ảnh đầu vào lớn hơn mức này thì thu nhỏ trước khi gửi: token ảnh tính theo
+    # kích thước, và ảnh căn hộ chụp bằng điện thoại thường thừa gấp nhiều lần
+    # mức model dùng tới.
+    image_max_edge: int = Field(default=1536, ge=256)
+
     @property
     def cors_origin_list(self) -> list[str]:
         """CORS_ORIGINS ở .env là chuỗi ngăn cách bởi dấu phẩy."""

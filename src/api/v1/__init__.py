@@ -8,10 +8,11 @@ Lõi AI chỉ phục vụ hai việc: health check và chat. Dữ liệu căn h�
 
 from fastapi import APIRouter
 
-from src.api.v1 import chat, health
+from src.api.v1 import chat, designer, health
 
 router = APIRouter()
 router.include_router(health.router)
 router.include_router(chat.router)
+router.include_router(designer.router)
 
 __all__ = ["router"]

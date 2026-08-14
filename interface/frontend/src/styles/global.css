@@ -982,6 +982,25 @@ table.data tbody tr:hover {
   color: var(--brand);
   background: #f5f9ff;
 }
+/* Gợi ý trong chế độ sửa ảnh: nằm ở chân khung, ngay trên ô nhập, nên cần
+   khoảng thở riêng và không được đẩy ô nhập xuống quá nhiều. */
+.qa-anh {
+  margin: 10px 0 2px;
+}
+.qa-anh button {
+  font-size: 12px;
+  padding: 6px 11px;
+}
+/* Nút dạng liên kết nằm giữa dòng chữ — dùng cho "Dùng ảnh gốc". */
+.cw-lienket {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--brand);
+  font-weight: 600;
+  text-decoration: underline;
+}
 .cmsg.u {
   align-self: flex-end;
   background: #e7edf5;
@@ -1288,6 +1307,156 @@ table.data tbody tr:hover {
   inset: 0;
   background: rgba(16, 24, 40, 0.4);
   z-index: 39;
+}
+
+/* ---- Sửa ảnh bằng trợ lý ---- */
+
+/* Nút + mở chế độ đính kèm ảnh. Tắt khi không mở căn nào — lúc đó không có ảnh
+   nào để sửa, và bật lên cho bấm rồi báo lỗi thì tệ hơn là chặn từ đầu. */
+.cw-them {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  align-self: flex-end;
+}
+.cw-them:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.cw-them.on {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+.cw-them:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Băng cho thấy ĐÚNG tấm ảnh sắp bị sửa — không để người dùng đoán. */
+.cw-dinhkem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid #d1e0ff;
+  background: #eef4ff;
+  border-radius: var(--rc);
+}
+.cw-dinhkem img {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  object-fit: cover;
+  border-radius: var(--rb);
+}
+.cw-dinhkem p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+.cw-dinhkem button {
+  margin-left: auto;
+  flex: none;
+  border: 0;
+  background: none;
+  color: var(--faint);
+  display: grid;
+  place-items: center;
+}
+
+/* Ảnh kết quả trong bong bóng chat. Là <button> chứ không phải <img> trần để
+   bàn phím bấm được — người chỉ dùng bàn phím cũng phải xem phóng to được. */
+.cmsg-anh {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--rb);
+  overflow: hidden;
+  background: none;
+}
+.cmsg-anh {
+  position: relative;
+}
+.cmsg-anh img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.cmsg-anh:hover {
+  border-color: var(--brand);
+}
+/* Ảnh đang được dùng làm nguồn cho lượt sửa tới. Phải nhìn là thấy ngay: một
+   cú bấm vừa phóng to vừa đổi ngữ cảnh, nên không được để việc đổi diễn ra
+   lặng lẽ. */
+.cmsg-anh.dang-chon {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px rgba(21, 112, 239, 0.35);
+}
+.cmsg-anh-dau {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 20px;
+}
+/* Ảnh phóng to nằm CẠNH khung chat, không phủ lên nó.
+   Trước đây z-index 60 nằm dưới .chat-sidebar (61) nên sidebar che mất ảnh.
+   Nâng z-index không giải quyết được — khi ấy ảnh lại che mất khung chat, mà
+   người dùng cần nhìn ảnh và gõ yêu cầu sửa tiếp cùng lúc.
+   Cách đúng là chừa đúng bề ngang sidebar, khớp với .shell.chat-open. */
+.cw-lightbox {
+  position: fixed;
+  inset: 0;
+  right: max(33.333vw, 340px);
+  z-index: 62;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: rgba(16, 24, 40, 0.82);
+}
+.cw-lightbox img {
+  max-width: 100%;
+  max-height: 88vh;
+  border-radius: var(--rc);
+  box-shadow: var(--shadow);
+}
+/* Màn hẹp: sidebar phủ toàn màn nên không còn chỗ đứng cạnh — ảnh chiếm cả
+   màn hình và nằm trên sidebar, đóng lại là quay về chat. */
+@media (max-width: 1100px) {
+  .cw-lightbox {
+    right: 0;
+  }
+}
+.cw-lightbox button {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  display: grid;
+  place-items: center;
+}
+.cw-lightbox button:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 @media (max-width: 960px) {

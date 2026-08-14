@@ -21,6 +21,36 @@ export function logout() {
   setToken(null);
 }
 
+// ---- Sửa ảnh bằng trợ lý ----
+/**
+ * Nhờ trợ lý sửa một chi tiết trong ảnh căn hộ.
+ *
+ * Đi đường riêng chứ không qua /api/chat: nó trả về một tấm ảnh chứ không phải
+ * luồng token, và có hạn mức riêng vì mỗi lượt tốn tiền hơn hẳn một lượt chat.
+ *
+ * Trả về `{status: 'ok', image_base64, object_edited}` khi sửa được, hoặc
+ * `{status: 'clarify', question}` khi trợ lý cần hỏi thêm cho rõ.
+ */
+/**
+ * `nguon` là URL ảnh gốc của căn, HOẶC data URL của ảnh vừa chỉnh xong.
+ *
+ * Ảnh vừa chỉnh chưa lưu ở đâu nên không có URL, mà data URL của ảnh 1024px dài
+ * cả MB — vượt xa giới hạn 2000 ký tự của `image_url`. Nên nó đi bằng trường
+ * riêng, và server chỉ nhận đúng một trong hai.
+ */
+export function editImage(nguon, instruction, sessionId) {
+  const laDataUrl = nguon.startsWith('data:');
+  return request('/api/image/edit', {
+    method: 'POST',
+    body: {
+      image_url: laDataUrl ? '' : nguon,
+      image_base64: laDataUrl ? nguon.slice(nguon.indexOf(',') + 1) : '',
+      instruction,
+      session_id: sessionId ?? null,
+    },
+  });
+}
+
 // ---- Căn hộ ----
 export function searchApartments({ tower, priceMin, priceMax, type } = {}) {
   return request('/api/apartments', {

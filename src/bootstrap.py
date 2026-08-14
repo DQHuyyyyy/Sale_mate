@@ -22,6 +22,7 @@ from src.data.contracts import Embedder, VectorStore
 from src.data.ingestion.embedders import FakeEmbedder, OpenAIEmbedder
 from src.data.stores.memory_store import InMemoryVectorStore
 from src.data.stores.qdrant_store import QdrantVectorStore
+from src.designer.editor import ImageEditService
 from src.rag.contracts import Reranker, Retriever
 from src.rag.rerankers import (
     CrossEncoderReranker,
@@ -29,6 +30,14 @@ from src.rag.rerankers import (
     PassthroughReranker,
 )
 from src.rag.retriever import DefaultRetriever, EmptyRetriever
+from src.services.designer import (
+    BoDinhVi,
+    FakeBoDinhVi,
+    FakeImageEditor,
+    ImageEditor,
+    OpenAIBoDinhVi,
+    OpenAIImageEditor,
+)
 from src.services.llm import OpenAIProvider, ScriptedProvider
 
 logger = get_logger(__name__)
@@ -132,6 +141,37 @@ def configure(target: Container | None = None, settings: Settings | None = None)
 
     box.register(AgentService, make_agent)
 
+    # ---------- Sửa ảnh ----------
+    # Cùng luật với LLM: không có khoá thật thì chỉ môi trường test mới tới được
+    # nhánh giả lập — configure() đã chặn từ trên nếu thiếu khoá ngoài test.
+    def make_bo_dinh_vi() -> BoDinhVi:
+        if not cfg.has_openai_key:
+            return FakeBoDinhVi()
+        return OpenAIBoDinhVi(cfg.openai_api_key, model=cfg.llm_model_fast, timeout_s=cfg.llm_timeout_s)
+
+    def make_image_editor() -> ImageEditor:
+        if not cfg.has_openai_key:
+            return FakeImageEditor()
+        return OpenAIImageEditor(
+            cfg.openai_api_key,
+            model=cfg.image_model,
+            quality=cfg.image_quality,
+            input_fidelity=cfg.image_input_fidelity,
+            timeout_s=cfg.image_timeout_s,
+        )
+
+    box.register(BoDinhVi, make_bo_dinh_vi)
+    box.register(ImageEditor, make_image_editor)
+    box.register(
+        ImageEditService,
+        lambda: ImageEditService(
+            box.resolve(BoDinhVi),
+            box.resolve(ImageEditor),
+            canh_toi_da=cfg.image_max_edge,
+            dung_mask=cfg.image_use_mask,
+        ),
+    )
+
     logger.info(
         "Đã cấu hình lõi AI",
         extra={
@@ -141,6 +181,7 @@ def configure(target: Container | None = None, settings: Settings | None = None)
                 "qdrant_cloud": cfg.uses_qdrant_cloud,
                 "reranker": cfg.reranker,
                 "llm_real": cfg.has_openai_key,
+                "image_edit": cfg.enable_image_edit,
             }
         },
     )

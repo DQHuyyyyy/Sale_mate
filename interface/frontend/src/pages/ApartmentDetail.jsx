@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { createSale, getApartment } from '../api';
 import { BackIcon, HouseIcon } from '../components/Icons';
 import { useAuth } from '../context/AuthContext';
@@ -75,7 +75,14 @@ export default function ApartmentDetail() {
   const { maCan } = useParams();
   const { isSale } = useAuth();
   const [apartment, setApartment] = useState(null);
-  const [activeImage, setActiveImage] = useState(0);
+  // Ảnh đang xem nằm ở URL (`?anh=2`) chứ không phải state nội bộ, vì widget trợ
+  // lý cũng cần biết — nó lấy đúng tấm này làm ngữ cảnh sửa ảnh. Sidebar và
+  // trang nội dung là hai nhánh anh em dưới Layout, không truyền prop cho nhau
+  // được; URL là kênh sẵn có mà cả hai cùng đọc, lại chia sẻ link được.
+  const [thamSo, datThamSo] = useSearchParams();
+  const activeImage = Math.max(0, Number(thamSo.get('anh')) || 0);
+  const setActiveImage = (chiSo) =>
+    datThamSo(chiSo > 0 ? { anh: String(chiSo) } : {}, { replace: true });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [sellOpen, setSellOpen] = useState(false);
@@ -84,10 +91,10 @@ export default function ApartmentDetail() {
   const load = () => {
     setLoading(true);
     getApartment(maCan)
-      .then((data) => {
-        setApartment(data);
-        setActiveImage(0);
-      })
+      // KHÔNG đặt lại về ảnh 0 ở đây: mở thẳng link `/apartments/X?anh=2` thì
+      // phải giữ đúng tấm người ta gửi cho nhau. Sang căn khác là URL đổi và
+      // tham số tự mất, nên không cần tự dọn.
+      .then(setApartment)
       .catch((loadError) => setError(loadError.message))
       .finally(() => setLoading(false));
   };
@@ -110,7 +117,8 @@ export default function ApartmentDetail() {
   }
 
   const images = apartment.images ?? [];
-  const current = images[activeImage];
+  // Kẹp về khoảng hợp lệ: `?anh=99` là URL người dùng gõ tay, không được nổ.
+  const current = images[Math.min(activeImage, images.length - 1)];
   const canSell = isSale && apartment.tinh_trang === 'Còn';
 
   return (
