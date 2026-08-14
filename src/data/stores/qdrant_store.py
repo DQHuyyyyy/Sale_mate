@@ -11,13 +11,31 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+import httpx
 from qdrant_client import AsyncQdrantClient, models
+from qdrant_client.http.exceptions import ResponseHandlingException
+from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from src.core.exceptions import UpstreamError
 from src.core.logging import get_logger
 from src.data.contracts import Chunk, RetrievalFilter
 
 logger = get_logger(__name__)
+
+# Qdrant Cloud thỉnh thoảng treo request (ReadTimeout) khi ghi/xoá hàng loạt
+# điểm liên tiếp — quan sát thật khi chạy ingest thật (không phải giả định).
+# Thử lại tối đa 3 lần, chỉ với lỗi mạng/timeout, không nuốt lỗi nghiệp vụ khác.
+_RETRYABLE_EXC = (httpx.TimeoutException, ResponseHandlingException)
+_UPSERT_BATCH_SIZE = 100
+
+
+def _retrying() -> AsyncRetrying:
+    return AsyncRetrying(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=8),
+        retry=retry_if_exception_type(_RETRYABLE_EXC),
+        reraise=True,
+    )
 
 
 class QdrantVectorStore:
@@ -29,28 +47,40 @@ class QdrantVectorStore:
         collection: str,
         *,
         api_key: str = "",
-        timeout: float = 20.0,
+        timeout: float = 30.0,
         client: AsyncQdrantClient | None = None,
     ) -> None:
         self._collection = collection
         # qdrant-client mặc định chờ 5 giây. Với Qdrant Cloud, lần gọi đầu sau
         # một lúc không dùng phải bắt tay TLS và đánh thức cluster nên hay vượt
         # mức đó — biểu hiện là hỏi lần đầu báo "chưa đủ dữ liệu", hỏi lại đúng
-        # câu đó thì trả lời được.
+        # câu đó thì trả lời được. Ghi/xoá hàng loạt điểm liên tiếp cũng dễ vượt
+        # mức 5s mặc định — nâng default lên 30s, vẫn cho override qua tham số.
         self._client = client or AsyncQdrantClient(url=url, api_key=api_key or None, timeout=timeout)
 
     async def ensure_collection(self, dimension: int) -> None:
         try:
             exists = await self._client.collection_exists(self._collection)
-            if exists:
-                return
-            await self._client.create_collection(
-                collection_name=self._collection,
-                vectors_config=models.VectorParams(
-                    size=dimension,
-                    distance=models.Distance.COSINE,
-                ),
-            )
+            if not exists:
+                await self._client.create_collection(
+                    collection_name=self._collection,
+                    vectors_config=models.VectorParams(
+                        size=dimension,
+                        distance=models.Distance.COSINE,
+                    ),
+                )
+                logger.info("Đã tạo collection Qdrant %s (dim=%d)", self._collection, dimension)
+
+            # Luôn đảm bảo đủ index, kể cả khi collection đã tồn tại từ trước —
+            # KHÔNG return sớm ở nhánh exists=True như bản cũ. Bug thật phát
+            # hiện 11/08/2026: thêm field lọc mới (price/area/num_bedrooms...)
+            # vào danh sách dưới đây không có tác dụng gì trên collection đã
+            # tồn tại, vì nhánh cũ chỉ tạo index lúc tạo MỚI collection — âm
+            # thầm để field lọc không hoạt động cho tới khi ai đó xoá hẳn
+            # collection rồi tạo lại. `create_payload_index` là thao tác
+            # idempotent (gọi lại trên field đã có index không lỗi), nên chạy
+            # lại mỗi lần không tốn kém, không có tác dụng phụ.
+            #
             # Index cho các trường lọc phân quyền, lọc cấu trúc bất động sản,
             # và metadata.source_site — bắt buộc để filter nhanh. Qdrant Cloud
             # (khác local Docker) từ chối filter trên field chưa có index với
@@ -73,7 +103,6 @@ class QdrantVectorStore:
                     field_name=field,
                     field_schema=schema,
                 )
-            logger.info("Đã tạo collection Qdrant %s (dim=%d)", self._collection, dimension)
         except Exception as exc:  # noqa: BLE001 - gói lại thành lỗi nghiệp vụ
             raise UpstreamError("Không kết nối được Qdrant.", detail={"cause": str(exc)}) from exc
 
@@ -89,7 +118,14 @@ class QdrantVectorStore:
             for chunk, vector in zip(chunks, vectors, strict=True)
         ]
         try:
-            await self._client.upsert(collection_name=self._collection, points=points)
+            # Một request chứa cả trăm điểm dễ vượt timeout trên Qdrant Cloud
+            # dù đã retry (quan sát thật: 637 điểm trong 1 request timeout cả
+            # 3 lần thử) — chia nhỏ theo lô để mỗi request nhanh và ổn định.
+            for i in range(0, len(points), _UPSERT_BATCH_SIZE):
+                batch = points[i : i + _UPSERT_BATCH_SIZE]
+                async for attempt in _retrying():
+                    with attempt:
+                        await self._client.upsert(collection_name=self._collection, points=batch)
         except Exception as exc:  # noqa: BLE001
             raise UpstreamError("Ghi dữ liệu vào Qdrant thất bại.") from exc
         return len(points)
@@ -125,14 +161,16 @@ class QdrantVectorStore:
 
     async def delete_by_doc(self, doc_id: str) -> int:
         try:
-            await self._client.delete(
-                collection_name=self._collection,
-                points_selector=models.FilterSelector(
-                    filter=models.Filter(
-                        must=[models.FieldCondition(key="doc_id", match=models.MatchValue(value=doc_id))]
+            async for attempt in _retrying():
+                with attempt:
+                    await self._client.delete(
+                        collection_name=self._collection,
+                        points_selector=models.FilterSelector(
+                            filter=models.Filter(
+                                must=[models.FieldCondition(key="doc_id", match=models.MatchValue(value=doc_id))]
+                            )
+                        ),
                     )
-                ),
-            )
         except Exception as exc:  # noqa: BLE001
             raise UpstreamError("Xoá dữ liệu trên Qdrant thất bại.") from exc
         return 1

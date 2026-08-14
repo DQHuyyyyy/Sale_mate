@@ -2,7 +2,23 @@
 
 from __future__ import annotations
 
-from src.data.crawling.meeyland import _extract_listing_paths, parse_listing_detail
+import pytest
+
+from src.data.crawling import meeyland
+from src.data.crawling.meeyland import (
+    PROJECT_OCP2,
+    PROJECT_OCP3,
+    _extract_listing_paths,
+    _extract_structured_fields,
+    parse_listing_detail,
+)
+
+
+@pytest.fixture(autouse=True)
+def _redirect_raw_text_dir(tmp_path, monkeypatch):
+    """Không ghi text thô vào data/ thật khi chạy test."""
+    monkeypatch.setattr(meeyland, "RAW_TEXT_DIR", tmp_path / "meeyland_crawl_raw")
+
 
 _DETAIL_HTML = """
 <html><head>
@@ -38,6 +54,55 @@ def test_parse_dung_du_truong():
     ]
 
 
+def test_parse_rut_dung_gia_dien_tich_so_phong_tu_meta_desc_va_tieu_de():
+    doc = parse_listing_detail(_DETAIL_HTML, "https://meeyland.com/test/306086850")
+
+    assert doc is not None
+    assert doc.metadata["area"] == 64.0
+    assert doc.metadata["price"] == 4_200_000_000
+    assert doc.metadata["num_bedrooms"] == 2
+    assert doc.metadata["property_type"] == "Chung cư"
+    assert doc.metadata["doc_kind"] == "listing"
+    # Fixture không nhắc "tòa <mã>" cụ thể — không được suy đoán ra building.
+    assert "building" not in doc.metadata
+
+
+def test_parse_rut_dung_ma_toa_khi_mo_ta_ghi_ro():
+    html = _DETAIL_HTML.replace(
+        "Căn góc thoáng sáng, sổ đỏ cầm tay, nội thất đầy đủ.",
+        "Căn góc thoáng sáng tại tòa S1.12, sổ đỏ cầm tay.",
+    )
+
+    doc = parse_listing_detail(html, "https://meeyland.com/test/306086850")
+
+    assert doc is not None
+    assert doc.metadata["building"] == "S1.12"
+
+
+def test_extract_structured_fields_thieu_thi_khong_gan_field_do():
+    """Không suy đoán khi thiếu — thiếu diện tích/giá thì KHÔNG có khoá đó, không phải 0."""
+    fields = _extract_structured_fields(
+        meta_desc="Meeyland có 3 ảnh về căn hộ. Mã tin rao: 123456.",
+        title="Bán căn hộ đẹp, liên hệ ngay",
+        description="",
+    )
+
+    assert "area" not in fields
+    assert "price" not in fields
+    assert "num_bedrooms" not in fields
+
+
+def test_extract_structured_fields_studio_khong_co_so_phong_ngu():
+    """parse_layout trả (0, 1) cho Studio — 0 phòng ngủ vẫn là số thật, phải gắn field."""
+    fields = _extract_structured_fields(
+        meta_desc="Diện tích 28m², giá 1.800.000.000  VNĐ.",
+        title="Bán Studio Vinhomes Ocean Park full đồ",
+        description="",
+    )
+
+    assert fields["num_bedrooms"] == 0
+
+
 def test_trang_khong_co_og_title_thi_tra_none():
     assert parse_listing_detail("<html><body>Trang lỗi</body></html>", "https://meeyland.com/x") is None
 
@@ -59,6 +124,72 @@ def test_loai_bo_so_dien_thoai_moi_gioi_khoi_tieu_de_va_mo_ta():
     assert "0908823226" not in doc.text
     # Giá tiền có dấu chấm ngăn nhóm số không được coi là SĐT, phải giữ nguyên.
     assert "4.200.000.000" in doc.text
+
+
+def test_text_la_markdown_co_heading_chuan():
+    doc = parse_listing_detail(_DETAIL_HTML, "https://meeyland.com/test/306086850")
+
+    assert doc is not None
+    assert doc.text.startswith("# Vinhomes Ocean Park")
+    assert "## Thông tin tóm tắt" in doc.text
+    assert "## Mô tả chi tiết" in doc.text
+
+
+def test_luu_text_tho_ra_file_truoc_khi_dung_markdown(tmp_path, monkeypatch):
+    raw_dir = tmp_path / "raw_out"
+    monkeypatch.setattr(meeyland, "RAW_TEXT_DIR", raw_dir)
+
+    doc = parse_listing_detail(_DETAIL_HTML, "https://meeyland.com/test/306086850")
+
+    assert doc is not None
+    raw_file = raw_dir / "ocp1" / "306086850.txt"
+    assert raw_file.exists()
+    assert "Căn góc thoáng sáng" in raw_file.read_text(encoding="utf-8")
+
+
+def test_project_config_gan_dung_project_vao_metadata():
+    doc = parse_listing_detail(_DETAIL_HTML, "https://meeyland.com/test/306086850", PROJECT_OCP2)
+
+    assert doc is not None
+    assert doc.metadata["project"] == "Vinhomes Ocean Park 2 (The Empire)"
+    # doc_id KHÔNG đổi theo project — listing_id của meeyland đã duy nhất toàn site,
+    # đổi format sẽ làm tin OCP1 cũ trên Qdrant bị trùng thay vì re-ingest đúng chỗ.
+    assert doc.doc_id == "meeyland:306086850"
+
+
+def test_must_mention_khop_thi_nhan_tin():
+    html = _DETAIL_HTML.replace(
+        "Vinhomes Ocean Park - căn góc 2PN",
+        "Vinhomes Ocean Park 3 - The Crown - căn góc 2PN",
+    )
+
+    doc = parse_listing_detail(html, "https://meeyland.com/test/306086850", PROJECT_OCP3)
+
+    assert doc is not None
+    assert doc.metadata["project"] == "Vinhomes Ocean Park 3 (The Crown)"
+
+
+def test_exclude_mentions_loai_tin_cua_cdt_khac_du_category_rieng():
+    """Bug thật 10/08/2026: category "riêng" OCP2 vẫn lẫn tin của CĐT khác
+    (MIK Group/Imperia, dự án "The Parkland") — meta_desc do meeyland tự sinh
+    LUÔN nhắc "Vinhomes Ocean Park 2" theo category dù CĐT thật trong mô tả
+    (do người bán viết) là một CĐT hoàn toàn khác, không tự nhận thuộc OCP
+    nào cả."""
+    html = _DETAIL_HTML.replace(
+        "Căn góc thoáng sáng, sổ đỏ cầm tay, nội thất đầy đủ.",
+        "Sở hữu căn hộ cao cấp tại The Parkland - Imperia Ocean City, sổ đỏ cầm tay.",
+    )
+
+    doc = parse_listing_detail(html, "https://meeyland.com/test/306086850", PROJECT_OCP2)
+
+    assert doc is None
+
+
+def test_must_mention_khong_khop_thi_bo_qua_tranh_gan_nham_du_an():
+    """Category cấp huyện của OCP3 có thể lẫn dự án khác — không nhắc đúng tên thì phải bỏ qua."""
+    doc = parse_listing_detail(_DETAIL_HTML, "https://meeyland.com/test/306086850", PROJECT_OCP3)
+
+    assert doc is None
 
 
 def test_extract_listing_paths_loc_dung_va_bo_trung():

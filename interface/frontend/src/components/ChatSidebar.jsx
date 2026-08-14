@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getApartment, streamChatMessage } from '../api';
 import CauTraLoi from './CauTraLoi';
-import { CloseIcon, SendIcon } from './Icons';
+import { CloseIcon, RobotMascot, SendIcon } from './Icons';
 
 const QUICK_ASKS = ['Căn 2PN dưới 4 tỷ', 'Căn còn ở tòa S1', 'Tư vấn view đẹp'];
 
@@ -268,7 +268,9 @@ export default function ChatSidebar({ open, onToggle }) {
       <button className="cw-moi-dong" aria-label="Đóng gợi ý" onClick={() => setBoQua(true)}>
         <CloseIcon />
       </button>
-      <div className="cw-moi-ava">S</div>
+      <div className="cw-moi-ava">
+        <RobotMascot className="cw-moi-mk" />
+      </div>
       <p className="cw-moi-ten">{tieuDeCan(maCanDangXem, canDangXem)}</p>
       <p className="cw-moi-hoi">Bạn có muốn mình phân tích chi tiết căn này không?</p>
       <div className="cw-moi-nut">
@@ -286,7 +288,7 @@ export default function ChatSidebar({ open, onToggle }) {
         {loiMoi}
         <div className="fab">
           <button aria-label="Mở trợ lý S" onClick={onToggle}>
-            S
+            <RobotMascot className="fab-mk" />
           </button>
         </div>
       </>
@@ -296,7 +298,9 @@ export default function ChatSidebar({ open, onToggle }) {
   return (
     <aside className="chat-sidebar" aria-label="Trợ lý S">
       <div className="cw-hd">
-        <div className="ava">S</div>
+        <div className="ava">
+          <RobotMascot className="cw-hd-mk" />
+        </div>
         <div>
           <b>Trợ lý S</b>
           <span>SalesMate AI</span>
