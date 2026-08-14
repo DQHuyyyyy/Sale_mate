@@ -88,6 +88,7 @@ def configure(target: Container | None = None, settings: Settings | None = None)
             cfg.qdrant_url,
             cfg.qdrant_collection,
             api_key=cfg.qdrant_api_key,
+            timeout=cfg.qdrant_timeout_s,
         )
 
     box.register(VectorStore, make_vector_store)

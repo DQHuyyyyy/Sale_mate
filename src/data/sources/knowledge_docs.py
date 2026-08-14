@@ -65,15 +65,24 @@ def load_knowledge_file(path: Path) -> LoadedDocument:
     return LoadedDocument(
         doc_id=f"knowledge:{path.stem}",
         title=meta["title"],
-        text=f"{meta['title']}\n\n{body}",
+        # KHÔNG chèn tiêu đề vào text. Ngữ cảnh tài liệu do `_van_ban_nhung()`
+        # trong pipeline ghép vào lúc nhúng, và chỉ lúc nhúng — `chunk.text` giữ
+        # nội dung thuần để trích dẫn hiện ra không lặp tiêu đề.
+        text=body,
         source_path=str(path),
+        # Đọc TỪ front-matter, chỉ rơi về mặc định khi file không khai. Trước
+        # đây `project`/`source_site`/`version` ghi cứng ở đây, nên mọi giá trị
+        # khai trong file đều bị bỏ — kể cả `doc_kind`, khoá mà truy hồi dùng
+        # để lọc. Tài liệu ghi đúng vẫn bị coi như không có nhãn.
         metadata={
             "visibility": meta["visibility"],
             "section": meta["section"],
-            "project": "Vinhomes Ocean Park Gia Lâm",
-            "source_site": "noi-bo",
+            "project": meta.get("project") or "Vinhomes Ocean Park Gia Lâm",
+            "source_site": meta.get("source_site") or "noi-bo",
+            "source_url": meta.get("source_url", ""),
+            "doc_kind": meta.get("doc_kind") or "policy",
             "image_urls": [],
-            "version": datetime.now(UTC).date().isoformat(),
+            "version": meta.get("version") or datetime.now(UTC).date().isoformat(),
         },
     )
 

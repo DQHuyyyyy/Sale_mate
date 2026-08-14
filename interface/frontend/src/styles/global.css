@@ -1016,6 +1016,94 @@ table.data tbody tr:hover {
   border-radius: 12px;
   width: fit-content;
 }
+/* Câu trả lời của trợ lý: đoạn văn và gạch đầu dòng sát nhau cho vừa khung hẹp. */
+.cmsg.a p {
+  margin: 0 0 8px;
+}
+.cmsg.a p:last-child {
+  margin-bottom: 0;
+}
+.ctl-ds {
+  margin: 0 0 8px;
+  padding-left: 18px;
+}
+.ctl-ds:last-child {
+  margin-bottom: 0;
+}
+.ctl-ds li {
+  margin-bottom: 4px;
+}
+
+/* Trích nguồn: nhỏ và nghiêng để tách khỏi nội dung, nhưng vẫn đọc được —
+   đây là thứ chứng minh trợ lý không bịa, không phải chú thích cho có. */
+.ctl-trich {
+  display: inline;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--faint);
+  white-space: nowrap;
+}
+/* Trích nguồn là mã căn thì bấm được để mở căn đó bên trái. Dùng <button> chứ
+   không phải <span onClick> để bàn phím và trình đọc màn hình dùng được; reset
+   phần nền/viền mặc định của nút cho nó nằm gọn trong dòng chữ. */
+.ctl-trich-nut {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--brand);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+.ctl-trich-nut:hover {
+  text-decoration-style: solid;
+}
+.ctl-trich-nut:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Bảng so sánh. Bọc ngoài để cuộn ngang thay vì tràn ra khỏi khung chat. */
+.ctl-bang-boc {
+  overflow-x: auto;
+  margin: 0 0 8px;
+  -webkit-overflow-scrolling: touch;
+}
+.ctl-bang-boc:last-child {
+  margin-bottom: 0;
+}
+.ctl-bang {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+.ctl-bang th,
+.ctl-bang td {
+  border: 1px solid var(--border);
+  padding: 6px 9px;
+  text-align: left;
+  vertical-align: top;
+}
+.ctl-bang th {
+  background: var(--bg-soft, #f5f7fa);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Dòng trạng thái nằm CÙNG bong bóng với chấm nhấp nháy: chấm chạy liên tục
+   trong lúc agent suy luận, không đứng im mỗi lần đổi bước. */
+.ctyping {
+  align-items: center;
+}
+.ctyping-buoc {
+  margin-right: 8px;
+  font-size: 13px;
+  color: var(--faint);
+}
+
 /* Lời mời phân tích — nổi NGAY TRÊN nút chat, thấy được cả khi chat đang đóng.
    Đặt trong panel thì chỉ ai đã mở chat mới thấy, mà người đang xem một căn
    thường chưa mở. */

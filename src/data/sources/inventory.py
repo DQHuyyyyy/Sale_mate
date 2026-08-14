@@ -141,6 +141,8 @@ def unit_to_document(unit: InventoryUnit) -> LoadedDocument:
             "section": unit.building,
             "project": unit.building,
             "source_site": "noi-bo",
+            # Tin rao — tách khỏi tài liệu chính sách để truy hồi lọc được.
+            "doc_kind": "listing",
             # Ảnh nằm local (data/raw/photos/), chưa có static server public nên
             # để rỗng thay vì bịa URL — không được hiển thị trên widget cho tới
             # khi có hạ tầng phục vụ ảnh (ngoài phạm vi "data" solo).

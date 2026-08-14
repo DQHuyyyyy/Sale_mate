@@ -88,6 +88,10 @@ def search_apartments(
     tower: str | None = Query(default=None, description="Mã tòa, ví dụ S1"),
     price_min: float | None = Query(default=None, ge=PRICE_MIN, le=PRICE_MAX),
     price_max: float | None = Query(default=None, ge=PRICE_MIN, le=PRICE_MAX),
+    price_max_exclusive: bool = Query(
+        default=False,
+        description='Loại luôn căn có giá bằng đúng price_max. Dùng cho câu "dưới X tỷ".',
+    ),
     type: str | None = Query(default=None, description="Loại căn, ví dụ '2 PN, 1WC'"),
     limit: int = Query(default=100, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
@@ -128,7 +132,11 @@ def search_apartments(
         where.append("a.gia_tri >= %s")
         params.append(price_min)
     if price_max is not None:
-        where.append("a.gia_tri <= %s")
+        # Trợ lý S bật cờ này khi người dùng nói "dưới 3 tỷ" — nghĩa là KHÔNG
+        # gồm căn giá đúng 3 tỷ. Ô "Đến" trên form vẫn tính cả biên vì đó là một
+        # khoảng, không phải một câu. Thiếu cờ thì chat đếm 21 còn lưới hiện 25
+        # và người dùng thấy ngay hai con số vênh nhau.
+        where.append("a.gia_tri < %s" if price_max_exclusive else "a.gia_tri <= %s")
         params.append(price_max)
 
     order_by = "a.gia_tri NULLS LAST, a.ma_can" if numeric_columns_ready() else "a.ma_can"

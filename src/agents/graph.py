@@ -23,7 +23,7 @@ from src.agents.contracts import LLMProvider
 from src.agents.nodes.act import ActNode
 from src.agents.nodes.generate import GenerateNode
 from src.agents.nodes.guardrail import GuardrailNode
-from src.agents.nodes.plan import ACT, PlanNode
+from src.agents.nodes.plan import ACT, RETRIEVE, PlanNode
 from src.agents.nodes.retrieve import RetrieveNode
 from src.agents.nodes.router import RouterNode
 from src.agents.nodes.tools import ToolsNode
@@ -47,12 +47,19 @@ def route_after_tools(state: AgentState) -> str:
 def route_after_plan(state: AgentState) -> str:
     """Kế hoạch nói gì thì đi đó. Lỗi hoặc nhãn lạ đều về generate.
 
-    Không có nhánh nào quay lại `plan` từ đây — vòng lặp đóng ở `act`, và trần
-    lần lặp nằm trong chính `plan`. Một chỗ chặn duy nhất, không thể quên.
+    Vòng lặp đóng ở `act` và ở `retrieve` — cả hai đều có cạnh quay về `plan`.
+    Trần lần lặp nằm trong chính `plan`, một chỗ chặn duy nhất không thể quên.
+    Riêng `retrieve` không cần trần: `plan` chỉ chọn nó khi chưa truy hồi lần
+    nào, mà node retrieve bật `da_truy_hoi` ngay lần chạy đầu.
     """
     if state.get("error"):
         return "generate"
-    return "act" if state.get("plan_action") == ACT else "generate"
+    action = state.get("plan_action")
+    if action == ACT:
+        return "act"
+    if action == RETRIEVE:
+        return "retrieve"
+    return "generate"
 
 
 def build_nodes(
@@ -96,9 +103,9 @@ def build_graph(nodes: dict[str, object]):
                               └──────────→ generate → ...
 
         bật:  router → tools ─┬→ retrieve ─┐
-                              └────────────┴→ plan ─┬→ act ──┐
-                                              ↑             │
-                                              └─────────────┘
+                              └────────────┴→ plan ─┬→ act ──────┐
+                                              ↑     ├→ retrieve ─┤
+                                              └─────┴────────────┘
                                                     └→ generate → guardrail → END
     """
     graph = StateGraph(AgentState)
@@ -127,7 +134,7 @@ def build_graph(nodes: dict[str, object]):
         graph.add_conditional_edges(
             "plan",
             route_after_plan,
-            {"act": "act", "generate": "generate"},
+            {"act": "act", "retrieve": "retrieve", "generate": "generate"},
         )
         # Chạy xong quay lại plan để nó nhìn bằng chứng mới rồi quyết tiếp.
         graph.add_edge("act", "plan")

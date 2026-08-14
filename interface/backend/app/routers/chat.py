@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
+from app.core.config import settings
 from app.core.deps import get_optional_user
 from app.core.ratelimit import RateLimiter
 from app.schemas.auth import CurrentUser
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.chat import ChatError, generate_reply, stream_reply
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -24,6 +28,13 @@ _gioi_han_nhan_vien = RateLimiter(NHAN_VIEN_MOI_10_PHUT, CUA_SO_GIAY)
 
 
 def _kiem_tra_han_muc(request: Request, user: CurrentUser | None) -> None:
+    if not settings.chat_rate_limit_enabled:
+        # Tắt qua CHAT_RATE_LIMIT_ENABLED=false để tự test không bị chặn giữa
+        # chừng. Log ở mức WARNING vì đây là trạng thái BẤT THƯỜNG — quên bật
+        # lại trên môi trường công khai là ai cũng gọi được thoải mái.
+        logger.warning("Hạn mức chat đang TẮT — chỉ dùng khi tự test, nhớ bật lại")
+        return
+
     if user is not None:
         con_luot, cho_giay = _gioi_han_nhan_vien.check(f"user:{user.id}")
     else:

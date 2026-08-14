@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Fragment, useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { getApartment, streamChatMessage } from '../api';
+import CauTraLoi from './CauTraLoi';
 import { CloseIcon, SendIcon } from './Icons';
 
 const QUICK_ASKS = ['Căn 2PN dưới 4 tỷ', 'Căn còn ở tòa S1', 'Tư vấn view đẹp'];
@@ -22,6 +23,26 @@ function tieuDeCan(maCan, can) {
   return phan.length ? `Căn ${maCan} — ${phan.join(' · ')}` : `Căn ${maCan}`;
 }
 
+const CO_MA_CAN = /\b[A-Za-z]{2,4}\d{2,5}\b/;
+
+/**
+ * Gắn mã căn đang mở vào câu hỏi khi người dùng nói trống không.
+ *
+ * "Phân tích cho tôi căn hiện tại" không có mã căn nào, nên tool tra tồn kho
+ * không rút được tham số và im lặng — trợ lý đành trả lời "chưa đủ dữ liệu"
+ * dù mã căn đang hiện ngay trên màn hình.
+ *
+ * Chỉ gắn khi câu hỏi CHƯA có mã căn: người dùng hỏi về căn khác trong lúc
+ * đang mở một căn là chuyện bình thường, không được ghi đè ý họ.
+ *
+ * Bong bóng chat vẫn hiện nguyên văn người dùng gõ — phần gắn thêm chỉ đi theo
+ * request, không sửa lời của họ trên màn hình.
+ */
+function themNguCanh(message, maCan) {
+  if (!maCan || CO_MA_CAN.test(message)) return message;
+  return `${message} (căn đang xem: ${maCan})`;
+}
+
 /** Câu hỏi gợi ý khi người dùng đang mở một căn cụ thể. */
 const goiYTheoCan = (maCan) => [
   `Phân tích chi tiết căn ${maCan}`,
@@ -33,6 +54,32 @@ const TEN_TOOL = {
   inventory_lookup: 'thông tin căn',
   inventory_search: 'danh sách căn',
 };
+
+/**
+ * Đổi tiêu chí `inventory_search` thành tham số URL của trang tìm kiếm.
+ *
+ * Trợ lý trả lời "có 12 căn từ 2 đến 3 tỷ" mà lưới bên ngoài vẫn hiện 97 căn
+ * thì người dùng phải tự đối chiếu bằng mắt. Đẩy đúng bộ lọc đó lên URL để hai
+ * bên nói cùng một tập căn.
+ *
+ * Chỉ lấy những tiêu chí trang tìm kiếm HIỂU được — nó không lọc theo hướng hay
+ * view, đẩy lên cũng vô nghĩa. Trả null nghĩa là không có gì để đồng bộ.
+ */
+function boLocTuTieuChi(filters) {
+  const c = filters?.inventory_search;
+  if (!c) return null;
+
+  const params = {};
+  if (c.price_min != null) params.priceMin = String(c.price_min);
+  if (c.price_max != null) params.priceMax = String(c.price_max);
+  // "dưới 3 tỷ" loại luôn căn giá đúng 3 tỷ. Không truyền cờ này thì chat đếm
+  // 21 căn còn lưới bên trái hiện 25, người dùng thấy ngay hai số vênh nhau.
+  if (c.price_max_nghiem_ngat) params.priceMaxExclusive = 'true';
+  if (c.building) params.tower = c.building;
+  if (c.unit_type) params.type = c.unit_type;
+
+  return Object.keys(params).length ? params : null;
+}
 
 /** Đổi event tiến trình của lõi AI thành một câu người đọc hiểu được. */
 function moTaBuoc(event) {
@@ -72,6 +119,8 @@ export default function ChatSidebar({ open, onToggle }) {
   const [sending, setSending] = useState(false);
   // Dòng trạng thái "trợ lý đang làm gì", thay cho màn hình đứng im.
   const [buoc, setBuoc] = useState('');
+  // Chữ đầu tiên đã về chưa — mốc để tắt chấm nhấp nháy.
+  const [dangTraLoi, setDangTraLoi] = useState(false);
   // Lõi AI cấp ở lượt đầu, gửi lại các lượt sau để log gom về một phiên.
   const sessionRef = useRef(null);
   // Đã mời phân tích căn nào rồi — không mời lại căn đó trong cùng phiên.
@@ -81,6 +130,7 @@ export default function ChatSidebar({ open, onToggle }) {
   const inputRef = useRef(null);
 
   // Đang xem căn nào thì đọc thẳng từ URL, không cần tầng state dùng chung.
+  const navigate = useNavigate();
   const khop = useLocation().pathname.match(/^\/apartments\/([^/]+)/);
   const maCanDangXem = khop ? decodeURIComponent(khop[1]) : null;
   const [canDangXem, setCanDangXem] = useState(null);
@@ -152,16 +202,18 @@ export default function ChatSidebar({ open, onToggle }) {
     setInput('');
     setSending(true);
     setBuoc('');
+    setDangTraLoi(false);
 
     if (maCanDangXem) daMoiRef.current.add(maCanDangXem);
 
     try {
       await streamChatMessage(
-        message,
+        themNguCanh(message, maCanDangXem),
         history,
         (event) => {
           if (event.session_id && !sessionRef.current) sessionRef.current = event.session_id;
           if (event.type === 'token') {
+            setDangTraLoi(true);
             setBuoc('');
             setMessages((prev) =>
               prev.map((item) =>
@@ -171,6 +223,20 @@ export default function ChatSidebar({ open, onToggle }) {
           } else if (event.type === 'route') {
             const mo_ta = moTaBuoc(event);
             if (mo_ta) setBuoc(mo_ta);
+
+            // Trợ lý vừa lọc theo tiêu chí nào thì lưới bên ngoài lọc theo đúng
+            // tiêu chí đó. Chỉ làm khi tool THẬT SỰ tìm thấy căn — lọc ra danh
+            // sách rỗng còn khó hiểu hơn là để nguyên.
+            if (event.data?.step === 'tools' && event.data?.found) {
+              const boLoc = boLocTuTieuChi(event.data.filters);
+              if (boLoc) navigate({ pathname: '/', search: `?${new URLSearchParams(boLoc)}` });
+            }
+          } else if (event.type === 'done') {
+            // Trợ lý hỏi ngược thì kèm sẵn vài phương án bấm được. Gắn vào
+            // đúng bong bóng vừa trả lời, không để state riêng — người dùng
+            // cuộn lên vẫn thấy các lựa chọn của lượt cũ.
+            const chon = event.data?.options;
+            if (Array.isArray(chon) && chon.length) capNhat({ options: chon });
           } else if (event.type === 'error') {
             capNhat({ content: event.content, error: true });
           }
@@ -183,6 +249,7 @@ export default function ChatSidebar({ open, onToggle }) {
     } finally {
       setSending(false);
       setBuoc('');
+      setDangTraLoi(false);
     }
   };
 
@@ -263,18 +330,53 @@ export default function ChatSidebar({ open, onToggle }) {
         {messages
           .filter((item) => item.content)
           .map((item, index) => (
-            <div
-              key={item.id ?? index}
-              className={item.role === 'user' ? 'cmsg u' : item.error ? 'cmsg a err' : 'cmsg a'}
-            >
-              {item.content}
-            </div>
+            // Fragment chứ KHÔNG phải div bọc: `.cw-body` là flex column và
+            // `.cmsg.u` canh phải bằng `align-self`, thứ chỉ có tác dụng lên
+            // con TRỰC TIẾP của flex container. Bọc thêm một lớp div là bong
+            // bóng của người dùng tụt về bên trái.
+            <Fragment key={item.id ?? index}>
+              <div
+                className={item.role === 'user' ? 'cmsg u' : item.error ? 'cmsg a err' : 'cmsg a'}
+              >
+                {/* Tin của người dùng giữ nguyên văn — họ gõ gì hiện đúng thế.
+                    Chỉ câu trả lời của trợ lý mới dựng markdown.
+
+                    `onChonCan` biến trích nguồn dạng mã căn thành nút mở đúng
+                    căn đó bên trái. Điều hướng để ở đây, không đưa vào
+                    CauTraLoi: component đó chỉ dựng chữ, không nên biết tới
+                    router. */}
+                {item.role === 'user' ? (
+                  item.content
+                ) : (
+                  <CauTraLoi
+                    text={item.content}
+                    onChonCan={(ma) => navigate(`/apartments/${encodeURIComponent(ma)}`)}
+                  />
+                )}
+              </div>
+
+              {/* Phương án chọn sẵn cho câu hỏi ngược. Dùng lại đúng lớp `qa`
+                  của gợi ý mở đầu — cùng ý nghĩa "bấm để hỏi luôn" thì nên
+                  trông giống nhau. Ô nhập vẫn mở, ai muốn gõ tay vẫn gõ. */}
+              {item.options?.length > 0 && (
+                <div className="qa" role="group" aria-label="Phương án gợi ý">
+                  {item.options.map((text) => (
+                    <button key={text} disabled={sending} onClick={() => ask(text)}>
+                      {text}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </Fragment>
           ))}
 
-        {sending && buoc && <div className="cstep">{buoc}</div>}
-
-        {sending && !buoc && (
+        {/* Chấm nhấp nháy chạy SUỐT từ lúc gửi tới lúc chữ đầu tiên hiện ra,
+            kể cả trong lúc agent đang chọn tool. Trước đây dòng trạng thái thay
+            chỗ chấm, nên mỗi lần đổi bước lại đứng im một nhịp — trông như treo.
+            Nay hai thứ đi cùng nhau trong một bong bóng. */}
+        {sending && !dangTraLoi && (
           <div className="ctyping">
+            {buoc && <span className="ctyping-buoc">{buoc}</span>}
             <i />
             <i />
             <i />

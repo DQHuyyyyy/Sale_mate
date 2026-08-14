@@ -107,6 +107,25 @@ tool đọc trực tiếp — xem mục "Thêm một tool". `inventory_units` l�
 nên chatbot và portal luôn nói cùng một con số. Trước đó nó là bảng sao chép và
 đã trôi lệch 4 căn sai giá.
 
+### Qdrant chỉ chứa `doc_kind="policy"`
+
+`SOURCES` giờ chỉ còn `knowledge`. Ba nguồn tin rao đã bị gỡ và 871 chunk của
+chúng đã xoá khỏi Qdrant:
+
+| Nguồn cũ | Chunk | Vì sao bỏ |
+|---|---|---|
+| `meeyland` | 695 | tin rao của **môi giới khác**, kèm giá họ niêm yết và số điện thoại của họ |
+| `batdongsan` | 76 | như trên |
+| `inventory` | 100 | **nhân bản** tồn kho Postgres — đúng hai nguồn số liệu mà mục trên vừa cấm |
+
+Hai nguồn đầu gây một lỗi đã xảy ra thật: câu "tìm các căn khoảng giá 3 tỷ" không
+rút được tiêu chí nên tool tồn kho không chạy, truy hồi rơi xuống 864 chunk tin
+rao, và trợ lý giới thiệu **hàng của sàn khác cho khách của mình**, trích "Mã tin:
+307426397". Không phải thiếu vài căn — là sai kho.
+
+Cần tham khảo mặt bằng giá thị trường thì nạp vào **collection riêng**, đừng để
+chung chỗ trợ lý tra tồn kho.
+
 ## Luồng agent
 
 Hai chế độ, chọn bằng `ENABLE_AGENT_LOOP`.
@@ -122,8 +141,8 @@ START → router → tools ─┬─(cần tài liệu)→ retrieve → generate
 
 ```
 START → router → tools ─┬→ retrieve ─┐
-                        └────────────┴→ plan ─┬→ act ──┐ (quay lại plan)
-                                              │        │
+                        └────────────┴→ plan ─┬→ act ──────┐ (quay lại plan)
+                                              ├→ retrieve ─┤
                                               └→ generate → guardrail → END
 ```
 
@@ -131,24 +150,34 @@ START → router → tools ─┬→ retrieve ─┐
 bộ bằng chứng đã gom, nên không cần node `observe` riêng cho cùng một việc.
 
 - `router` — luật từ khoá trước, model rẻ sau. Nhãn lạ thì fallback `general`.
+  `needs_retrieval` khai theo **loại trừ** (`_KHONG_TRA_CUU`), không liệt kê
+  nhãn được phép: thêm nhãn mới là tự động được tra cứu. Cách cũ liệt kê thuận
+  biến `general` thành ngõ cụt — xem chốt thứ năm bên dưới.
 - `tools` — chạy tool khai là phục vụ nhãn hiện tại. Nằm trên đường đi chung và
   tự thoát khi không có tool nào nhận, nên thêm tool không phải sửa `graph.py`.
-- `retrieve` — chỉ gọi `Retriever` Protocol, không biết gì về Qdrant.
+- `retrieve` — chỉ gọi `Retriever` Protocol, không biết gì về Qdrant. Bó vào
+  `doc_kind="policy"` khi nhãn là `LEGAL`/`DOCUMENT` **hoặc khi tool đã có dữ
+  liệu**: lúc đó số liệu về căn đã lấy từ Postgres rồi, việc còn lại của truy
+  hồi là tìm *quy tắc*, không phải gom thêm tin rao.
 - `generate` — model mạnh; có context thì ép grounding. Số liệu tool đứng
   **trước** tài liệu trong prompt: tool đọc nguồn sự thật lúc hỏi, vector store
   chỉ là bản chụp.
 - `guardrail` — độ phủ thấp → trả "chưa đủ dữ liệu"; gắn cờ nhạy cảm; gộp nguồn
   tài liệu với nguồn tool. Có kết quả tool thì **không** từ chối dù độ phủ 0.
 
-- `plan` *(chỉ khi bật vòng lặp)* — model chọn một trong ba: `act` gọi thêm
-  tool · `clarify` hỏi ngược người dùng · `answer` đã đủ.
+- `plan` *(chỉ khi bật vòng lặp)* — model chọn một trong bốn: `act` gọi thêm
+  tool · `retrieve` đi tra tài liệu · `clarify` hỏi ngược người dùng · `answer`
+  đã đủ. Khi `clarify` nó kèm vài phương án bấm được ở `plan_options`, gửi ra
+  FE qua `data.options` của event `done`. Phương án lấy thẳng **tên tài liệu đã
+  truy hồi**, không để model tự nghĩ — model từng chào "ưu đãi Ocean Park 1"
+  trong khi kho chỉ có OP2 và OP3, người dùng bấm vào là mất thêm một lượt.
 - `act` *(chỉ khi bật vòng lặp)* — chạy tool plan chọn, cộng dồn bằng chứng.
 
 Thêm node: kế thừa `BaseNode`, chỉ viết `execute()` — try/except, log, đo thời
 gian đã có sẵn ở lớp cha. Node **không** trả khoá `metadata`, lớp cha đang dùng
 khoá đó để gắn thời gian chạy.
 
-### Bốn chốt chặn của vòng lặp
+### Năm chốt chặn của vòng lặp
 
 Không có chúng thì agent đốt quota hoặc bịa. Đừng gỡ cái nào khi thêm tính năng:
 
@@ -158,6 +187,16 @@ Không có chúng thì agent đốt quota hoặc bịa. Đừng gỡ cái nào k
 | Tool phải có trong registry | `PlanNode` | model bịa tên tool |
 | Không lặp lại hành động đã thử | `PlanNode` + `da_thu` | agent kẹt, xin đi xin lại một thứ |
 | Làm sạch tham số rỗng | `ActNode._lam_sach` | model điền `""` cho trường không dùng |
+| Không hỏi ngược khi chưa tra cứu | `PlanNode._phai_tra_cuu_truoc` | agent bỏ cuộc quá sớm |
+
+Bốn chốt đầu chặn agent làm **quá nhiều**; chốt cuối chặn nó làm **quá ít**.
+"Ocean park có ưu đãi gì" từng bị router xếp `general` nên không truy hồi gì,
+`plan` nhìn state rỗng rồi hỏi ngược "loại ưu đãi nào?" — bịa ra trục mơ hồ,
+trong khi trục thật là Ocean Park 2 hay 3 và truy hồi cho độ phủ 0.919 với đúng
+hai tài liệu đó. Hỏi ngược mà chưa có bằng chứng là đoán mò chỗ cần làm rõ.
+
+`da_truy_hoi` (do `RetrieveNode` bật) phân biệt "tìm rồi mà không có" với "chưa
+hề tìm" — chỉ nhìn `chunks` rỗng thì plan sẽ đòi truy hồi mãi.
 
 Chốt cuối tưởng vặt nhưng đã gây lỗi thật: model trả
 `{"unit_code": "VOP397", "building": ""}`, tool dịch `""` thành `ILIKE ''` nên
@@ -195,6 +234,27 @@ các tool khác trong cùng lượt.
 **Dữ liệu có cấu trúc (giá, tình trạng căn) đi qua tool, không nhét vào Qdrant.**
 RAG luôn là bản chụp; giá và tình trạng đổi hàng ngày. Trộn hai đường là tự tạo
 hai nguồn số liệu lệch nhau.
+
+### Con số của chính sách cũng là dữ liệu có cấu trúc
+
+[`tools/data/chinh_sach_vay.json`](src/agents/tools/data/chinh_sach_vay.json) giữ
+tham số định lượng của chính sách hỗ trợ lãi suất — trần lãi suất, số tháng
+khoá, phụ phí từng gói, và **`hieu_luc_den`**. Văn bản vẫn ở Qdrant để trích
+dẫn; chỉ con số dùng để TÍNH mới ra đây.
+
+Vì sao không rút số từ văn xuôi bằng model: đã đo được nó bịa. Hỏi "tôi có 1 tỷ,
+mua VOP397 thì vay thế nào", model lấy đúng giá từ tool rồi tự thêm "ngân hàng
+cho vay lên đến 70-80% giá trị" — không tài liệu nào nói vậy.
+
+Vì sao có `hieu_luc_den`: chính sách bất động sản có hạn. Bản 6%/5 năm chỉ áp
+dụng cho khách mua 20/4–20/7/2026 và đã thay bản 9% công bố trước đó một tháng.
+`tinh_khoan_vay` đọc ngày để biết còn hiệu lực không — hết hạn thì nói thẳng và
+**không gán lãi suất nào**, thay vì rơi về chính sách gần nhất rồi báo cho khách
+một ưu đãi họ không được hưởng.
+
+File JSON chứ không phải bảng Postgres vì migration ở dự án này chạy thẳng lên
+production; để trong repo thì mỗi lần sửa là một PR có review. Đổi sang DB về
+sau chỉ cần thay thân `tai_chinh_sach()`.
 
 ## Streaming và hiện suy luận
 

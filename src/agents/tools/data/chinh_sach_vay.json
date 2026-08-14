@@ -1,0 +1,56 @@
+{
+  "_doc": [
+    "Tham số ĐỊNH LƯỢNG của chính sách hỗ trợ lãi suất. Văn bản đầy đủ vẫn nằm ở",
+    "Qdrant để trích dẫn; ở đây chỉ giữ những con số mà tool cần tính toán.",
+    "",
+    "Sửa file này là một PR riêng, có review — sai một chữ số ở đây là báo sai cho",
+    "khách. `doc_id` phải trỏ đúng tài liệu nguồn để câu trả lời trích được về đó.",
+    "",
+    "`hieu_luc_den` là trường quan trọng nhất: chính sách bất động sản có hạn, và",
+    "chính sách này đã đổi một lần (20/3/2026 công bố trần 9%, tới 17/4/2026 hạ",
+    "xuống 6%). Tool đọc ngày để biết còn hiệu lực hay không, thay vì mặc định là",
+    "còn."
+  ],
+  "chinh_sach": [
+    {
+      "ma": "htls-2026-04",
+      "ten": "Hỗ trợ lãi suất — khoá trần 6%/năm trong 5 năm",
+      "doc_id": "knowledge:Chính sách hỗ trợ lãi suất chung của Vinhomes",
+      "nguon": "https://market.vinhomes.vn/blog/chinh-sach-khoa-tran-lai-suat-6-trong-5-nam-khi-mua-nha-vinhomes",
+      "hieu_luc_tu": "2026-04-20",
+      "hieu_luc_den": "2026-07-20",
+      "tran_lai_suat": 6.0,
+      "so_thang_khoa": 60,
+      "tran_sau_uu_dai": 9.0,
+      "so_thang_tiep_suc": 24,
+      "goi_duoc_tiep_suc_toi_da_thang": 36,
+      "ky_han_vay_nam_min": 20,
+      "ky_han_vay_nam_max": 35,
+      "muc_vay_ho_tro": [70, 80],
+      "goi": [
+        { "so_thang": 18, "mien_lai": true, "phu_phi": { "70": 0.0, "80": 0.0 } },
+        { "so_thang": 24, "mien_lai": false, "phu_phi": { "70": 4.5, "80": 5.0 } },
+        { "so_thang": 30, "mien_lai": false, "phu_phi": { "70": 9.0, "80": 11.0 } },
+        { "so_thang": 36, "mien_lai": false, "phu_phi": { "70": 14.0, "80": 16.5 } },
+        { "so_thang": 60, "mien_lai": false, "phu_phi": { "70": 25.0, "80": 30.0 } }
+      ]
+    },
+    {
+      "ma": "htls-2026-03",
+      "ten": "Hỗ trợ lãi suất — khoá trần 9%/năm (bản công bố 20/3/2026)",
+      "doc_id": "knowledge:Chính sách hỗ trợ lãi suất chung của Vinhomes",
+      "nguon": "https://market.vinhomes.vn/blog/chinh-sach-khoa-tran-lai-suat-6-trong-5-nam-khi-mua-nha-vinhomes",
+      "hieu_luc_tu": "2026-03-20",
+      "hieu_luc_den": "2026-04-19",
+      "tran_lai_suat": 9.0,
+      "so_thang_khoa": 60,
+      "tran_sau_uu_dai": null,
+      "so_thang_tiep_suc": 0,
+      "goi_duoc_tiep_suc_toi_da_thang": 0,
+      "ky_han_vay_nam_min": 20,
+      "ky_han_vay_nam_max": 35,
+      "muc_vay_ho_tro": [70, 80],
+      "goi": []
+    }
+  ]
+}

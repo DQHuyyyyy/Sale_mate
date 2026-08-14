@@ -33,6 +33,9 @@ class AgentState(TypedDict, total=False):
         session_id: ID phiên hội thoại.
         intent: Kết quả phân loại của router.
         needs_retrieval: Router quyết định có phải tra tài liệu không.
+        da_truy_hoi: Node retrieve ĐÃ chạy thật chưa. Khác `chunks` rỗng ở chỗ
+            nó phân biệt "tìm rồi mà không có" với "chưa hề tìm" — plan cần
+            phân biệt đó để không hỏi ngược người dùng khi chưa tra cứu lần nào.
         chunks: Các đoạn tài liệu đã truy hồi.
         coverage: Độ phủ truy hồi (0-1) — dưới ngưỡng thì phải từ chối.
         context: Chunk đã ghép thành text để nhét vào prompt.
@@ -41,11 +44,16 @@ class AgentState(TypedDict, total=False):
         tool_citations: Nguồn từ tool (kind="db"), guardrail gộp vào citations.
         tools_ran: Tên các tool đã chạy — để stream báo cho người dùng biết
             trợ lý đang làm gì thay vì ngồi nhìn màn hình trống.
-        plan_action: Quyết định của node plan: "act" · "answer" · "clarify".
+        tool_filters: Tiêu chí từng tool đã dùng, để giao diện đồng bộ bộ lọc
+            trên trang tìm kiếm với thứ trợ lý vừa trả lời.
+        plan_action: Quyết định của node plan: "act" · "answer" · "clarify"
+            · "retrieve".
         plan_reason: Lý do ngắn gọn, hiện thẳng cho người dùng thấy agent
             đang nghĩ gì.
         plan_tool: Tool mà plan chọn gọi (chỉ có nghĩa khi plan_action="act").
         plan_args: Tham số cho tool đó.
+        plan_options: Vài phương án trả lời sẵn kèm câu hỏi ngược, để người
+            dùng bấm chọn thay vì phải gõ lại (chỉ có khi plan_action="clarify").
         iterations: Số vòng plan → act đã chạy. Có trần cứng để một câu hỏi xấu
             không đốt sạch quota.
         da_thu: Chữ ký các hành động đã thử — để nhận ra agent đang lặp lại
@@ -63,6 +71,7 @@ class AgentState(TypedDict, total=False):
 
     intent: Intent
     needs_retrieval: bool
+    da_truy_hoi: bool
 
     chunks: list[Chunk]
     coverage: float
@@ -71,11 +80,13 @@ class AgentState(TypedDict, total=False):
     tool_context: str
     tool_citations: list[Citation]
     tools_ran: list[str]
+    tool_filters: dict[str, Any]
 
     plan_action: str
     plan_reason: str
     plan_tool: str
     plan_args: dict[str, Any]
+    plan_options: list[str]
     iterations: int
     da_thu: list[str]
 
@@ -102,8 +113,11 @@ def initial_state(
         tool_context="",
         tool_citations=[],
         tools_ran=[],
+        tool_filters={},
         iterations=0,
         da_thu=[],
+        da_truy_hoi=False,
+        plan_options=[],
         coverage=0.0,
         is_sensitive=False,
         metadata={},

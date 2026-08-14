@@ -185,9 +185,22 @@ async def _mark_removed_listings(store: VectorStore, documents: list, source_sit
         logger.info("Đánh dấu %d tin %s đã gỡ khỏi site là hết hiệu lực", len(stale), source_site)
 
 
+# Qdrant CHỈ chứa tài liệu chính sách (`doc_kind="policy"`). Ba nguồn tin rao —
+# `inventory`, `batdongsan`, `meeyland` — đã bị gỡ khỏi bảng này có chủ đích:
+#
+# * `batdongsan` và `meeyland` là tin rao của MÔI GIỚI KHÁC, cùng dự án nhưng
+#   không phải kho của công ty, kèm giá họ tự niêm yết và số điện thoại của họ.
+#   Khi một tool tồn kho lỡ không chạy, truy hồi rơi xuống 864 chunk này và trợ
+#   lý giới thiệu hàng của sàn khác cho khách của mình — đã xảy ra thật với câu
+#   "tìm các căn khoảng giá 3 tỷ", trích ra "Mã tin: 307426397".
+#
+# * `inventory` thì nhân bản 100 căn từ Postgres vào Qdrant, tạo đúng hai nguồn
+#   số liệu mà CLAUDE.md cấm. Giá và tình trạng căn đổi hàng ngày; RAG là bản
+#   chụp. Tồn kho đi qua tool `inventory_lookup` / `inventory_search`, đọc thẳng
+#   `inventory_units`.
+#
+# Muốn tham khảo mặt bằng giá thị trường thì nạp vào COLLECTION RIÊNG, đừng để
+# chung chỗ trợ lý tra tồn kho.
 SOURCES: dict[str, Callable[[IngestPipeline, VectorStore], Awaitable[IngestResult]]] = {
-    "inventory": ingest_inventory,
-    "batdongsan": ingest_batdongsan,
-    "meeyland": ingest_meeyland,
     "knowledge": ingest_knowledge,
 }

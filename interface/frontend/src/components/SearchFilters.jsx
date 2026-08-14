@@ -8,7 +8,7 @@ const PRICE_MAX = 20;
 
 const DEFAULT_FILTERS = { tower: '', priceMin: '', priceMax: '', type: '' };
 
-export default function SearchFilters({ onSearch, loading, types = [] }) {
+export default function SearchFilters({ onSearch, loading, types = [], value }) {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [towers, setTowers] = useState([]);
   const [error, setError] = useState('');
@@ -18,6 +18,13 @@ export default function SearchFilters({ onSearch, loading, types = [] }) {
       .then(setTowers)
       .catch(() => setTowers([])); // Không có bảng towers thì để dropdown rỗng, không chặn tìm kiếm.
   }, []);
+
+  // Bộ lọc thật nằm trên URL. Đồng bộ xuống các ô để khi trợ lý S lọc hộ, người
+  // dùng nhìn thấy ĐÚNG tiêu chí đang áp dụng chứ không phải ô trống.
+  const khoaUrl = JSON.stringify(value ?? {});
+  useEffect(() => {
+    setFilters({ ...DEFAULT_FILTERS, ...(value ?? {}) });
+  }, [khoaUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const update = (key) => (event) => setFilters({ ...filters, [key]: event.target.value });
 

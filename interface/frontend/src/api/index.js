@@ -22,12 +22,15 @@ export function logout() {
 }
 
 // ---- Căn hộ ----
-export function searchApartments({ tower, priceMin, priceMax, type } = {}) {
+export function searchApartments({ tower, priceMin, priceMax, priceMaxExclusive, type } = {}) {
   return request('/api/apartments', {
     params: {
       tower,
       price_min: priceMin,
       price_max: priceMax,
+      // Trợ lý S bật cờ này cho câu "dưới 3 tỷ" — loại luôn căn giá đúng 3 tỷ,
+      // để lưới bên trái đếm ra cùng con số với câu trả lời trong chat.
+      price_max_exclusive: priceMaxExclusive || undefined,
       type,
     },
   });

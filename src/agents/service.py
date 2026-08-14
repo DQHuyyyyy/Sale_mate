@@ -22,6 +22,7 @@ from src.agents.contracts import LLMProvider
 from src.agents.graph import CONTEXT_NODES
 from src.agents.nodes.generate import build_messages
 from src.agents.nodes.guardrail import INSUFFICIENT_MESSAGE
+from src.agents.nodes.plan import RETRIEVE
 from src.agents.state import AgentState, initial_state
 from src.core.config import Settings
 from src.core.exceptions import SalesMateError, UpstreamError
@@ -113,7 +114,15 @@ class LangGraphAgentService:
                         content=state.get("plan_reason", ""),
                         session_id=session_id,
                     )
-                    yield ChatEvent(type=ChatEventType.DONE, session_id=session_id)
+                    # Phương án chọn sẵn đi kèm event DONE, trong `data` — khoá
+                    # mở rộng tự do, không phải đụng vào hợp đồng ChatEvent.
+                    # Gắn vào DONE chứ không phải TOKEN vì FE cần biết câu hỏi
+                    # ngược đã hết chữ rồi mới dựng nút bấm.
+                    yield ChatEvent(
+                        type=ChatEventType.DONE,
+                        session_id=session_id,
+                        data={"options": state.get("plan_options", [])},
+                    )
                     return
 
                 # Có dữ liệu từ tool thì KHÔNG từ chối, dù truy hồi tài liệu
@@ -219,6 +228,21 @@ class LangGraphAgentService:
                     data={"step": "plan", "action": state.get("plan_action", "")},
                 )
 
+            # Plan đòi tra tài liệu trước khi kết luận. Chạy chính node retrieve
+            # của graph rồi quay lại plan — cùng một node object, nên stream và
+            # graph không thể lệch hành vi.
+            if state.get("plan_action") == RETRIEVE:
+                retrieve = self._nodes.get("retrieve")
+                if retrieve is None:
+                    return
+                state.update(await retrieve(state))
+                yield ChatEvent(
+                    type=ChatEventType.ROUTE,
+                    session_id=session_id,
+                    data={"step": "retrieve", "found": len(state.get("chunks", []))},
+                )
+                continue
+
             if state.get("plan_action") != "act":
                 return
 
@@ -271,6 +295,9 @@ class LangGraphAgentService:
                         "tools": ran,
                         # Phân biệt "đã tra nhưng không thấy" với "chưa tra gì".
                         "found": bool(state.get("tool_context")),
+                        # Tiêu chí đã lọc, để giao diện đồng bộ danh sách bên
+                        # ngoài với câu trả lời trong chat.
+                        "filters": state.get("tool_filters", {}),
                     },
                 )
             ]
