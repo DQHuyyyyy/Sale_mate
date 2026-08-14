@@ -182,15 +182,22 @@ class TestKhongCoToken:
 
 
 class TestHanMucChat:
-    def test_khach_bi_chan_sau_khi_vuot_han_muc(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    @staticmethod
+    def _chuan_bi(monkeypatch: pytest.MonkeyPatch, *, bat_han_muc: bool) -> TestClient:
         async def fake_reply(message, history, session_id=None):
             return "trả lời mẫu"
 
         monkeypatch.setattr(chat_router, "generate_reply", fake_reply)
+        # Neo cờ tường minh: `.env` của máy dev có thể đang tắt hạn mức để tự
+        # test, và test không được đổi kết quả theo cấu hình từng máy.
+        monkeypatch.setattr(chat_router.settings, "chat_rate_limit_enabled", bat_han_muc)
         # Bộ đếm dùng chung cả tiến trình, phải làm sạch trước khi đo.
         chat_router._gioi_han_khach._hits.clear()
+        return TestClient(app)
 
-        client = TestClient(app)
+    def test_khach_bi_chan_sau_khi_vuot_han_muc(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = self._chuan_bi(monkeypatch, bat_han_muc=True)
+
         body = {"message": "chào", "history": []}
         for lan in range(chat_router.KHACH_MOI_10_PHUT):
             assert client.post("/api/chat", json=body).status_code == 200, lan
@@ -198,3 +205,11 @@ class TestHanMucChat:
         response = client.post("/api/chat", json=body)
         assert response.status_code == 429
         assert "Retry-After" in response.headers
+
+    def test_tat_han_muc_thi_goi_bao_nhieu_cung_duoc(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Cờ tắt phải thật sự bỏ qua bộ đếm, không chỉ nới rộng nó."""
+        client = self._chuan_bi(monkeypatch, bat_han_muc=False)
+
+        body = {"message": "chào", "history": []}
+        for lan in range(chat_router.KHACH_MOI_10_PHUT + 5):
+            assert client.post("/api/chat", json=body).status_code == 200, lan

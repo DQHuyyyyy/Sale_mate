@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from src.agents.contracts import AgentTool, ToolResult
 from src.agents.state import Intent
+from src.agents.tools.args import doc_tham_so
 from src.agents.tools.registry import register_tool
 from src.data.stores.inventory_db import get_inventory_db
 
@@ -75,7 +76,7 @@ class InventoryLookupTool(AgentTool):
 
     async def run(self, **kwargs: Any) -> ToolResult:
         try:
-            args = InventoryArgs(**kwargs)
+            args, _ = doc_tham_so(InventoryArgs, kwargs)
         except Exception as exc:  # noqa: BLE001 - trả lỗi cho agent, không làm đứt luồng
             return ToolResult.failure(f"Tham số không hợp lệ: {exc}")
 

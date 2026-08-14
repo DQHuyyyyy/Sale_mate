@@ -1038,10 +1038,32 @@ table.data tbody tr:hover {
    đây là thứ chứng minh trợ lý không bịa, không phải chú thích cho có. */
 .ctl-trich {
   display: inline;
-  font-size: 12px;
+  font-size: 11px;
   font-style: italic;
   color: var(--faint);
   white-space: nowrap;
+}
+/* Trích nguồn là mã căn thì bấm được để mở căn đó bên trái. Dùng <button> chứ
+   không phải <span onClick> để bàn phím và trình đọc màn hình dùng được; reset
+   phần nền/viền mặc định của nút cho nó nằm gọn trong dòng chữ. */
+.ctl-trich-nut {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--brand);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+.ctl-trich-nut:hover {
+  text-decoration-style: solid;
+}
+.ctl-trich-nut:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 3px;
 }
 
 /* Bảng so sánh. Bọc ngoài để cuộn ngang thay vì tràn ra khỏi khung chat. */

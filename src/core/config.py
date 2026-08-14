@@ -40,7 +40,10 @@ class Settings(BaseSettings):
     llm_model_answer: str = "gpt-4o"
     llm_model_fast: str = "gpt-4o-mini"
     llm_temperature: float = Field(default=0.3, ge=0.0, le=2.0)
-    llm_max_tokens: int = Field(default=1024, gt=0)
+    # 2048 chứ không phải 1024: câu "liệt kê các căn dưới 3 tỷ" trả 21 căn đã
+    # ngốn ~950 token, sát trần cũ. Chạm trần thì câu trả lời đứt giữa chừng —
+    # hỏng câm, không có lỗi nào báo ra.
+    llm_max_tokens: int = Field(default=2048, gt=0)
     llm_timeout_s: float = Field(default=60.0, gt=0)
 
     # ---------- Vector store ----------

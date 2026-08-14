@@ -6,6 +6,7 @@ registry. Thêm tool mới = tạo file + thêm một dòng import bên dưới.
 
 from src.agents.tools import (
     inventory,  # noqa: F401 - import để tool tự đăng ký
+    khoan_vay,  # noqa: F401 - import để tool tự đăng ký
     search,  # noqa: F401 - import để tool tự đăng ký
     summary,  # noqa: F401 - import để tool tự đăng ký
 )

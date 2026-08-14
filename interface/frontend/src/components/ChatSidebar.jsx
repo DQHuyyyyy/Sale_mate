@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getApartment, streamChatMessage } from '../api';
 import CauTraLoi from './CauTraLoi';
@@ -72,6 +72,9 @@ function boLocTuTieuChi(filters) {
   const params = {};
   if (c.price_min != null) params.priceMin = String(c.price_min);
   if (c.price_max != null) params.priceMax = String(c.price_max);
+  // "dưới 3 tỷ" loại luôn căn giá đúng 3 tỷ. Không truyền cờ này thì chat đếm
+  // 21 căn còn lưới bên trái hiện 25, người dùng thấy ngay hai số vênh nhau.
+  if (c.price_max_nghiem_ngat) params.priceMaxExclusive = 'true';
   if (c.building) params.tower = c.building;
   if (c.unit_type) params.type = c.unit_type;
 
@@ -228,6 +231,12 @@ export default function ChatSidebar({ open, onToggle }) {
               const boLoc = boLocTuTieuChi(event.data.filters);
               if (boLoc) navigate({ pathname: '/', search: `?${new URLSearchParams(boLoc)}` });
             }
+          } else if (event.type === 'done') {
+            // Trợ lý hỏi ngược thì kèm sẵn vài phương án bấm được. Gắn vào
+            // đúng bong bóng vừa trả lời, không để state riêng — người dùng
+            // cuộn lên vẫn thấy các lựa chọn của lượt cũ.
+            const chon = event.data?.options;
+            if (Array.isArray(chon) && chon.length) capNhat({ options: chon });
           } else if (event.type === 'error') {
             capNhat({ content: event.content, error: true });
           }
@@ -321,14 +330,44 @@ export default function ChatSidebar({ open, onToggle }) {
         {messages
           .filter((item) => item.content)
           .map((item, index) => (
-            <div
-              key={item.id ?? index}
-              className={item.role === 'user' ? 'cmsg u' : item.error ? 'cmsg a err' : 'cmsg a'}
-            >
-              {/* Tin của người dùng giữ nguyên văn — họ gõ gì hiện đúng thế.
-                  Chỉ câu trả lời của trợ lý mới dựng markdown. */}
-              {item.role === 'user' ? item.content : <CauTraLoi text={item.content} />}
-            </div>
+            // Fragment chứ KHÔNG phải div bọc: `.cw-body` là flex column và
+            // `.cmsg.u` canh phải bằng `align-self`, thứ chỉ có tác dụng lên
+            // con TRỰC TIẾP của flex container. Bọc thêm một lớp div là bong
+            // bóng của người dùng tụt về bên trái.
+            <Fragment key={item.id ?? index}>
+              <div
+                className={item.role === 'user' ? 'cmsg u' : item.error ? 'cmsg a err' : 'cmsg a'}
+              >
+                {/* Tin của người dùng giữ nguyên văn — họ gõ gì hiện đúng thế.
+                    Chỉ câu trả lời của trợ lý mới dựng markdown.
+
+                    `onChonCan` biến trích nguồn dạng mã căn thành nút mở đúng
+                    căn đó bên trái. Điều hướng để ở đây, không đưa vào
+                    CauTraLoi: component đó chỉ dựng chữ, không nên biết tới
+                    router. */}
+                {item.role === 'user' ? (
+                  item.content
+                ) : (
+                  <CauTraLoi
+                    text={item.content}
+                    onChonCan={(ma) => navigate(`/apartments/${encodeURIComponent(ma)}`)}
+                  />
+                )}
+              </div>
+
+              {/* Phương án chọn sẵn cho câu hỏi ngược. Dùng lại đúng lớp `qa`
+                  của gợi ý mở đầu — cùng ý nghĩa "bấm để hỏi luôn" thì nên
+                  trông giống nhau. Ô nhập vẫn mở, ai muốn gõ tay vẫn gõ. */}
+              {item.options?.length > 0 && (
+                <div className="qa" role="group" aria-label="Phương án gợi ý">
+                  {item.options.map((text) => (
+                    <button key={text} disabled={sending} onClick={() => ask(text)}>
+                      {text}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </Fragment>
           ))}
 
         {/* Chấm nhấp nháy chạy SUỐT từ lúc gửi tới lúc chữ đầu tiên hiện ra,

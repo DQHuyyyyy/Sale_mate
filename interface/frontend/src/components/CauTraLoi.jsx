@@ -62,12 +62,33 @@ function dungInDam(text, khoa) {
     );
 }
 
+// Trích nguồn là mã căn thì bấm được để mở đúng căn đó. Tên tài liệu ("Chính
+// sách hỗ trợ lãi suất…") thì không — chưa có trang riêng cho tài liệu, làm nó
+// trông bấm được mà bấm không ra gì còn tệ hơn để chữ thường.
+const LA_MA_CAN = /^[A-Za-z]{2,4}\d{2,5}$/;
+
+/** Một tên nguồn: nút bấm nếu là mã căn, chữ thường nếu không. */
+function MotNguon({ ten, onChonCan }) {
+  if (!onChonCan || !LA_MA_CAN.test(ten)) return `"${ten}"`;
+  return (
+    <button type="button" className="ctl-trich-nut" onClick={() => onChonCan(ten)}>
+      &quot;{ten}&quot;
+    </button>
+  );
+}
+
 /** Dựng một đoạn chữ: in đậm + trích nguồn. */
-function dungChu(text, khoa) {
+function dungChu(text, khoa, onChonCan) {
   return tachTrichDan(String(text)).map((phan, i) =>
     phan.trich ? (
       <em key={`${khoa}-t${i}`} className="ctl-trich">
-        Trích {phan.trich.map((ten) => `"${ten}"`).join(', ')}
+        Trích{' '}
+        {phan.trich.map((ten, j) => (
+          <span key={ten}>
+            {j > 0 && ', '}
+            <MotNguon ten={ten} onChonCan={onChonCan} />
+          </span>
+        ))}
       </em>
     ) : (
       <span key={`${khoa}-c${i}`}>{dungInDam(phan.chu, `${khoa}-${i}`)}</span>
@@ -87,7 +108,7 @@ const tachO = (dong) =>
     .split('|')
     .map((o) => o.trim());
 
-function DungBang({ dong, khoa }) {
+function DungBang({ dong, khoa, onChonCan }) {
   const hang = dong.filter((d) => !laDongNgan(d)).map(tachO);
   if (!hang.length) return null;
   const [dau, ...than] = hang;
@@ -99,7 +120,7 @@ function DungBang({ dong, khoa }) {
         <thead>
           <tr>
             {dau.map((o, i) => (
-              <th key={i}>{dungChu(o, `${khoa}-h${i}`)}</th>
+              <th key={i}>{dungChu(o, `${khoa}-h${i}`, onChonCan)}</th>
             ))}
           </tr>
         </thead>
@@ -107,7 +128,7 @@ function DungBang({ dong, khoa }) {
           {than.map((r, i) => (
             <tr key={i}>
               {r.map((o, j) => (
-                <td key={j}>{dungChu(o, `${khoa}-${i}-${j}`)}</td>
+                <td key={j}>{dungChu(o, `${khoa}-${i}-${j}`, onChonCan)}</td>
               ))}
             </tr>
           ))}
@@ -117,7 +138,7 @@ function DungBang({ dong, khoa }) {
   );
 }
 
-export default function CauTraLoi({ text }) {
+export default function CauTraLoi({ text, onChonCan }) {
   const dong = String(text ?? '').split('\n');
   const phanTu = [];
   let danhSach = [];
@@ -128,7 +149,7 @@ export default function CauTraLoi({ text }) {
     phanTu.push(
       <ul key={`ul-${khoa}`} className="ctl-ds">
         {danhSach.map((item, i) => (
-          <li key={i}>{dungChu(item, `${khoa}-${i}`)}</li>
+          <li key={i}>{dungChu(item, `${khoa}-${i}`, onChonCan)}</li>
         ))}
       </ul>,
     );
@@ -137,7 +158,7 @@ export default function CauTraLoi({ text }) {
 
   const xaBang = (khoa) => {
     if (!bang.length) return;
-    phanTu.push(<DungBang dong={bang} khoa={khoa} key={`b-${khoa}`} />);
+    phanTu.push(<DungBang dong={bang} khoa={khoa} onChonCan={onChonCan} key={`b-${khoa}`} />);
     bang = [];
   };
 
@@ -157,7 +178,7 @@ export default function CauTraLoi({ text }) {
     }
 
     xaDanhSach(i);
-    if (line) phanTu.push(<p key={`p-${i}`}>{dungChu(line, i)}</p>);
+    if (line) phanTu.push(<p key={`p-${i}`}>{dungChu(line, i, onChonCan)}</p>);
   });
 
   xaDanhSach('cuoi');

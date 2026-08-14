@@ -5,11 +5,12 @@ câu hỏi cùng những gì đã thu được, rồi chọn một trong ba hàn
 mỗi lần hành động, nên nó vừa là bước quan sát vừa là bước quyết định — đúng
 kiểu observe-then-decide, không tách thành hai node cho một việc.
 
-    act      gọi thêm một tool để lấy dữ kiện còn thiếu
-    clarify  câu hỏi mơ hồ, hỏi lại người dùng thay vì đoán
-    answer   đã đủ, chuyển sang sinh câu trả lời
+    act       gọi thêm một tool để lấy dữ kiện còn thiếu
+    retrieve  đi tra kho tài liệu trước khi kết luận
+    clarify   câu hỏi mơ hồ, hỏi lại người dùng thay vì đoán
+    answer    đã đủ, chuyển sang sinh câu trả lời
 
-Ba thứ giữ cho nó không chạy loạn:
+Bốn thứ giữ cho nó không chạy loạn:
 
 1. **Trần cứng.** Hết `agent_max_iterations` là ép `answer`, model không có
    quyền xin thêm. Thiếu cái này thì một câu hỏi xấu gọi tool đến hết quota.
@@ -17,6 +18,8 @@ Ba thứ giữ cho nó không chạy loạn:
    sai thì rơi về `answer` chứ không thử đoán.
 3. **Không lặp lại chính mình.** Hành động trùng với thứ đã thử là dấu hiệu
    agent kẹt — gọi lại cũng ra kết quả cũ, nên cắt sớm thay vì đốt nốt trần.
+4. **Không bỏ cuộc khi chưa tra cứu.** Ba chốt trên đều chặn agent làm QUÁ
+   NHIỀU; chốt này chặn nó làm quá ít. Xem `_phai_tra_cuu_truoc`.
 
 `LLMProvider` là contract đóng băng và không có API tool-calling, nên plan yêu
 cầu model trả JSON qua `complete()` rồi tự parse — cùng cách RouterNode lấy nhãn.
@@ -41,6 +44,11 @@ logger = get_logger(__name__)
 ACT = "act"
 ANSWER = "answer"
 CLARIFY = "clarify"
+RETRIEVE = "retrieve"
+
+# Số phương án chọn sẵn tối đa kèm một câu hỏi ngược. Nhiều hơn thì người dùng
+# phải đọc thay vì bấm, mất luôn ý nghĩa của việc gợi sẵn.
+_TOI_DA_PHUONG_AN = 4
 
 _PROMPT = """Bạn là bộ điều phối của trợ lý bán căn hộ. Chọn ĐÚNG MỘT hành động tiếp theo.
 
@@ -55,11 +63,21 @@ Các tool có thể gọi:
 
 Hành động cho phép:
 - "act": còn thiếu dữ kiện và có tool lấy được. Phải nêu "tool" và "args".
-- "clarify": câu hỏi quá mơ hồ để tra cứu (thiếu mã căn, thiếu tiêu chí). Nêu câu hỏi ngược lại ở "reason".
-- "answer": đã đủ dữ kiện, hoặc không tool nào giúp được.
+- "clarify": ĐÃ tra cứu nhưng dữ kiện phủ nhiều khả năng khác nhau, cần người
+  dùng chọn. Nêu câu hỏi ngược ở "reason" và các phương án ở "options".
+- "answer": đã đủ dữ kiện, hoặc không tool nào giúp được, HOẶC người dùng chỉ
+  đang xã giao (chào hỏi, cảm ơn, tạm biệt) — lúc đó cứ đáp lời, đừng hỏi ngược.
+
+Về "options" (chỉ dùng với "clarify", và chỉ khi CHƯA có tài liệu nào ở phần
+dữ kiện): tối đa {toi_da} chuỗi, mỗi chuỗi là một CỤM DANH TỪ ngắn gọn chỉ chủ
+đề người dùng có thể chọn — ví dụ "Ưu đãi Ocean Park 2", KHÔNG viết thành câu
+hỏi đóng kiểu "Bạn có muốn biết ưu đãi Ocean Park 2 không?".
+
+Chỉ nêu thứ CÓ THẬT trong dữ kiện. Đừng liệt kê phương án mà bạn không thấy dữ
+liệu nào chứng minh là tồn tại.
 
 Trả về DUY NHẤT một object JSON, không giải thích, không bọc trong markdown:
-{{"action": "...", "tool": "...", "args": {{}}, "reason": "một câu ngắn bằng tiếng Việt"}}"""
+{{"action": "...", "tool": "...", "args": {{}}, "options": [], "reason": "một câu ngắn bằng tiếng Việt"}}"""
 
 # Model hay bọc JSON trong ```json ... ``` dù đã dặn đừng.
 _JSON_BLOCK = re.compile(r"\{.*\}", re.DOTALL)
@@ -71,12 +89,97 @@ _MA_CAN = re.compile(r"\b[A-Za-z]{2,4}\d{2,5}\b")
 _TOOL_TRA_MA_CAN = "inventory_lookup"
 
 
+def _phuong_an_tu_tai_lieu(state: AgentState) -> list[str]:
+    """Phương án lấy thẳng TÊN TÀI LIỆU đã truy hồi, không hỏi model.
+
+    Vì sao không để model tự nghĩ: nó gợi ý thứ không tồn tại. Ca thật — kho chỉ
+    có ưu đãi của Ocean Park 2 và 3, model vẫn chào "ưu đãi của Ocean Park 1".
+    Người dùng bấm vào, agent tra không ra, lại hỏi ngược tiếp; hai lượt trôi đi
+    mà không ai tiến thêm bước nào.
+
+    Tên tài liệu là danh sách những gì THẬT SỰ có, đã xếp theo độ liên quan.
+    Cùng lý lẽ với `_ma_can_con_thieu`: câu hỏi có đáp án khách quan thì đối
+    chiếu dữ liệu, đừng đưa cho model đoán.
+
+    Chúng cũng sẵn là cụm danh từ ("Ưu đãi của Vinhomes OceanPark 2"), đọc như
+    một gợi ý bấm được — hơn hẳn câu hỏi đóng "Bạn có muốn biết… không?" mà
+    bấm vào chỉ như đang trả lời "có".
+    """
+    ten = [(c.doc_title or "").strip() for c in state.get("chunks") or []]
+    return list(dict.fromkeys(t for t in ten if t))[:_TOI_DA_PHUONG_AN]
+
+
+def _doc_phuong_an(data: dict[str, Any]) -> list[str]:
+    """Lọc phương án model trả về — chỉ dùng khi KHÔNG có tài liệu nào.
+
+    Đường dự phòng cho ca clarify sau khi chạy tool: lúc đó không có tên tài
+    liệu nào để bám, đành nhận đề xuất của model. Model hay trả lẫn `null`, số,
+    hoặc object; một phần tử rác làm hỏng cả dãy nút nên lọc ở đây.
+    """
+    tho = data.get("options")
+    if not isinstance(tho, list):
+        return []
+    sach = [t.strip() for t in tho if isinstance(t, str) and t.strip()]
+    return list(dict.fromkeys(sach))[:_TOI_DA_PHUONG_AN]
+
+
+def _gia_tri_cho_phep(o: dict[str, Any]) -> list[str]:
+    """Danh sách giá trị hợp lệ của một trường, nếu schema có khai.
+
+    Trường Optional được pydantic mô tả bằng `anyOf: [{...}, {"type": "null"}]`,
+    nên phải chui vào trong mới thấy `enum`.
+    """
+    if o.get("enum"):
+        return [str(v) for v in o["enum"]]
+    for nhanh in o.get("anyOf") or []:
+        if nhanh.get("enum"):
+            return [str(v) for v in nhanh["enum"]]
+    return []
+
+
+def _kieu(o: dict[str, Any]) -> str:
+    if o.get("type"):
+        return str(o["type"])
+    kieu = [str(n["type"]) for n in (o.get("anyOf") or []) if n.get("type") and n["type"] != "null"]
+    return kieu[0] if kieu else ""
+
+
+def _mo_ta_tham_so(schema: dict[str, Any]) -> str:
+    """Mô tả từng tham số kèm KIỂU, GIÁ TRỊ HỢP LỆ và giải thích.
+
+    Bản đầu chỉ liệt kê tên tham số, vứt hết phần còn lại của JSON Schema. Model
+    thấy có trường tên `sort`, không biết nó nhận giá trị gì, nên điền `"price"`
+    — suy đoán hợp lý nhất có thể. Pydantic từ chối và cả tool hỏng.
+    Đó là lỗi thiết kế phía ta: đưa tờ khai không có nhãn ô rồi trách người điền
+    sai. `SearchArgs` vốn đã khai đủ Literal và description, chỉ là không ai
+    chuyển tiếp cho model.
+    """
+    props = schema.get("properties") or {}
+    if not props:
+        return "    (không có tham số)"
+
+    bat_buoc = set(schema.get("required") or [])
+    dong = []
+    for ten, o in props.items():
+        phan = [f"    - {ten}"]
+        gia_tri = _gia_tri_cho_phep(o)
+        if gia_tri:
+            phan.append(f"(chỉ nhận: {' | '.join(gia_tri)})")
+        elif kieu := _kieu(o):
+            phan.append(f"({kieu})")
+        if ten in bat_buoc:
+            phan.append("[bắt buộc]")
+        if mo_ta := o.get("description"):
+            phan.append(f"— {mo_ta}")
+        dong.append(" ".join(phan))
+    return "\n".join(dong)
+
+
 def _describe_tools(registry: ToolRegistry) -> str:
     lines = []
     for tool in registry.all():
         schema = (tool.args_schema.model_json_schema() if tool.args_schema else {}) or {}
-        params = ", ".join((schema.get("properties") or {}).keys()) or "không có"
-        lines.append(f"- {tool.name}: {tool.description}\n  Tham số: {params}")
+        lines.append(f"- {tool.name}: {tool.description}\n  Tham số:\n{_mo_ta_tham_so(schema)}")
     return "\n".join(lines) or "(không có tool nào)"
 
 
@@ -84,8 +187,18 @@ def _describe_evidence(state: AgentState) -> str:
     parts = []
     if state.get("tool_context"):
         parts.append(f"Từ tool:\n{state['tool_context']}")
-    if state.get("chunks"):
-        parts.append(f"Từ tài liệu: {len(state['chunks'])} đoạn đã truy hồi.")
+
+    chunks = state.get("chunks") or []
+    if chunks:
+        # Nêu TÊN tài liệu, không chỉ đếm số đoạn. Chỉ nói "5 đoạn đã truy hồi"
+        # thì model không biết chúng nói về cái gì, nên khi phải hỏi ngược nó
+        # bịa ra trục lựa chọn — hỏi "loại ưu đãi nào?" trong khi trục mơ hồ
+        # thật là Ocean Park 2 hay 3. Có tên tài liệu là nó thấy đúng trục.
+        ten = list(dict.fromkeys(c.doc_title or c.doc_id for c in chunks))
+        parts.append(
+            "Từ tài liệu, {} đoạn thuộc các tài liệu:\n{}".format(len(chunks), "\n".join(f"- {t}" for t in ten))
+        )
+
     return "\n\n".join(parts) or "(chưa có gì)"
 
 
@@ -157,6 +270,29 @@ class PlanNode(BaseNode):
 
         return None
 
+    @staticmethod
+    def _phai_tra_cuu_truoc(state: AgentState) -> bool:
+        """Đòi hỏi ngược khi chưa hề tra cứu ⇒ bắt đi tra trước.
+
+        Chốt thứ tư, và là chốt duy nhất chặn agent BỎ CUỘC quá sớm.
+
+        Ca thật: "Ocean park có ưu đãi gì" bị router xếp `general` nên node
+        retrieve không chạy. `plan` nhìn vào state rỗng, không có gì để cân
+        nhắc, nên chọn `clarify` — rồi bịa luôn trục mơ hồ, hỏi "loại ưu đãi
+        nào?" trong khi trục thật là Ocean Park 2 hay 3. Truy hồi cho độ phủ
+        0.919 với đúng hai tài liệu đó, agent chỉ là chưa bao giờ nhìn.
+
+        Hỏi ngược mà chưa có bằng chứng thì đoán mò chỗ cần làm rõ. Một lần
+        truy hồi rẻ hơn nhiều so với việc bắt người dùng mất một lượt.
+
+        Chỉ ép ĐÚNG MỘT LẦN: `da_truy_hoi` do node retrieve bật, nên vòng sau
+        điều kiện này sai và `clarify` đi tiếp bình thường — kể cả khi tra
+        xong vẫn không ra gì. Không có đường nào lặp vô hạn ở đây.
+        """
+        if state.get("da_truy_hoi"):
+            return False
+        return not state.get("tool_context") and not state.get("chunks")
+
     def _prompt(self, state: AgentState):
         from src.models.chat import ChatMessage, MessageRole
 
@@ -166,6 +302,7 @@ class PlanNode(BaseNode):
                 query=state.get("query", ""),
                 evidence=_describe_evidence(state),
                 tools=_describe_tools(self._registry),
+                toi_da=_TOI_DA_PHUONG_AN,
             ),
         )
 
@@ -190,7 +327,16 @@ class PlanNode(BaseNode):
         reason = str(data.get("reason", "")).strip()
 
         if action == CLARIFY:
-            return self._quyet(CLARIFY, reason or "Bạn cho mình thêm thông tin để tra cứu chính xác nhé.")
+            if self._phai_tra_cuu_truoc(state):
+                return self._quyet(RETRIEVE, "Tra kho tài liệu trước khi hỏi lại.")
+            # Tài liệu đã truy hồi là nguồn phương án ĐÁNG TIN nhất — nó liệt
+            # kê đúng những gì có thật. Chỉ khi không có tài liệu nào (clarify
+            # sau khi chạy tool) mới nhận đề xuất của model.
+            return self._quyet(
+                CLARIFY,
+                reason or "Bạn cho mình thêm thông tin để tra cứu chính xác nhé.",
+                options=_phuong_an_tu_tai_lieu(state) or _doc_phuong_an(data),
+            )
 
         if action == ACT:
             tool = str(data.get("tool", "")).strip()
@@ -213,10 +359,24 @@ class PlanNode(BaseNode):
         return self._quyet(ANSWER, reason or "Đã đủ dữ kiện để trả lời.")
 
     @staticmethod
-    def _quyet(action: str, reason: str, *, tool: str = "", args: dict | None = None) -> dict[str, Any]:
-        return {
+    def _quyet(
+        action: str,
+        reason: str,
+        *,
+        tool: str = "",
+        args: dict | None = None,
+        options: list[str] | None = None,
+    ) -> dict[str, Any]:
+        quyet: dict[str, Any] = {
             "plan_action": action,
             "plan_reason": reason,
             "plan_tool": tool,
             "plan_args": args or {},
+            "plan_options": options or [],
         }
+        # Quyết định `retrieve` phải tự bật cờ: RetrieveNode thoát ngay khi
+        # `needs_retrieval` tắt, mà ca cần chốt này nhất chính là ca router đã
+        # tắt nó. Không bật thì node chạy rỗng và vòng lặp quay lại y nguyên.
+        if action == RETRIEVE:
+            quyet["needs_retrieval"] = True
+        return quyet

@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     ai_core_url: str = "http://localhost:8001"
     ai_core_timeout: float = 60.0
 
+    # Hạn mức gọi /api/chat. Mặc định BẬT: endpoint này công khai và mỗi lượt
+    # đều tốn tiền model, tắt trên môi trường có người ngoài truy cập là mở cửa
+    # cho người lạ tiêu quota. Chỉ tắt khi tự test.
+    chat_rate_limit_enabled: bool = True
+
     # ---- App ----
     app_host: str = "0.0.0.0"
     app_port: int = 8000

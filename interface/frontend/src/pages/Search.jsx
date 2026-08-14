@@ -5,7 +5,10 @@ import ApartmentList from '../components/ApartmentList';
 import SearchFilters from '../components/SearchFilters';
 import { uniqueTypes } from '../utils/format';
 
-const TRUONG_LOC = ['tower', 'priceMin', 'priceMax', 'type'];
+// `priceMaxExclusive` chỉ do trợ lý S đặt (câu "dưới 3 tỷ"), form không có ô
+// cho nó — ô "Đến" là một khoảng nên vẫn tính cả biên. Vẫn phải nằm trong danh
+// sách này để sống sót qua URL và F5.
+const TRUONG_LOC = ['tower', 'priceMin', 'priceMax', 'priceMaxExclusive', 'type'];
 
 /**
  * Trang chủ: bộ lọc + lưới căn hộ. Backend chỉ trả căn "Còn".

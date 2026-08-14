@@ -237,3 +237,54 @@ async def test_guardrail_gop_nguon_tai_lieu_va_nguon_tool():
     result = await GuardrailNode(0.35)(state)
 
     assert [c.kind for c in result["citations"]] == ["doc", "db"]
+
+
+# ---------------- Retrieve: chọn lọc theo doc_kind ----------------
+
+
+class _GhiFilter:
+    """Retriever ghi lại filter được truyền vào — thứ duy nhất test này quan tâm."""
+
+    def __init__(self) -> None:
+        self.filters = None
+
+    async def retrieve(self, query, *, filters=None, top_k=None, top_n=None):
+        self.filters = filters
+        return RetrievalResult()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("intent", "tool_context", "mong_doi"),
+    [
+        (Intent.DOCUMENT, "", "policy"),
+        (Intent.LEGAL, "", "policy"),
+        # Ca hỏng thật: "tôi có 1 tỷ, mua VOP397 thì vay thế nào" bị xếp `price`,
+        # cả 5 đoạn truy hồi được đều là tin rao, chính sách lãi suất không bao
+        # giờ tới tay model — rồi model tự bịa "ngân hàng cho vay 70-80%".
+        (Intent.PRICE, '[inventory_lookup] {"unit_code": "VOP397"}', "policy"),
+        # Chưa có dữ liệu tool thì tin rao vẫn là câu trả lời đúng.
+        (Intent.PRICE, "", None),
+        (Intent.LISTING, "", None),
+    ],
+)
+async def test_loc_chinh_sach_khi_tool_da_co_du_lieu(intent, tool_context, mong_doi):
+    retriever = _GhiFilter()
+    state = initial_state("hỏi gì đó", "s1")
+    state.update({"needs_retrieval": True, "intent": intent, "tool_context": tool_context})
+
+    await RetrieveNode(retriever)(state)
+
+    assert retriever.filters.doc_kind == mong_doi
+
+
+@pytest.mark.asyncio
+async def test_retrieve_danh_dau_da_tra_cuu():
+    """`chunks` rỗng vừa có nghĩa "tìm không thấy" vừa có nghĩa "chưa tìm" —
+    plan cần phân biệt hai ca đó để không hỏi ngược khi chưa tra cứu lần nào."""
+    state = initial_state("hỏi gì đó", "s1")
+    state["needs_retrieval"] = True
+
+    result = await RetrieveNode(_StubRetriever(RetrievalResult()))(state)
+
+    assert result["da_truy_hoi"] is True
