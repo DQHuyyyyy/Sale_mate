@@ -55,6 +55,7 @@ Thumbs.db
 /eval/results/meeyland_chunks.json
 /eval/results/batdongsan_chunks.json
 /eval/results/inventory_chunks.json
+/eval/results/manual_eval_results.json
 
 # Logs
 logs/
