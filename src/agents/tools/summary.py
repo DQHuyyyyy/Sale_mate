@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from src.agents.contracts import AgentTool, ToolResult
 from src.agents.state import Intent
 from src.agents.tools.registry import register_tool
+from src.agents.tools.search import chuan_hoa, doc_phan_khu
 from src.data.stores.inventory_db import get_inventory_db
 
 _CON_HANG = "available"
@@ -54,12 +55,20 @@ def _extract_args(query: str) -> dict[str, Any] | None:
         return None
     if not any(dau in thap for dau in _DAU_HIEU):
         return None
-    return {}
+
+    # Người dùng nêu phân khu thì PHẢI đếm trong phân khu đó. Thiếu vế này, tool
+    # trả con số toàn kho nằm cạnh con số đã lọc của `inventory_search`, và model
+    # chọn nhầm — đo được: "phân khu 3 còn bao nhiêu căn" trả lời 97 thay vì 30.
+    phan_khu = doc_phan_khu(query)
+    return {"subdivision": phan_khu} if phan_khu else {}
 
 
 class SummaryArgs(BaseModel):
     building: str | None = Field(default=None, description="Chỉ đếm trong một toà, ví dụ 'S210'")
     unit_type: str | None = Field(default=None, description="Chỉ đếm một loại căn, ví dụ '2PN'")
+    subdivision: str | None = Field(
+        default=None, description="Chỉ đếm một phân khu: 'Ocean Park 1', 'Ocean Park 2' hoặc 'Ocean Park 3'"
+    )
 
 
 @register_tool(intents={Intent.LISTING, Intent.PRICE}, build_args=_extract_args)
@@ -86,6 +95,9 @@ class InventorySummaryTool(AgentTool):
                 building=args.building,
                 unit_type=args.unit_type,
             )
+            if args.subdivision:
+                wanted = chuan_hoa(args.subdivision)
+                records = [r for r in records if chuan_hoa(str(r.get("subdivision") or "")) == wanted]
         except Exception as exc:  # noqa: BLE001 - lỗi kết nối DB, không làm đứt luồng
             return ToolResult.failure(f"Không truy vấn được cơ sở dữ liệu tồn kho: {exc}")
 

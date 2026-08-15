@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { createSale, getApartment } from '../api';
 import { BackIcon, HouseIcon } from '../components/Icons';
 import { useAuth } from '../context/AuthContext';
@@ -75,7 +75,21 @@ export default function ApartmentDetail() {
   const { maCan } = useParams();
   const { isSale } = useAuth();
   const [apartment, setApartment] = useState(null);
-  const [activeImage, setActiveImage] = useState(0);
+
+  // Ảnh đang xem nằm trên URL (?anh=2), KHÔNG phải state cục bộ. Trợ lý S là
+  // component anh em ở sidebar, nó cần biết người dùng đang dừng ở ảnh nào để
+  // tính năng "Modify Object" sửa đúng ảnh đó — state cục bộ thì nó không thấy.
+  // Cùng lý do bộ lọc tìm kiếm nằm trên URL, xem đầu Search.jsx. Tiện thể link
+  // chia sẻ và F5 cũng giữ đúng ảnh.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeImage = Math.max(0, Number(searchParams.get('anh') ?? 0) || 0);
+  const setActiveImage = (index) => {
+    const params = new URLSearchParams(searchParams);
+    if (index > 0) params.set('anh', String(index));
+    else params.delete('anh');
+    // `replace` để nút Back của trình duyệt không phải lùi qua từng ảnh đã xem.
+    setSearchParams(params, { replace: true });
+  };
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [sellOpen, setSellOpen] = useState(false);
@@ -101,7 +115,7 @@ export default function ApartmentDetail() {
         <div className="alert alert-error" style={{ marginTop: 26 }}>
           {error}
         </div>
-        <Link className="back-link" to="/">
+        <Link className="back-link" to="/tim-kiem">
           <BackIcon style={{ width: 15, height: 15 }} />
           Về trang tìm kiếm
         </Link>
@@ -110,7 +124,10 @@ export default function ApartmentDetail() {
   }
 
   const images = apartment.images ?? [];
-  const current = images[activeImage];
+  // Kẹp chỉ số: URL do người dùng sửa được, `?anh=99` không được làm mất
+  // ảnh chính thành khung trống.
+  const chiSoAnh = images.length ? Math.min(activeImage, images.length - 1) : 0;
+  const current = images[chiSoAnh];
   const canSell = isSale && apartment.tinh_trang === 'Còn';
 
   return (
@@ -120,6 +137,9 @@ export default function ApartmentDetail() {
           Căn <span className="mono">{apartment.ma_can}</span>
         </h1>
         <p>
+          {/* Phân khu đứng ĐẦU: đó là thứ định vị căn trong đại đô thị, tòa/tầng
+              chỉ có nghĩa khi đã biết phân khu nào. */}
+          {apartment.phan_khu ? `${apartment.phan_khu} · ` : ''}
           Tòa {orDash(apartment.toa)}
           {apartment.tang !== null && apartment.tang !== undefined ? ` · Tầng ${apartment.tang}` : ''}
           {apartment.so_phong ? ` · Phòng ${apartment.so_phong}` : ''}
@@ -143,7 +163,7 @@ export default function ApartmentDetail() {
               {images.map((image, index) => (
                 <button
                   key={image.id}
-                  className={index === activeImage ? 'on' : ''}
+                  className={index === chiSoAnh ? 'on' : ''}
                   onClick={() => setActiveImage(index)}
                   aria-label={`Ảnh ${index + 1}`}
                 >
@@ -166,6 +186,10 @@ export default function ApartmentDetail() {
           </span>
 
           <dl className="spec-list">
+            <div>
+              <dt>Phân khu</dt>
+              <dd>{orDash(apartment.phan_khu)}</dd>
+            </div>
             <div>
               <dt>Diện tích</dt>
               <dd>{formatArea(apartment.dien_tich, apartment.dien_tich_so)}</dd>
@@ -198,7 +222,7 @@ export default function ApartmentDetail() {
         </div>
       </div>
 
-      <Link className="back-link" to="/">
+      <Link className="back-link" to="/tim-kiem">
         <BackIcon style={{ width: 15, height: 15 }} />
         Về trang tìm kiếm
       </Link>

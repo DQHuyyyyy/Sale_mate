@@ -36,6 +36,8 @@ class ApartmentBase(BaseModel):
     gia_tri: Decimal | None = None
     noi_that: str | None = None
     tinh_trang: str | None = None
+    # Ocean Park 1 / 2 / 3 (migration 008).
+    phan_khu: str | None = None
 
 
 class ApartmentListItem(ApartmentBase):

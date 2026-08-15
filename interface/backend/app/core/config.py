@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -41,10 +42,43 @@ class Settings(BaseSettings):
     ai_core_url: str = "http://localhost:8001"
     ai_core_timeout: float = 60.0
 
-    # Hạn mức gọi /api/chat. Mặc định BẬT: endpoint này công khai và mỗi lượt
-    # đều tốn tiền model, tắt trên môi trường có người ngoài truy cập là mở cửa
-    # cho người lạ tiêu quota. Chỉ tắt khi tự test.
+    # Hạn mức cho các endpoint AI TỐN TIỀN — /api/chat và /api/images/modify.
+    # Mặc định BẬT: chúng công khai và mỗi lượt đều tốn tiền model, tắt trên môi
+    # trường có người ngoài truy cập là mở cửa cho người lạ tiêu quota. Chỉ tắt
+    # khi tự test.
     chat_rate_limit_enabled: bool = True
+
+    # ---- Sinh ảnh (Modify Object) ----
+    # Sửa ảnh nội thất theo yêu cầu người dùng. Ảnh KHÔNG được lưu — chỉ trả về
+    # cho phiên chat đang mở, vì đây là ảnh minh hoạ do AI tạo, không phải ảnh
+    # thật của căn.
+    #
+    # Đổi nhà cung cấp bằng biến môi trường, không sửa code — cùng nguyên tắc
+    # `bootstrap.py` của lõi AI dùng cho LLM và vector store.
+    image_provider: Literal["openai", "gemini"] = "openai"
+    image_timeout_s: float = 300.0
+
+    # OPENAI_API_KEY vốn "thuộc về lõi AI" (xem mục Chatbot ở trên). Tính năng
+    # này là ngoại lệ có chủ đích: nó không phải hỏi đáp nên không đi qua lõi AI,
+    # mà vẫn cần một key sinh ảnh. Dùng lại key sẵn có đỡ được một thứ phải cấu
+    # hình trên Render và một hoá đơn phải theo dõi.
+    openai_api_key: str = ""
+    openai_image_model: str = "gpt-image-1-mini"
+    # "auto" để model tự giữ khổ ảnh gốc. Ép "1024x1024" thì ảnh căn hộ (khổ
+    # ngang) bị cắt hoặc bóp méo — đo được: ảnh gốc 1023x767, `auto` trả về
+    # 1536x1024 đúng tỉ lệ.
+    openai_image_size: str = "auto"
+
+    google_api_key: str = ""
+    gemini_image_model: str = "gemini-3.1-flash-image"
+
+    @property
+    def image_edit_key(self) -> str:
+        return self.openai_api_key if self.image_provider == "openai" else self.google_api_key
+
+    @property
+    def image_edit_enabled(self) -> bool:
+        return bool(self.image_edit_key)
 
     # ---- App ----
     app_host: str = "0.0.0.0"

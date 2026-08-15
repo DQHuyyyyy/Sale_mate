@@ -1,15 +1,36 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { getApartment, streamChatMessage } from '../api';
+import { getApartment, modifyApartmentImage, streamChatMessage } from '../api';
 import CauTraLoi from './CauTraLoi';
-import { CloseIcon, RobotMascot, SendIcon } from './Icons';
+import { CloseIcon, PlusIcon, RobotMascot, SendIcon, WandIcon } from './Icons';
 
-const QUICK_ASKS = ['Căn 2PN dưới 4 tỷ', 'Căn còn ở tòa S1', 'Tư vấn view đẹp'];
+// Gợi ý mở đầu. NHÃN và CÂU HỎI tách nhau có chủ đích: nút đọc gọn là
+// "Ocean Park 1", nhưng gửi đúng chữ đó thì trợ lý trả lời về tiện ích chứ
+// không liệt kê căn — đo được. Thêm chữ "Căn ở" là ra đúng danh sách căn.
+const LOI_MOI_MO_DAU = 'Bạn muốn tìm căn ở khu vực nào?';
+const GOI_Y_MO_DAU = [1, 2, 3].map((so) => ({
+  nhan: `Ocean Park ${so}`,
+  cau_hoi: `Căn ở Ocean Park ${so}`,
+}));
 
 // Backend chặn history ở 20 lượt (40 tin nhắn) và trả 422 nếu vượt. Lịch sử
 // giữ nguyên trong sidebar suốt phiên nên sẽ chạm trần đó — cắt bớt trước khi
 // gửi, giữ 30 tin gần nhất để còn biên an toàn.
 const MAX_HISTORY = 30;
+
+// Chế độ của ô nhập. Menu "+" mở ra các tính năng ngoài hỏi đáp; hiện mới có
+// một, nhưng khai thành bảng để thêm mục sau chỉ là thêm một dòng.
+const MODIFY = 'modify';
+const TINH_NANG = [
+  {
+    ma: MODIFY,
+    ten: 'Modify Object',
+    mo_ta: 'Sửa nội thất trong ảnh đang xem',
+    // Cần một ảnh cụ thể làm gốc, nên phải đang mở trang chi tiết một căn.
+    can_anh: true,
+    goi_y: 'Ví dụ: đổi sofa hiện tại thành màu nâu',
+  },
+];
 
 /**
  * Tiêu đề cho lời mời, ghép từ dữ liệu THẬT của căn.
@@ -44,11 +65,12 @@ function themNguCanh(message, maCan) {
 }
 
 /** Câu hỏi gợi ý khi người dùng đang mở một căn cụ thể. */
-const goiYTheoCan = (maCan) => [
-  `Phân tích chi tiết căn ${maCan}`,
-  `Căn ${maCan} còn không, giá bao nhiêu?`,
-  `Có căn nào tương tự ${maCan} không?`,
-];
+const goiYTheoCan = (maCan) =>
+  [
+    `Phân tích chi tiết căn ${maCan}`,
+    `Căn ${maCan} còn không, giá bao nhiêu?`,
+    `Có căn nào tương tự ${maCan} không?`,
+  ].map((cau) => ({ nhan: cau, cau_hoi: cau }));
 
 const TEN_TOOL = {
   inventory_lookup: 'thông tin căn',
@@ -75,6 +97,7 @@ function boLocTuTieuChi(filters) {
   // "dưới 3 tỷ" loại luôn căn giá đúng 3 tỷ. Không truyền cờ này thì chat đếm
   // 21 căn còn lưới bên trái hiện 25, người dùng thấy ngay hai số vênh nhau.
   if (c.price_max_nghiem_ngat) params.priceMaxExclusive = 'true';
+  if (c.subdivision) params.subdivision = c.subdivision;
   if (c.building) params.tower = c.building;
   if (c.unit_type) params.type = c.unit_type;
 
@@ -129,10 +152,17 @@ export default function ChatSidebar({ open, onToggle }) {
   const bodyRef = useRef(null);
   const inputRef = useRef(null);
 
+  // Menu "+" đang mở mục nào. null = chat thường.
+  const [menuMo, setMenuMo] = useState(false);
+  const [cheDo, setCheDo] = useState(null);
+
   // Đang xem căn nào thì đọc thẳng từ URL, không cần tầng state dùng chung.
   const navigate = useNavigate();
-  const khop = useLocation().pathname.match(/^\/apartments\/([^/]+)/);
+  const vitri = useLocation();
+  const khop = vitri.pathname.match(/^\/apartments\/([^/]+)/);
   const maCanDangXem = khop ? decodeURIComponent(khop[1]) : null;
+  // Ảnh đang xem cũng nằm trên URL — xem lý do ở đầu ApartmentDetail.jsx.
+  const chiSoAnhDangXem = Math.max(0, Number(new URLSearchParams(vitri.search).get('anh') ?? 0) || 0);
   const [canDangXem, setCanDangXem] = useState(null);
 
   // Đổi sang căn khác thì cho phép mời lại, và nạp vài thông tin để lời mời nói
@@ -229,7 +259,7 @@ export default function ChatSidebar({ open, onToggle }) {
             // sách rỗng còn khó hiểu hơn là để nguyên.
             if (event.data?.step === 'tools' && event.data?.found) {
               const boLoc = boLocTuTieuChi(event.data.filters);
-              if (boLoc) navigate({ pathname: '/', search: `?${new URLSearchParams(boLoc)}` });
+              if (boLoc) navigate({ pathname: '/tim-kiem', search: `?${new URLSearchParams(boLoc)}` });
             }
           } else if (event.type === 'done') {
             // Trợ lý hỏi ngược thì kèm sẵn vài phương án bấm được. Gắn vào
@@ -253,10 +283,64 @@ export default function ChatSidebar({ open, onToggle }) {
     }
   };
 
+  /**
+   * Modify Object — sửa ảnh đang xem theo yêu cầu bằng lời.
+   *
+   * Không đi qua lõi AI: `ChatRequest` là hợp đồng đóng băng, không có chỗ cho
+   * `image_id`, và đây là thao tác một bước không cần router/retrieve/plan.
+   */
+  const suaAnh = async (text) => {
+    const yeuCau = text.trim();
+    if (!yeuCau || sending || !maCanDangXem) return;
+
+    const anh = canDangXem?.images?.[chiSoAnhDangXem];
+    if (!anh) {
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'Căn này chưa có ảnh nào để sửa.', error: true },
+      ]);
+      return;
+    }
+
+    const id = `${Date.now()}-${Math.random()}`;
+    setMessages((prev) => [
+      ...prev,
+      { role: 'user', content: yeuCau },
+      { id, role: 'assistant', content: '' },
+    ]);
+    setInput('');
+    setCheDo(null);
+    setSending(true);
+    // Đo được 40-60 giây. Nói trước thời gian để người dùng không tưởng treo.
+    setBuoc('Đang dựng ảnh, mất khoảng một phút…');
+    setDangTraLoi(false);
+
+    try {
+      const ket_qua = await modifyApartmentImage({ maCan: maCanDangXem, imageId: anh.id, yeuCau });
+      setMessages((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? { ...item, content: `Ảnh căn ${maCanDangXem} sau khi ${yeuCau}`, anhAI: ket_qua.anh }
+            : item,
+        ),
+      );
+    } catch (error) {
+      setMessages((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, content: error.message, error: true } : item)),
+      );
+    } finally {
+      setSending(false);
+      setBuoc('');
+    }
+  };
+
+  /** Ô nhập dùng chung cho hỏi đáp và cho Modify Object — gửi đi đâu tuỳ chế độ. */
+  const gui = () => (cheDo === MODIFY ? suaAnh(input) : ask(input));
+
   const handleKeyDown = (event) => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
-      ask(input);
+      gui();
     }
   };
 
@@ -319,13 +403,18 @@ export default function ChatSidebar({ open, onToggle }) {
         </div>
 
         {messages.length === 0 && (
-          <div className="qa">
-            {(maCanDangXem ? goiYTheoCan(maCanDangXem) : QUICK_ASKS).map((text) => (
-              <button key={text} onClick={() => ask(text)}>
-                {text}
-              </button>
-            ))}
-          </div>
+          <>
+            {/* Chỉ mời chọn khu vực khi người dùng CHƯA mở căn nào. Đang xem một
+                căn mà hỏi ngược "khu vực nào" là bỏ qua thứ họ đang nhìn. */}
+            {!maCanDangXem && <div className="cw-loi-moi">{LOI_MOI_MO_DAU}</div>}
+            <div className="qa">
+              {(maCanDangXem ? goiYTheoCan(maCanDangXem) : GOI_Y_MO_DAU).map((goi_y) => (
+                <button key={goi_y.nhan} onClick={() => ask(goi_y.cau_hoi)}>
+                  {goi_y.nhan}
+                </button>
+              ))}
+            </div>
+          </>
         )}
 
         {/* Bỏ qua bong bóng còn rỗng: nó là chỗ chờ token đầu tiên, hiện ra
@@ -356,6 +445,16 @@ export default function ChatSidebar({ open, onToggle }) {
                     text={item.content}
                     onChonCan={(ma) => navigate(`/apartments/${encodeURIComponent(ma)}`)}
                   />
+                )}
+
+                {/* Ảnh do AI dựng. Nhãn nằm NGAY TRÊN ảnh chứ không phải cuối
+                    tin nhắn: người dùng chụp màn hình gửi cho khách thì nhãn
+                    phải đi theo ảnh, nếu không đó thành ảnh thật của căn. */}
+                {item.anhAI && (
+                  <figure className="cw-anh-ai">
+                    <img src={item.anhAI} alt={item.content} />
+                    <figcaption>Ảnh minh hoạ do AI tạo — không phải ảnh thật của căn</figcaption>
+                  </figure>
                 )}
               </div>
 
@@ -389,22 +488,71 @@ export default function ChatSidebar({ open, onToggle }) {
       </div>
 
       <div className="cw-foot">
+        {/* Menu tính năng. Mục cần ảnh mà chưa mở căn nào thì vẫn hiện nhưng
+            khoá lại, kèm câu chỉ đường — ẩn hẳn thì người dùng không biết
+            tính năng đó tồn tại. */}
+        {menuMo && (
+          <div className="cw-menu" role="menu">
+            {TINH_NANG.map((tn) => {
+              const khoa = tn.can_anh && !maCanDangXem;
+              return (
+                <button
+                  key={tn.ma}
+                  role="menuitem"
+                  disabled={khoa}
+                  onClick={() => {
+                    setCheDo(tn.ma);
+                    setMenuMo(false);
+                    inputRef.current?.focus();
+                  }}
+                >
+                  <WandIcon />
+                  <span>
+                    <b>{tn.ten}</b>
+                    <i>{khoa ? 'Mở một căn hộ trước để dùng tính năng này' : tn.mo_ta}</i>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {cheDo && (
+          <div className="cw-chedo">
+            <WandIcon />
+            <span>
+              {TINH_NANG.find((tn) => tn.ma === cheDo)?.ten}
+              {maCanDangXem && ` · căn ${maCanDangXem}, ảnh ${chiSoAnhDangXem + 1}`}
+            </span>
+            <button aria-label="Thoát chế độ" onClick={() => setCheDo(null)}>
+              <CloseIcon />
+            </button>
+          </div>
+        )}
+
         <div className="cw-inrow">
+          <button
+            className={menuMo ? 'cw-plus on' : 'cw-plus'}
+            aria-label="Tính năng khác"
+            aria-expanded={menuMo}
+            onClick={() => setMenuMo((truoc) => !truoc)}
+          >
+            <PlusIcon />
+          </button>
           <textarea
             ref={inputRef}
             rows={1}
             maxLength={2000}
-            placeholder="Nhập câu hỏi cho Trợ lý S…"
+            placeholder={
+              cheDo
+                ? (TINH_NANG.find((tn) => tn.ma === cheDo)?.goi_y ?? 'Mô tả thay đổi bạn muốn…')
+                : 'Nhập câu hỏi cho Trợ lý S…'
+            }
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={handleKeyDown}
           />
-          <button
-            className="cw-send"
-            aria-label="Gửi"
-            disabled={sending || !input.trim()}
-            onClick={() => ask(input)}
-          >
+          <button className="cw-send" aria-label="Gửi" disabled={sending || !input.trim()} onClick={gui}>
             <SendIcon />
           </button>
         </div>

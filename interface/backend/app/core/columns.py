@@ -29,6 +29,8 @@ COL_SO_DO = '"Số đỏ"'
 COL_GIA = '"Giá"'
 COL_NOI_THAT = '"Nội thất"'
 COL_TINH_TRANG = '"Tình trạng (Còn/Hết)"'
+# Migration 008. Hiện là dữ liệu DEMO gán theo toà, chưa phải số liệu thật.
+COL_PHAN_KHU = '"Phân khu"'
 
 # Cột số do migration 001 thêm. Chưa chạy 001 thì hai cột này chưa tồn tại —
 # xem `app/core/schema.py`.

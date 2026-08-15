@@ -297,7 +297,6 @@ def parse_listing_detail(html: str, url: str, project: ProjectConfig = PROJECT_O
             # Tin rao — tách khỏi tài liệu chính sách để truy hồi lọc được.
             "doc_kind": "listing",
             "version": datetime.now(UTC).date().isoformat(),
-            "doc_kind": "listing",
             **structured_fields,
         },
     )

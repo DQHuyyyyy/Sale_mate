@@ -31,7 +31,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from src.data.contracts import LoadedDocument
-from src.data.ingestion.parsers import sanitize_text
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_KNOWLEDGE_DIR = REPO_ROOT / "data" / "raw" / "knowledge"

@@ -14,7 +14,7 @@ from src.agents.tools.search import InventorySearchTool, extract_criteria, vocab
 from src.data.stores.inventory_db import InventoryDB, inventory_units_table, metadata
 
 
-def _row(code, price, area, status="available", building="S210", unit_type="2PN, 1WC"):
+def _row(code, price, area, status="available", building="S210", unit_type="2PN, 1WC", subdivision="Ocean Park 1"):
     return {
         "unit_code": code,
         "building": building,
@@ -31,14 +31,15 @@ def _row(code, price, area, status="available", building="S210", unit_type="2PN,
         "photos": [],
         "price_value": price,
         "area_value": area,
+        "subdivision": subdivision,
     }
 
 
 _ROWS = [
     _row("VOP001", 2.0, 31),
-    _row("VOP002", 2.5, 45),
+    _row("VOP002", 2.5, 45, subdivision="Ocean Park 2"),
     _row("VOP003", 3.0, 60),  # ĐÚNG biên 3 tỷ
-    _row("VOP004", 4.5, 90),
+    _row("VOP004", 4.5, 90, subdivision="Ocean Park 2"),
     _row("VOP005", 1.8, 28, status="sold"),  # đã bán, không được lọt
     {**_row("VOP006", 0, 0), "price_value": None, "area_value": None},  # không rõ số
 ]
@@ -333,3 +334,49 @@ async def test_tham_so_model_bia_khong_giet_ca_tool():
     assert ket_qua.ok
     assert ket_qua.data["tong_so_khop"] == 3
     assert ket_qua.data["tieu_chi_bo_qua"] == ["sort"]
+
+
+# ---------- Phân khu ----------
+
+
+@pytest.mark.parametrize(
+    ("query", "mong_doi"),
+    [
+        ("căn ở Ocean Park 2", "Ocean Park 2"),
+        ("căn OP3 dưới 3 tỷ", "Ocean Park 3"),
+        ("phân khu 1 có gì", "Ocean Park 1"),
+        ("khu 2 còn căn nào", "Ocean Park 2"),
+        ("căn 2PN ở OceanPark 3", "Ocean Park 3"),
+        # Mã toà chứa chữ số nhưng KHÔNG phải số phân khu.
+        ("tìm căn toà S2", None),
+        ("tìm căn toà S210 2PN", None),
+        # Dự án chỉ có ba phân khu — bắt "khu 7" rồi lọc ra rỗng thì người dùng
+        # không hiểu vì sao.
+        ("căn ở khu 7", None),
+    ],
+)
+def test_rut_phan_khu(query: str, mong_doi: str | None):
+    assert (extract_criteria(query) or {}).get("subdivision") == mong_doi
+
+
+@pytest.mark.asyncio
+async def test_loc_theo_phan_khu():
+    ket_qua = await InventorySearchTool().run(subdivision="Ocean Park 2")
+
+    ma = {r["unit_code"] for r in ket_qua.data["can_hien_thi"]}
+    assert ma == {"VOP002", "VOP004"}
+
+
+@pytest.mark.asyncio
+async def test_loc_phan_khu_bo_qua_hoa_va_khoang_trang():
+    """Dữ liệu ghi "Ocean Park 2" còn model có thể gửi "oceanpark 2"."""
+    ket_qua = await InventorySearchTool().run(subdivision="oceanpark2")
+
+    assert ket_qua.data["tong_so_khop"] == 2
+
+
+@pytest.mark.asyncio
+async def test_phan_khu_ket_hop_voi_gia():
+    ket_qua = await InventorySearchTool().run(subdivision="Ocean Park 2", price_max=3, price_max_nghiem_ngat=True)
+
+    assert {r["unit_code"] for r in ket_qua.data["can_hien_thi"]} == {"VOP002"}

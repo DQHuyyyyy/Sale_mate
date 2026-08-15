@@ -4,6 +4,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './context/AuthContext';
 import ApartmentDetail from './pages/ApartmentDetail';
 import Documents from './pages/Documents';
+import Home from './pages/Home';
 import Login from './pages/Login';
 import MySales from './pages/MySales';
 import Profile from './pages/Profile';
@@ -21,7 +22,8 @@ export default function App() {
 
         <Route element={<Layout />}>
           {/* Công khai — khách vãng lai xem được, backend cũng mở các endpoint này. */}
-          <Route path="/" element={<Search />} />
+          <Route path="/" element={<Home />} />
+          <Route path="/tim-kiem" element={<Search />} />
           <Route path="/zones" element={<Zones />} />
           <Route path="/apartments/:maCan" element={<ApartmentDetail />} />
 

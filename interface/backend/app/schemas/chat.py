@@ -13,7 +13,13 @@ class ChatMessage(BaseModel):
     # min_length khớp với `src/models/chat.py` của lõi AI. Thiếu ràng buộc này
     # thì backend cho lọt tin nhắn rỗng rồi lõi AI mới trả 422 — người dùng nhận
     # một lỗi 502 mơ hồ, còn log lại chỉ ra sai ở tầng trong cùng.
-    content: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
+    #
+    # CỐ Ý KHÔNG có max_length, và đây là chỗ khác `message` bên dưới. Lõi AI
+    # cũng chỉ đặt max_length cho `message`, không đặt cho content của history:
+    # 2000 ký tự là trần của thứ NGƯỜI DÙNG gõ (khớp bộ đếm x/2000 ở widget),
+    # còn history chứa cả câu trả lời do MODEL sinh, dài bao nhiêu không ai
+    # kiểm soát được. Đừng "cho đồng bộ" rồi thêm max_length vào đây.
+    content: str = Field(min_length=1)
 
 
 class ChatRequest(BaseModel):

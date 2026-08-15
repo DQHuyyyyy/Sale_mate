@@ -58,3 +58,17 @@ def test_can_duoi_khong_bi_anh_huong(sql_da_chay: list[str]) -> None:
 
     assert "a.gia_tri >= %s" in sql_da_chay[0]
     assert "a.gia_tri < %s" in sql_da_chay[0]
+
+
+def test_loc_theo_phan_khu(sql_da_chay: list[str]) -> None:
+    """Trợ lý S đẩy bộ lọc này lên URL sau khi trả lời "4 căn ở Ocean Park 2
+    dưới 3 tỷ" — thiếu nó thì lưới bên trái vẫn hiện 21 căn."""
+    TestClient(app).get("/api/apartments", params={"subdivision": "Ocean Park 2"})
+
+    assert '"Phân khu" = %s' in sql_da_chay[0]
+
+
+def test_khong_loc_phan_khu_khi_client_khong_gui(sql_da_chay: list[str]) -> None:
+    TestClient(app).get("/api/apartments")
+
+    assert "Phân khu" not in sql_da_chay[0].split("WHERE")[-1]

@@ -50,6 +50,7 @@ MAX_RESULTS = 30
 # `status` (tool đã lọc chỉ còn căn available).
 _TRUONG_GON = (
     "unit_code",
+    "subdivision",
     "building",
     "unit_type",
     "area_m2",
@@ -86,6 +87,13 @@ _UNIT_CODE = re.compile(r"\b[A-Za-z]{2,4}\d{2,5}\b")
 _NGU_CANH_GIAO_DIEN = re.compile(r"\s*\(căn đang xem:[^)]*\)\s*", re.IGNORECASE)
 # "2 phòng ngủ", "2pn", "2 PN" — số phòng ngủ là tiêu chí hay được hỏi nhất.
 _BEDROOMS = re.compile(r"(\d)\s*(?:phòng\s*ngủ|pn\b)", re.IGNORECASE)
+# Phân khu: "Ocean Park 2", "OceanPark 2", "OP2", "phân khu 2", "khu 3".
+# Chỉ nhận số 1-3 — dự án có đúng ba phân khu, bắt "khu 7" rồi lọc ra rỗng thì
+# người dùng không hiểu vì sao.
+_PHAN_KHU = re.compile(
+    r"(?:ocean\s*park|op|phân\s*khu|phan\s*khu|khu)\s*([123])\b",
+    re.IGNORECASE,
+)
 # "view biển", "view hồ" — lấy ĐÚNG MỘT từ ngay sau chữ "view".
 # Lấy hai từ thì "view hồ tòa R103" thành từ khoá "hồ tòa" và không khớp gì cả.
 # Một từ có thể rộng hơn ý người hỏi, nhưng rộng còn trả về căn thật; sai thì
@@ -343,11 +351,38 @@ def extract_criteria(query: str) -> dict[str, Any] | None:
     if view:
         criteria["view_keyword"] = view.group(1).strip()
 
+    # Phải xét SAU toà nhà: mã toà "S2", "H1", "M3" chứa chữ số nhưng không phải
+    # số phân khu. `_match_building` khớp theo token nên "S2" thành building, còn
+    # `_PHAN_KHU` đòi có từ dẫn ("Ocean Park", "OP", "khu") nên không bắt nhầm.
+    phan_khu = doc_phan_khu(query)
+    if phan_khu:
+        criteria["subdivision"] = phan_khu
+
     return criteria or None
+
+
+def doc_phan_khu(query: str) -> str | None:
+    """Tên phân khu nêu trong câu hỏi, hoặc None.
+
+    Công khai vì `inventory_summary` dùng chung: hai tool phải hiểu câu hỏi
+    GIỐNG HỆT nhau. Mỗi bên một luật thì chúng trả hai con số khác nhau cho
+    cùng một câu, cả hai cùng nằm trong ngữ cảnh, và model chọn bừa một cái —
+    đo được: "phân khu 3 còn bao nhiêu căn" trả lời 97 thay vì 30.
+    """
+    khop = _PHAN_KHU.search(query)
+    return f"Ocean Park {khop.group(1)}" if khop else None
+
+
+def chuan_hoa(text: str) -> str:
+    """Bỏ dấu, khoảng trắng, dấu câu — để so khớp không phụ thuộc cách gõ."""
+    return _fold(text)
 
 
 class SearchArgs(BaseModel):
     unit_type: str | None = Field(default=None, description="Loại căn, ví dụ '2PN' hoặc 'Studio'")
+    subdivision: str | None = Field(
+        default=None, description="Phân khu: 'Ocean Park 1', 'Ocean Park 2' hoặc 'Ocean Park 3'"
+    )
     building: str | None = Field(default=None, description="Toà nhà, ví dụ 'S210'")
     direction: str | None = Field(default=None, description="Hướng, ví dụ 'Đông Nam'")
     view_keyword: str | None = Field(default=None, description="Từ khoá trong mô tả view, ví dụ 'biển'")
@@ -459,6 +494,12 @@ class InventorySearchTool(AgentTool):
         một kiểu) rồi lệch nhau lúc dữ liệu ghi không thống nhất.
         """
         result = [r for r in rows if r.get("status") == "available"]
+
+        if args.subdivision:
+            # So sau khi chuẩn hoá: dữ liệu ghi "Ocean Park 2" còn model có thể
+            # gửi "OceanPark 2" hay "ocean park 2".
+            wanted = _fold(args.subdivision)
+            result = [r for r in result if _fold(str(r.get("subdivision") or "")) == wanted]
 
         if args.unit_type:
             wanted = _fold(args.unit_type)

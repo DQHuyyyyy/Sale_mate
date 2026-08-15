@@ -169,7 +169,6 @@ def unit_to_document(unit: InventoryUnit) -> LoadedDocument:
             "image_urls": [],
             "local_photo_files": unit.photos,
             "version": datetime.now(UTC).date().isoformat(),
-            "doc_kind": "listing",
             # Toà lấy thẳng từ CSV (chính xác tuyệt đối, khác building suy
             # đoán bằng regex ở meeyland/batdongsan). Toàn bộ tồn kho đều là
             # căn hộ chung cư — sự thật đã biết, không phải suy đoán per-record.

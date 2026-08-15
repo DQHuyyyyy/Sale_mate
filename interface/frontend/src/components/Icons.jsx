@@ -189,3 +189,17 @@ export const ZoneIcon = (props) => (
     <path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-5h6v5" />
   </svg>
 );
+
+export const PlusIcon = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" {...props}>
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+);
+
+export const WandIcon = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="m15 4-1.5 3L10 8.5l3.5 1.5L15 13l1.5-3L20 8.5 16.5 7 15 4Z" />
+    <path d="M5 14l-1 2-2 1 2 1 1 2 1-2 2-1-2-1-1-2Z" />
+    <path d="M14.5 12.5 4 23" />
+  </svg>
+);
