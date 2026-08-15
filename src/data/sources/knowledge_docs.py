@@ -10,6 +10,15 @@ Quy ước front-matter (nằm giữa 2 dòng `---` ở đầu file):
     title: Tên tài liệu
     section: Nhóm nội dung, vd "Chính sách bán hàng"
     visibility: internal | public
+    project: (tuỳ chọn) Dự án cụ thể tài liệu áp dụng, vd "Vinhomes Ocean Park 2
+        (The Empire)". Không khai thì mặc định "Vinhomes Ocean Park Gia Lâm"
+        (OCP1) — giữ tương thích ngược với các file cũ viết trước khi dự án mở
+        rộng sang OCP2/OCP3.
+
+Vì sao cần `project`: chính sách/giá/tiến độ khác nhau theo TỪNG dự án
+(OCP1/OCP2/OCP3) — trộn chung một "project" mặc định sẽ khiến RetrievalFilter
+không lọc được, và câu hỏi về OCP2 có thể lẫn số liệu OCP1. Xem
+`RetrievalFilter.project` ở `src/data/contracts.py`.
 
 File nguồn nằm ở data/raw/knowledge/ (bị .gitignore — mỗi máy tự có, xem
 README/hướng dẫn nội bộ).
@@ -29,6 +38,7 @@ DEFAULT_KNOWLEDGE_DIR = REPO_ROOT / "data" / "raw" / "knowledge"
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n?(.*)$", re.DOTALL)
 _VALID_VISIBILITY = {"internal", "public"}
 _REQUIRED_FRONTMATTER_KEYS = {"title", "section", "visibility"}
+_DEFAULT_PROJECT = "Vinhomes Ocean Park Gia Lâm"  # OCP1 — mặc định cho file cũ chưa khai "project"
 
 
 def _parse_frontmatter(raw: str, filename: str) -> tuple[dict[str, str], str]:
@@ -56,12 +66,23 @@ def _parse_frontmatter(raw: str, filename: str) -> tuple[dict[str, str], str]:
 def load_knowledge_file(path: Path) -> LoadedDocument:
     """Đọc 1 file .md kiến thức chung thành LoadedDocument.
 
-    Raise ValueError nếu thiếu/sai front-matter — thà báo lỗi sớm còn hơn
-    ingest một tài liệu gắn nhầm quyền truy cập.
+    Raise ValueError nếu thiếu/sai front-matter, hoặc nếu nội dung không mở
+    đầu bằng heading H1 đúng `title` khai trong front-matter — thà báo lỗi
+    sớm còn hơn ingest một tài liệu gắn nhầm quyền truy cập, hoặc thiếu
+    heading chuẩn (yêu cầu bắt buộc của luồng xử lý dữ liệu).
     """
     raw = path.read_text(encoding="utf-8")
     meta, body = _parse_frontmatter(raw, path.name)
 
+    expected_heading = f"# {meta['title']}"
+    first_line = body.splitlines()[0] if body else ""
+    if first_line != expected_heading:
+        raise ValueError(f"{path.name}: nội dung phải mở đầu bằng '{expected_heading}' (heading H1 khớp title)")
+
+    # Kiểm tra heading trên `body` GỐC (trước khi làm sạch) — sanitize_text()
+    # giữ nguyên xuống dòng nên không đổi kết quả so khớp, nhưng validate
+    # trước rồi mới làm sạch là thứ tự an toàn hơn, tránh phụ thuộc ngầm vào
+    # việc sanitize không đổi dòng đầu.
     return LoadedDocument(
         doc_id=f"knowledge:{path.stem}",
         title=meta["title"],

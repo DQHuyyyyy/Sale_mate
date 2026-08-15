@@ -47,6 +47,9 @@ inventory_units_table = Table(
     # None là "không rõ" chứ không phải 0.
     Column("price_value", Numeric),  # đơn vị: tỷ đồng
     Column("area_value", Numeric),  # đơn vị: m2
+    # Phân khu: Ocean Park 1 / 2 / 3 (migration 008). Gán theo TOÀ nên mọi căn
+    # cùng toà luôn cùng phân khu. Hiện là dữ liệu DEMO, chưa phải số liệu thật.
+    Column("subdivision", String),
 )
 
 

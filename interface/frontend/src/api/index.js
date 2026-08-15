@@ -22,7 +22,7 @@ export function logout() {
 }
 
 // ---- Căn hộ ----
-export function searchApartments({ tower, priceMin, priceMax, priceMaxExclusive, type } = {}) {
+export function searchApartments({ tower, priceMin, priceMax, priceMaxExclusive, subdivision, type } = {}) {
   return request('/api/apartments', {
     params: {
       tower,
@@ -31,6 +31,7 @@ export function searchApartments({ tower, priceMin, priceMax, priceMaxExclusive,
       // Trợ lý S bật cờ này cho câu "dưới 3 tỷ" — loại luôn căn giá đúng 3 tỷ,
       // để lưới bên trái đếm ra cùng con số với câu trả lời trong chat.
       price_max_exclusive: priceMaxExclusive || undefined,
+      subdivision,
       type,
     },
   });
@@ -135,3 +136,16 @@ export function sendChatMessage(message, history) {
 }
 
 export { streamChat as streamChatMessage } from './client';
+
+/**
+ * Sửa một ảnh của căn theo yêu cầu bằng lời — tính năng "Modify Object".
+ *
+ * Trả về data URI, KHÔNG lưu ở server: đây là ảnh minh hoạ do AI tạo cho một
+ * tài sản có thật, để lẫn vào ảnh thật là quảng cáo sai sự thật.
+ */
+export function modifyApartmentImage({ maCan, imageId, yeuCau }) {
+  return request('/api/images/modify', {
+    method: 'POST',
+    body: { ma_can: maCan, image_id: imageId, yeu_cau: yeuCau },
+  });
+}

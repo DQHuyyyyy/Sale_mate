@@ -17,6 +17,7 @@ export default function ApartmentCard({ apartment }) {
     gia,
     gia_tri: giaTri,
     tinh_trang: tinhTrang,
+    phan_khu: phanKhu,
     thumbnail,
   } = apartment;
 
@@ -26,6 +27,9 @@ export default function ApartmentCard({ apartment }) {
         {thumbnail ? <img src={thumbnail} alt={`Ảnh căn ${maCan}`} loading="lazy" /> : <HouseIcon className="house" />}
         <span className={tinhTrang === 'Còn' ? 'badge-st' : 'badge-st sold'}>{tinhTrang}</span>
         <span className="badge-code">{maCan}</span>
+        {/* Phân khu nằm trên ảnh: lưới bốn cột chật, thêm một dòng chữ nữa là
+            thẻ cao lên và bớt căn hiện trong màn hình đầu. */}
+        {phanKhu && <span className="badge-khu">{phanKhu}</span>}
       </div>
 
       <div className="lbody">

@@ -13,6 +13,10 @@ section: Chính sách bán hàng
 visibility: internal
 ---
 
+# Chính sách chiết khấu theo quý
+
+## Điều kiện áp dụng
+
 Chiết khấu áp dụng theo quý, điều kiện thanh toán sớm được ưu tiên hơn.
 """
 
@@ -25,10 +29,33 @@ def test_doc_dung_du_truong(tmp_path):
 
     assert doc.doc_id == "knowledge:chiet-khau"
     assert doc.title == "Chính sách chiết khấu theo quý"
+    assert doc.text.startswith("# Chính sách chiết khấu theo quý")
     assert "Chiết khấu áp dụng theo quý" in doc.text
     assert doc.metadata["visibility"] == "internal"
     assert doc.metadata["section"] == "Chính sách bán hàng"
     validate_metadata(doc.metadata, doc_id=doc.doc_id)
+
+
+def test_thieu_heading_h1_thi_bao_loi(tmp_path):
+    path = tmp_path / "thieu-heading.md"
+    path.write_text(
+        "---\ntitle: T\nsection: S\nvisibility: public\n---\nNội dung không có heading H1.",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="heading"):
+        load_knowledge_file(path)
+
+
+def test_heading_h1_khong_khop_title_thi_bao_loi(tmp_path):
+    path = tmp_path / "heading-sai.md"
+    path.write_text(
+        "---\ntitle: T\nsection: S\nvisibility: public\n---\n# Tiêu đề khác\nNội dung.",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="heading"):
+        load_knowledge_file(path)
 
 
 def test_thieu_frontmatter_thi_bao_loi(tmp_path):

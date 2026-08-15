@@ -217,13 +217,172 @@ def parse_int(raw: str | float | int | None) -> int | None:
 
 
 def clean_text(raw: str | None) -> str:
-    """Bỏ khoảng trắng thừa và xuống dòng trong ô Excel."""
+    """Bỏ khoảng trắng thừa và xuống dòng trong ô Excel.
+
+    CHỈ dùng cho giá trị MỘT DÒNG (ô CSV/Excel: tên toà, tầng, hướng...) —
+    gộp cả xuống dòng vì ô Excel không có khái niệm "đoạn văn". Văn bản DÀI
+    nhiều dòng (mô tả tin đăng, nội dung tài liệu Markdown) phải dùng
+    `sanitize_text()` bên dưới, không dùng hàm này.
+    """
     if raw is None:
         return ""
     return re.sub(r"\s+", " ", str(raw)).strip()
+
+
+# ---------------------------------------------------------------- Làm sạch văn bản dài
+
+_HTML_TAG_PATTERN = re.compile(r"<[^>]+>")
+_URL_PATTERN = re.compile(r"https?://\S+|www\.\S+", re.IGNORECASE)
+# Số điện thoại VN — có thể có nhãn dẫn ("LH:", "Zalo:"...) hoặc trần.
+# Số VN thật đúng 10 chữ số khi bắt đầu bằng 0 ("0" + 9 số nữa) — cố định
+# {8,9} (không phải khoảng rộng {9,10}) VÀ chặn biên hai đầu bằng
+# (?<!\d)/(?!\d) là bắt buộc, không phải tối ưu thêm — nhưng CHƯA ĐỦ: bug thật
+# phát hiện 12/08/2026 — dấu CHẤM là ký tự phân cách của CẢ SĐT (theo thiết kế
+# ban đầu) LẪN giá tiền ("10.000.000.000"), nên `(?<!\d)` không chặn được vì
+# ký tự ngay trước vị trí khớp giữa là dấu chấm, không phải chữ số. Bỏ hẳn dấu
+# chấm khỏi ký tự phân cách cho phép của SĐT — dữ liệu thật ở đây (meeyland/
+# batdongsan) không viết SĐT có dấu chấm ngăn nhóm, chỉ giá tiền mới dùng.
+_PHONE_PATTERN = re.compile(
+    r"(?<!\d)(?:\b(?:LH|Zalo|Call|SĐT|SDT|Hotline|Liên hệ)\b\s*[:\-\s]*)?(?:\+?84|0)(?:[\-\s]?\d){8,9}(?!\d)",
+    re.IGNORECASE,
+)
+_SPAM_PHRASES_PATTERN = re.compile(
+    r"\b(?:"
+    r"chính chủ cần bán gấp|chính chủ gửi bán|bán gấp|siêu phẩm|"
+    r"rẻ nhất thị trường|cam kết rẻ nhất|bao phí sang tên|miễn trung gian|"
+    r"miễn quảng cáo|quảng cáo vui lòng không làm phiền|liên hệ em|"
+    r"lh em|xem nhà 24\/7|hỗ trợ vay 70%|chiết khấu cực khủng"
+    r")\b",
+    re.IGNORECASE,
+)
+_REPEATED_PUNCT_PATTERN = re.compile(r"([.\-*!=?]){3,}")
+# Xoá cụm spam/SĐT giữa câu để lại vệt dấu câu rời rạc, vd "đẹp. . , !" —
+# gộp một CỤM dấu câu liền nhau (có thể cách nhau bởi khoảng trắng) thành
+# đúng 1 dấu, giữ dấu CUỐI cùng trong cụm (thường mang nghĩa rõ nhất).
+_PUNCT_CLUSTER_PATTERN = re.compile(r"[.,;:!?](?:\s*[.,;:!?])+")
+_HTML_ENTITIES: tuple[tuple[str, str], ...] = (
+    ("&nbsp;", " "),
+    ("&amp;", "&"),
+    ("&lt;", "<"),
+    ("&gt;", ">"),
+    ("&quot;", '"'),
+    ("&#39;", "'"),
+)
+_JUNK_PLACEHOLDERS = frozenset({"nan", "none", "null", "n/a", "undefined", "empty"})
+
+
+def sanitize_text(raw: str | None) -> str:
+    """Làm sạch văn bản DÀI (mô tả tin đăng, nội dung tài liệu...): khử SĐT,
+    cụm quảng cáo spam, HTML entity/thẻ còn sót, URL, ký tự unicode ẩn
+    (`\\xa0`, `\\u200b`, BOM), dấu câu lặp — KHÔNG đụng vào cấu trúc đoạn.
+
+    Khác `clean_text()`: giữ nguyên xuống dòng đơn/đôi, chỉ gộp khoảng trắng
+    NGANG (space/tab) thừa trong từng dòng và gộp 3+ dòng trống liên tiếp
+    xuống còn 1 dòng trống.
+
+    Lý do tách riêng — bug thật phát hiện 12/08/2026: một cách làm sạch khác
+    (`re.sub(r"\\s+", " ", text)`, gộp CẢ xuống dòng) từng được thử, phá sạch
+    heading/bảng/danh sách trong tài liệu kiến thức (`##`, `| Mục | Giá |`,
+    gạch đầu dòng) vì gộp hết mọi thứ thành 1 dòng — `ParagraphChunker` dựa
+    vào dòng trống (`\\n\\n`) để tách chunk, không còn dòng trống thì cả tài
+    liệu thành một "đoạn" bị cắt cứng theo ký tự, không theo cấu trúc.
+    """
+    if raw is None:
+        return ""
+
+    text = raw.strip()
+    if text.lower() in _JUNK_PLACEHOLDERS:
+        return ""
+
+    text = unicodedata.normalize("NFC", text)
+    text = text.replace("\xa0", " ").replace("​", "").replace("﻿", "")
+
+    for entity, replacement in _HTML_ENTITIES:
+        text = text.replace(entity, replacement)
+
+    text = _HTML_TAG_PATTERN.sub(" ", text)
+    text = _URL_PATTERN.sub("", text)
+    text = _PHONE_PATTERN.sub("", text)
+    text = _SPAM_PHRASES_PATTERN.sub("", text)
+    text = _REPEATED_PUNCT_PATTERN.sub(r"\1", text)
+    # Xoá phrase/SĐT ở trên hay để lại vệt dấu câu rời rạc (vd "đẹp. . , !") —
+    # gộp lại thành 1 dấu duy nhất trước khi dọn khoảng trắng.
+    text = _PUNCT_CLUSTER_PATTERN.sub(lambda m: m.group()[-1], text)
+
+    # Gộp khoảng trắng ngang THEO TỪNG DÒNG — không gộp xuyên dòng, để giữ
+    # nguyên ranh giới đoạn/heading/hàng bảng mà bước xoá spam/SĐT ở trên có
+    # thể để lại (vd 2 khoảng trắng liền nhau sau khi xoá 1 cụm ở giữa dòng).
+    lines = [re.sub(r"[ \t]+", " ", line).strip() for line in text.split("\n")]
+    text = "\n".join(lines)
+    # 3+ dòng trống liên tiếp (phần nội dung bị xoá để lại dòng rỗng) gộp còn 1.
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
+    cleaned = text.strip()
+    return cleaned if cleaned.lower() not in _JUNK_PLACEHOLDERS else ""
 
 
 def _strip_accents(text: str) -> str:
     """Bỏ dấu tiếng Việt để so sánh không phụ thuộc dấu."""
     normalized = unicodedata.normalize("NFD", text)
     return "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+
+
+# ---------------------------------------------------------------- Loại hình BĐS
+
+# Thứ tự ưu tiên: cụm cụ thể trước, cụm chung ("chung cư") sau — tránh
+# "biệt thự liền kề" bị nhận nhầm thành "chung cư" nếu quét cả câu rồi khớp
+# nhầm từ khoá chung trước.
+_PROPERTY_TYPE_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("shophouse", "Shophouse"),
+    ("biet thu", "Biệt thự"),
+    ("lien ke", "Liền kề"),
+    ("chung cu", "Chung cư"),
+    ("can ho", "Chung cư"),
+    ("studio", "Chung cư"),
+)
+
+
+_VIEW_CONTEXT_CHARS = 20
+
+
+def detect_property_type(text: str) -> str | None:
+    """Suy loại hình BĐS (chung cư/biệt thự/liền kề/shophouse) từ từ khoá
+    xuất hiện trong văn bản (tiêu đề, mô tả...).
+
+    Chỉ trả kết quả khi có từ khoá rõ ràng — không suy đoán khi mơ hồ, tránh
+    gán nhầm loại hình rồi lọc sai khi khách tìm đúng loại.
+
+    Bỏ qua khớp nếu ngay trước từ khoá có chữ "view" (vd "view hồ và biệt
+    thự siêu thoáng" — đang tả CẢNH QUAN nhìn thấy từ căn, không phải chính
+    căn đó là biệt thự). Phát hiện thật: tin `meeyland:307500673` là căn hộ
+    1PN nhưng tiêu đề nhắc "view... biệt thự" khiến bị gắn nhầm — bỏ
+    `description` khi gọi hàm không đủ vì cụm này nằm ngay trong tiêu đề.
+    """
+    if not text:
+        return None
+    folded = _strip_accents(text).lower()
+    for keyword, label in _PROPERTY_TYPE_KEYWORDS:
+        for match in re.finditer(re.escape(keyword), folded):
+            preceding = folded[max(0, match.start() - _VIEW_CONTEXT_CHARS) : match.start()]
+            if "view" in preceding:
+                continue
+            return label
+    return None
+
+
+# ---------------------------------------------------------------- Mã toà
+
+# Chỉ nhận mã toà khi có từ "tòa/toà" ngay trước — độ chính xác cao hơn quét
+# mọi chuỗi giống mã toà trong câu (dễ bắt nhầm tên khu như "The Sapphire 2",
+# mã tin rao, số điện thoại...). Cái giá phải trả: bỏ sót tin chỉ nhắc tên khu
+# chung mà không ghi mã toà cụ thể — chấp nhận được, "không bịa" quan trọng
+# hơn "không bỏ sót".
+_BUILDING_CODE_RE = re.compile(r"(?:tòa|toà)\s*([A-Za-z]{1,3}\d{1,3}(?:\.\d{1,2})?)", re.IGNORECASE)
+
+
+def extract_building_code(text: str) -> str | None:
+    """Rút mã toà (vd 'S1.12', 'R105') khi văn bản ghi rõ 'tòa <mã>'."""
+    if not text:
+        return None
+    match = _BUILDING_CODE_RE.search(text)
+    return match.group(1).upper() if match else None

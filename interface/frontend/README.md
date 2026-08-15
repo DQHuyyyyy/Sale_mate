@@ -28,11 +28,14 @@ src/
 │                 SearchFilters · ApartmentCard · ApartmentList · ZoneList
 │                 SaleTable · SoldTable · DocumentList
 │                 AddApartmentForm · AddDocumentForm · AddSaleForm · Icons
-├── pages/        Login · Search · Zones · ApartmentDetail · Documents
+├── pages/        Login · Home · Search · Zones · ApartmentDetail · Documents
 │                 MySales · Profile
 │                 admin/AdminSales · admin/AddApartment · admin/AddDocument
 ├── utils/        format.js — giá, diện tích, ngày giờ kiểu Việt
 └── styles/       global.css — toàn bộ token màu/bo góc/bóng
+
+public/
+└── media/        ảnh + video giới thiệu dự án cho trang chủ (bản gốc ở /data)
 ```
 
 ## Route
@@ -40,8 +43,9 @@ src/
 | Route | Quyền | Trang |
 |---|---|---|
 | `/login` | public | Đăng nhập |
-| `/` | auth | Tìm kiếm căn hộ (chỉ căn "Còn") |
-| `/zones` | auth | Sơ đồ phân khu |
+| `/` | public | Trang chủ — giới thiệu Ocean Park 1/2/3, ảnh và video dự án |
+| `/tim-kiem` | public | Tìm kiếm căn hộ (chỉ căn "Còn") |
+| `/zones` | public | Sơ đồ phân khu |
 | `/documents` | auth | Danh sách tài liệu, lọc theo nhóm |
 | `/apartments/:maCan` | auth | Chi tiết căn + gallery ảnh; sale ghi nhận đã bán ở đây |
 | `/my-sales` | sale | Lịch sử bán của tôi |

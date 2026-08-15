@@ -14,6 +14,10 @@ Tuân thủ:
 - Nghỉ `REQUEST_DELAY_S` giữa mỗi request.
 - Loại số điện thoại môi giới khỏi mô tả trước khi embed — không cần cho việc
   trả lời câu hỏi và tránh phát tán thông tin liên hệ cá nhân.
+
+Đúng luồng Parsing -> text thô -> Markdown: mỗi tin lấy được ghi 1 file text
+thô vào data/raw/batdongsan_crawl_raw/ (gitignore, chỉ để đối chiếu/audit)
+TRƯỚC khi dựng thành Markdown có heading. Ảnh (image_urls) vẫn lấy đủ như cũ.
 """
 
 from __future__ import annotations
@@ -29,8 +33,18 @@ from bs4 import BeautifulSoup, Tag
 
 from src.core.logging import get_logger
 from src.data.contracts import LoadedDocument
+from src.data.ingestion.parsers import (
+    detect_property_type,
+    extract_building_code,
+    parse_area_m2,
+    parse_price_vnd,
+    sanitize_text,
+)
 
 logger = get_logger(__name__)
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+RAW_TEXT_DIR = REPO_ROOT / "data" / "raw" / "batdongsan_crawl_raw"
 
 BASE_URL = "https://batdongsan.com.vn"
 DEFAULT_SEARCH_PATH = "/nha-dat-ban-vinhomes-ocean-park-gia-lam"
@@ -73,11 +87,84 @@ def _extract_listing_id(path: str) -> str:
     return match.group(1) if match else path
 
 
-def parse_listing_detail(html: str, url: str) -> LoadedDocument | None:
+def _save_raw_text(
+    listing_id: str, url: str, title: str, address: str, specs: dict[str, str], description: str
+) -> None:
+    """Lưu text thô (trước khi dựng Markdown) — bước 'PDF/Word -> text thô'."""
+    try:
+        RAW_TEXT_DIR.mkdir(parents=True, exist_ok=True)
+        specs_raw = "\n".join(f"{label}: {value}" for label, value in specs.items())
+        raw = f"Nguồn: {url}\nTiêu đề: {title}\nĐịa chỉ: {address}\n{specs_raw}\nMô tả: {description}\n"
+        (RAW_TEXT_DIR / f"{listing_id}.txt").write_text(raw, encoding="utf-8")
+    except OSError as exc:  # không chặn crawl nếu máy hết dung lượng/quyền ghi
+        logger.warning("Không lưu được text thô cho %s: %s", listing_id, exc)
+
+
+def _to_markdown(title: str, address: str, specs: dict[str, str], description: str) -> str:
+    """Dựng Markdown có heading rõ ràng từ dữ liệu đã trích xuất."""
+    specs_block = "\n".join(f"- {label}: {value}" for label, value in specs.items())
+    return (f"# {title}\n\n## Địa chỉ\n{address}\n\n## Thông số\n{specs_block}\n\n## Mô tả\n{description}").strip()
+
+
+DEFAULT_PROJECT = "Vinhomes Ocean Park Gia Lâm"  # OCP1 — mặc định giữ tương thích ngược
+
+_BEDROOM_COUNT_RE = re.compile(r"\d+")
+
+
+def _extract_structured_fields(
+    specs: dict[str, str], title: str, address: str, description: str
+) -> dict[str, float | int | str]:
+    """Rút giá/diện tích/số phòng ngủ/loại hình/mã toà để gắn vào `Chunk`
+    (payload gốc trên Qdrant, dùng cho `RetrievalFilter`).
+
+    `specs` đã tách sẵn theo nhãn rõ ràng (không phải mô tả tự do) nên dùng
+    thẳng `parsers.py` — trang này không tự bịa số khi thiếu, chỉ trả những
+    field rút được, thiếu thì bỏ qua thay vì đoán.
+    """
+    fields: dict[str, float | int | str] = {}
+
+    price = parse_price_vnd(specs.get("Khoảng giá"))
+    if price is not None:
+        fields["price"] = price
+
+    area = parse_area_m2(specs.get("Diện tích"))
+    if area is not None:
+        fields["area"] = area
+
+    # "Số phòng ngủ" đã tách riêng khỏi số WC (khác chuỗi gộp "2PN, 1WC" mà
+    # parse_layout() xử lý) — chỉ cần lấy số nguyên đầu tiên trong giá trị,
+    # ví dụ "3 phòng" -> 3.
+    bedrooms_raw = specs.get("Số phòng ngủ")
+    if bedrooms_raw:
+        match = _BEDROOM_COUNT_RE.search(bedrooms_raw)
+        if match:
+            fields["num_bedrooms"] = int(match.group())
+
+    # CỐ Ý không quét `description` — mô tả tự do do người bán viết hay nhắc
+    # loại hình LÂN CẬN chứ không phải của chính căn (vd "view sang biệt thự
+    # kế bên" = view NHÌN RA biệt thự, không phải căn này là biệt thự). Người
+    # bán hầu như luôn nói rõ loại hình ngay trong tiêu đề ("Bán biệt thự...",
+    # "Bán căn hộ...") nên chỉ cần quét `title` là đủ tin cậy.
+    property_type = detect_property_type(title)
+    if property_type is not None:
+        fields["property_type"] = property_type
+
+    building = extract_building_code(f"{title} {address} {description}")
+    if building is not None:
+        fields["building"] = building
+
+    return fields
+
+
+def parse_listing_detail(html: str, url: str, project: str = DEFAULT_PROJECT) -> LoadedDocument | None:
     """Chuyển HTML trang chi tiết thành LoadedDocument.
 
     Trả None nếu trang không có tiêu đề — coi như crawl lỗi (trang bị gỡ,
     redirect sang trang khác...), bỏ qua thay vì tạo tài liệu rỗng.
+
+    `project` gắn thẳng vào metadata — không tự suy đoán từ nội dung trang,
+    vì trang lưu tay không có category chuẩn hoá như meeyland. Người gọi
+    (`load_saved_detail_pages`) phải chỉ định đúng dự án theo thư mục nguồn.
     """
     soup = BeautifulSoup(html, "html.parser")
 
@@ -112,24 +199,35 @@ def parse_listing_detail(html: str, url: str) -> LoadedDocument | None:
         if src and src not in image_urls:
             image_urls.append(src)
 
-    specs_block = "\n".join(f"- {label}: {value}" for label, value in specs.items())
-    text = f"{title}\nĐịa chỉ: {address}\n{specs_block}\n\nMô tả:\n{description}".strip()
+    # Trích trước khi làm sạch — parse_price_vnd/parse_area_m2 đọc trực tiếp
+    # giá trị `specs` (đã tách nhãn rõ ràng từ HTML), sanitize_text() chạy
+    # sau chỉ ảnh hưởng phần TEXT hiển thị, không ảnh hưởng số đã trích.
+    structured_fields = _extract_structured_fields(specs, title, address, description)
+
+    clean_title = sanitize_text(title)
+    clean_address = sanitize_text(address)
+    clean_specs = {sanitize_text(k): sanitize_text(v) for k, v in specs.items()}
+    clean_description = sanitize_text(description)
 
     listing_id = _extract_listing_id(url)
+    _save_raw_text(listing_id, url, clean_title, clean_address, clean_specs, clean_description)
+    text = _to_markdown(clean_title, clean_address, clean_specs, clean_description)
+
     return LoadedDocument(
         doc_id=f"batdongsan:{listing_id}",
-        title=title,
+        title=clean_title,
         text=text,
         source_path=url,
         metadata={
             "image_urls": image_urls,
             "visibility": "public",
-            "section": "Vinhomes Ocean Park Gia Lâm",
-            "project": "Vinhomes Ocean Park Gia Lâm",
+            "section": project,
+            "project": project,
             "source_site": "batdongsan.com.vn",
             # Tin rao — tách khỏi tài liệu chính sách để truy hồi lọc được.
             "doc_kind": "listing",
             "version": datetime.now(UTC).date().isoformat(),
+            **structured_fields,
         },
     )
 
@@ -145,12 +243,16 @@ def _extract_source_url(html: str) -> str | None:
     return match.group(1) if match else None
 
 
-def load_saved_detail_pages(directory: Path) -> list[LoadedDocument]:
+def load_saved_detail_pages(directory: Path, project: str = DEFAULT_PROJECT) -> list[LoadedDocument]:
     """Đọc các trang chi tiết đã lưu thủ công từ trình duyệt (Ctrl+S → "Chỉ HTML").
 
     Dùng khi crawl tự động bị chặn (xem docstring module) — người dùng tự
     duyệt web bình thường và lưu trang, hàm này chỉ xử lý file có sẵn trên
     máy, không gọi mạng, không né tránh gì cả.
+
+    Không đọc đệ quy (`glob`, không `rglob`) — cố ý, để mỗi dự án nằm trong
+    một thư mục riêng ("khu nào ra khu đấy") và người gọi tự chỉ đúng
+    `project` khớp thư mục, thay vì đoán dự án từ nội dung trang.
     """
     html_paths = sorted(directory.glob("*.html"))
     documents: list[LoadedDocument] = []
@@ -162,14 +264,16 @@ def load_saved_detail_pages(directory: Path) -> list[LoadedDocument]:
             logger.warning("Không tìm được URL gốc trong %s — bỏ qua file này", path.name)
             continue
 
-        document = parse_listing_detail(html, url)
+        document = parse_listing_detail(html, url, project)
         if document is None:
             logger.warning("Không parse được nội dung từ %s", path.name)
             continue
 
         documents.append(document)
 
-    logger.info("Đọc được %d/%d file HTML hợp lệ từ %s", len(documents), len(html_paths), directory)
+    logger.info(
+        "Đọc được %d/%d file HTML hợp lệ từ %s (dự án: %s)", len(documents), len(html_paths), directory, project
+    )
     return documents
 
 

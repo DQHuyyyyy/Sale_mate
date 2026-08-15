@@ -16,36 +16,29 @@
 // tầng giao diện, không phải bắt model đổi cách viết.
 const TRICH_DAN = /\[([^\]\n]{2,60})\]/g;
 
-/** Gộp các trích nguồn đứng liền nhau thành một: Trích "A", "B". */
-function tachTrichDan(text) {
-  const phan = [];
-  let vitri = 0;
-  let dangGom = null;
+/**
+ * Gỡ mọi dấu trích nguồn khỏi thân bài, trả về danh sách nguồn để in một lần
+ * ở cuối.
+ *
+ * Model gắn dấu vào TỪNG khẳng định, nên một câu trả lời tra cứu căn hộ có tám
+ * gạch đầu dòng là tám lần "Trích VOP397" — cùng một nguồn lặp lại tám lần,
+ * lấn át chính nội dung. Giá trị của trích nguồn là người đọc kiểm chứng được,
+ * và một dòng ở cuối làm được đúng việc đó.
+ *
+ * Danh sách giữ thứ tự xuất hiện và bỏ trùng.
+ */
+function gomNguon(text) {
+  const ten = [];
+  const than = String(text ?? '').replace(TRICH_DAN, (_, nguon) => {
+    if (!ten.includes(nguon)) ten.push(nguon);
+    return '';
+  });
 
-  const xa = () => {
-    if (dangGom) {
-      phan.push({ trich: dangGom });
-      dangGom = null;
-    }
+  return {
+    // Gỡ dấu xong hay còn lại khoảng trắng thừa giữa câu hoặc trước dấu câu.
+    than: than.replace(/[ \t]{2,}/g, ' ').replace(/[ \t]+([.,;:)])/g, '$1'),
+    nguon: ten,
   };
-
-  for (const khop of text.matchAll(TRICH_DAN)) {
-    const truoc = text.slice(vitri, khop.index);
-    // Chỉ khoảng trắng giữa hai trích dẫn thì gom chung, không lặp chữ "Trích".
-    if (truoc.trim() === '' && dangGom) {
-      dangGom.push(khop[1]);
-    } else {
-      xa();
-      if (truoc) phan.push({ chu: truoc });
-      dangGom = [khop[1]];
-    }
-    vitri = khop.index + khop[0].length;
-  }
-
-  xa();
-  const con_lai = text.slice(vitri);
-  if (con_lai) phan.push({ chu: con_lai });
-  return phan;
 }
 
 /** Tách `**in đậm**` thành các phần tử, giữ nguyên phần còn lại. */
@@ -77,22 +70,25 @@ function MotNguon({ ten, onChonCan }) {
   );
 }
 
-/** Dựng một đoạn chữ: in đậm + trích nguồn. */
-function dungChu(text, khoa, onChonCan) {
-  return tachTrichDan(String(text)).map((phan, i) =>
-    phan.trich ? (
-      <em key={`${khoa}-t${i}`} className="ctl-trich">
-        Trích{' '}
-        {phan.trich.map((ten, j) => (
-          <span key={ten}>
-            {j > 0 && ', '}
-            <MotNguon ten={ten} onChonCan={onChonCan} />
-          </span>
-        ))}
-      </em>
-    ) : (
-      <span key={`${khoa}-c${i}`}>{dungInDam(phan.chu, `${khoa}-${i}`)}</span>
-    ),
+/** Dựng một đoạn chữ. Dấu trích nguồn đã được `gomNguon` gỡ từ trước. */
+function dungChu(text, khoa) {
+  return dungInDam(String(text), khoa);
+}
+
+/** Dòng nguồn duy nhất ở cuối câu trả lời. */
+function DongNguon({ nguon, onChonCan }) {
+  if (!nguon.length) return null;
+
+  return (
+    <p className="ctl-nguon">
+      <span className="ctl-nguon-nhan">Nguồn:</span>{' '}
+      {nguon.map((ten, i) => (
+        <span key={ten}>
+          {i > 0 && ', '}
+          <MotNguon ten={ten} onChonCan={onChonCan} />
+        </span>
+      ))}
+    </p>
   );
 }
 
@@ -108,7 +104,7 @@ const tachO = (dong) =>
     .split('|')
     .map((o) => o.trim());
 
-function DungBang({ dong, khoa, onChonCan }) {
+function DungBang({ dong, khoa }) {
   const hang = dong.filter((d) => !laDongNgan(d)).map(tachO);
   if (!hang.length) return null;
   const [dau, ...than] = hang;
@@ -120,7 +116,7 @@ function DungBang({ dong, khoa, onChonCan }) {
         <thead>
           <tr>
             {dau.map((o, i) => (
-              <th key={i}>{dungChu(o, `${khoa}-h${i}`, onChonCan)}</th>
+              <th key={i}>{dungChu(o, `${khoa}-h${i}`)}</th>
             ))}
           </tr>
         </thead>
@@ -128,7 +124,7 @@ function DungBang({ dong, khoa, onChonCan }) {
           {than.map((r, i) => (
             <tr key={i}>
               {r.map((o, j) => (
-                <td key={j}>{dungChu(o, `${khoa}-${i}-${j}`, onChonCan)}</td>
+                <td key={j}>{dungChu(o, `${khoa}-${i}-${j}`)}</td>
               ))}
             </tr>
           ))}
@@ -139,7 +135,8 @@ function DungBang({ dong, khoa, onChonCan }) {
 }
 
 export default function CauTraLoi({ text, onChonCan }) {
-  const dong = String(text ?? '').split('\n');
+  const { than, nguon } = gomNguon(text);
+  const dong = than.split('\n');
   const phanTu = [];
   let danhSach = [];
   let bang = [];
@@ -149,7 +146,7 @@ export default function CauTraLoi({ text, onChonCan }) {
     phanTu.push(
       <ul key={`ul-${khoa}`} className="ctl-ds">
         {danhSach.map((item, i) => (
-          <li key={i}>{dungChu(item, `${khoa}-${i}`, onChonCan)}</li>
+          <li key={i}>{dungChu(item, `${khoa}-${i}`)}</li>
         ))}
       </ul>,
     );
@@ -158,7 +155,7 @@ export default function CauTraLoi({ text, onChonCan }) {
 
   const xaBang = (khoa) => {
     if (!bang.length) return;
-    phanTu.push(<DungBang dong={bang} khoa={khoa} onChonCan={onChonCan} key={`b-${khoa}`} />);
+    phanTu.push(<DungBang dong={bang} khoa={khoa} key={`b-${khoa}`} />);
     bang = [];
   };
 
@@ -178,10 +175,16 @@ export default function CauTraLoi({ text, onChonCan }) {
     }
 
     xaDanhSach(i);
-    if (line) phanTu.push(<p key={`p-${i}`}>{dungChu(line, i, onChonCan)}</p>);
+    if (line) phanTu.push(<p key={`p-${i}`}>{dungChu(line, i)}</p>);
   });
 
   xaDanhSach('cuoi');
   xaBang('cuoi');
-  return <>{phanTu}</>;
+
+  return (
+    <>
+      {phanTu}
+      <DongNguon nguon={nguon} onChonCan={onChonCan} />
+    </>
+  );
 }

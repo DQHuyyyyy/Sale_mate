@@ -26,6 +26,60 @@ export const LogoMark = (props) => (
   </svg>
 );
 
+/**
+ * Robot mascot cho nút trợ lý AI — theo đúng mẫu "CodeNoNo" (Dqd02) trong
+ * github.com/legeling/awesome-codex-pet: đầu tròn trắng, 2 sừng cong cyan,
+ * visor đen viền cyan với mắt thanh dọc kiểu "11", 2 tay hình lưỡi liềm cong
+ * cyan hai bên. Không dùng sprite ảnh của họ (pipeline sinh ảnh/video — quá
+ * tải cho một icon nút bấm) — vẽ lại bằng SVG path, animate bằng CSS xoay
+ * quanh điểm gắn (sừng lắc nhẹ, tay vẫy khi hover) để giữ đúng cảm giác "có
+ * sự sống" của bản gốc.
+ *
+ * Toàn bộ chuyển động là CSS keyframes trong global.css (`.robot-*`), tắt hết
+ * khi `prefers-reduced-motion` — đúng yêu cầu sàn chất lượng ở
+ * Context Product/Giaodien.md mục 9.
+ */
+export const RobotMascot = (props) => (
+  <svg viewBox="0 0 40 40" fill="none" className="robot-mk" {...props}>
+    <g className="robot-float">
+      {/* Tay — hình lưỡi liềm cong, xoay quanh điểm gắn ở vai */}
+      <path
+        className="robot-arm-l"
+        d="M10 21 Q2 25 4 33 Q8 30 11 24 Q11.5 22 10 21 Z"
+        fill="var(--robot-cyan)"
+      />
+      <path
+        className="robot-arm-r"
+        d="M30 21 Q38 25 36 33 Q32 30 29 24 Q28.5 22 30 21 Z"
+        fill="var(--robot-cyan)"
+      />
+
+      {/* Sừng — cong, xoay nhẹ quanh gốc gắn vào đầu */}
+      <path
+        className="robot-horn-l"
+        d="M17 13 Q9 9 8 1 Q15 5 18 11 Z"
+        fill="var(--robot-cyan)"
+      />
+      <path
+        className="robot-horn-r"
+        d="M23 13 Q31 9 32 1 Q25 5 22 11 Z"
+        fill="var(--robot-cyan)"
+      />
+
+      {/* Đầu — hình tròn trắng, vẽ sau cùng để phủ lên gốc sừng/tay */}
+      <circle className="robot-body" cx="20" cy="22" r="12" />
+
+      {/* Visor — viền cyan, nền tối, 2 mắt thanh dọc trắng kiểu "11" */}
+      <ellipse cx="20" cy="19.5" rx="8.5" ry="6.5" fill="var(--robot-cyan)" />
+      <ellipse cx="20" cy="19.8" rx="7" ry="5.2" fill="var(--text)" />
+      <g className="robot-eyes">
+        <rect x="17.3" y="16.6" width="2.1" height="6.4" rx="1.05" fill="#fff" />
+        <rect x="20.6" y="16.6" width="2.1" height="6.4" rx="1.05" fill="#fff" />
+      </g>
+    </g>
+  </svg>
+);
+
 export const SearchIcon = (props) => (
   <svg viewBox="0 0 24 24" {...stroke} {...props}>
     <circle cx="11" cy="11" r="7" />
@@ -133,5 +187,19 @@ export const BackIcon = (props) => (
 export const ZoneIcon = (props) => (
   <svg viewBox="0 0 24 24" {...stroke} strokeWidth="1.6" {...props}>
     <path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-5h6v5" />
+  </svg>
+);
+
+export const PlusIcon = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" {...props}>
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+);
+
+export const WandIcon = (props) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="m15 4-1.5 3L10 8.5l3.5 1.5L15 13l1.5-3L20 8.5 16.5 7 15 4Z" />
+    <path d="M5 14l-1 2-2 1 2 1 1 2 1-2 2-1-2-1-1-2Z" />
+    <path d="M14.5 12.5 4 23" />
   </svg>
 );

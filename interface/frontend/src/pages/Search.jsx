@@ -8,10 +8,10 @@ import { uniqueTypes } from '../utils/format';
 // `priceMaxExclusive` chỉ do trợ lý S đặt (câu "dưới 3 tỷ"), form không có ô
 // cho nó — ô "Đến" là một khoảng nên vẫn tính cả biên. Vẫn phải nằm trong danh
 // sách này để sống sót qua URL và F5.
-const TRUONG_LOC = ['tower', 'priceMin', 'priceMax', 'priceMaxExclusive', 'type'];
+const TRUONG_LOC = ['tower', 'priceMin', 'priceMax', 'priceMaxExclusive', 'subdivision', 'type'];
 
 /**
- * Trang chủ: bộ lọc + lưới căn hộ. Backend chỉ trả căn "Còn".
+ * Trang tìm kiếm căn hộ: bộ lọc + lưới căn hộ. Backend chỉ trả căn "Còn".
  *
  * Bộ lọc nằm trên URL chứ không trong state riêng. Nhờ vậy trợ lý S lọc được
  * danh sách này bằng cách điều hướng — người dùng hỏi "căn 2-3 tỷ" thì cả câu

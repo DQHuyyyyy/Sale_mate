@@ -12,6 +12,7 @@ from app.core.columns import (
     COL_HUONG,
     COL_LOAI_CAN,
     COL_NOI_THAT,
+    COL_PHAN_KHU,
     COL_SO_DO,
     COL_SO_PHONG,
     COL_TANG,
@@ -68,7 +69,8 @@ def apartment_columns() -> str:
     a.{COL_GIA}          AS gia,
     {gia_tri},
     a.{COL_NOI_THAT}     AS noi_that,
-    a.{COL_TINH_TRANG}   AS tinh_trang
+    a.{COL_TINH_TRANG}   AS tinh_trang,
+    a.{COL_PHAN_KHU}     AS phan_khu
 """
 
 
@@ -92,6 +94,7 @@ def search_apartments(
         default=False,
         description='Loại luôn căn có giá bằng đúng price_max. Dùng cho câu "dưới X tỷ".',
     ),
+    subdivision: str | None = Query(default=None, description="Phân khu, ví dụ 'Ocean Park 2'"),
     type: str | None = Query(default=None, description="Loại căn, ví dụ '2 PN, 1WC'"),
     limit: int = Query(default=100, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
@@ -121,6 +124,12 @@ def search_apartments(
     if tower:
         where.append(f"a.{COL_TOA} = %s")
         params.append(tower)
+    if subdivision:
+        # Trợ lý S đẩy bộ lọc này lên URL sau khi trả lời "có 4 căn ở Ocean Park
+        # 2 dưới 3 tỷ" — thiếu nó thì lưới bên trái vẫn hiện đủ 21 căn và người
+        # dùng thấy hai con số vênh nhau.
+        where.append(f"a.{COL_PHAN_KHU} = %s")
+        params.append(subdivision)
     if type:
         # Dữ liệu viết không thống nhất ('1 PN, 1WC' vs '1PN, 1WC') nên so khớp
         # sau khi bỏ khoảng trắng, không so nguyên văn.

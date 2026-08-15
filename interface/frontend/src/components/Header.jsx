@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import AvatarMenu from './AvatarMenu';
 import LoginModal from './LoginModal';
-import { BurgerIcon, FileIcon, LogoMark, MapIcon, SearchIcon } from './Icons';
+import { BurgerIcon, FileIcon, HouseIcon, LogoMark, MapIcon, SearchIcon } from './Icons';
 
 export default function Header() {
   const [navOpen, setNavOpen] = useState(false);
@@ -30,6 +30,14 @@ export default function Header() {
             <NavLink
               to="/"
               end
+              className={({ isActive }) => (isActive ? 'on' : '')}
+              onClick={closeNav}
+            >
+              <HouseIcon />
+              Trang chủ
+            </NavLink>
+            <NavLink
+              to="/tim-kiem"
               className={({ isActive }) => (isActive ? 'on' : '')}
               onClick={closeNav}
             >

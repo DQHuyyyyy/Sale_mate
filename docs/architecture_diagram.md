@@ -1,37 +1,58 @@
 # Kiến trúc hệ thống — SalesMate
 
+> Cập nhật theo kiến trúc **3 service** đang chạy thật (xem `RUN.md`,
+> `Makefile`, `.env.example`) — không phải bản Next.js một backend mô tả ở
+> phiên bản tài liệu trước.
+
 ## 1. Tổng quan
 
 ```mermaid
 graph TB
     subgraph Client["Client"]
-        Browser["Trình duyệt<br/>(desktop · mobile)"]
+        Browser["Trình duyệt"]
     end
 
-    subgraph FE["Frontend — Next.js 16 · Tailwind v4"]
-        Portal["Trang portal<br/>server component"]
-        Widget["AIWidget<br/>client component"]
+    subgraph FE["interface/frontend — Vite · React 18 · React Router (:5173)"]
+        Portal["Trang portal<br/>tìm căn · dự án"]
+        Widget["AIWidget<br/>chat góc dưới phải"]
     end
 
-    subgraph BE["Backend — FastAPI · Python 3.11"]
-        API["API v1<br/>health · chat · portal"]
+    subgraph API["interface/backend — API sản phẩm · FastAPI (:8000)"]
+        Auth["/api/auth"]
+        Apt["/api/apartments"]
+        Zones["/api/zones"]
+        Sales["/api/sales"]
+        Users["/api/users"]
+        Docs["/api/documents"]
+        ChatBridge["/api/chat<br/>cầu nối sang lõi AI"]
+    end
+
+    subgraph AICore["src/ — Lõi AI · FastAPI (:8001)"]
+        V1["/api/v1/chat · /api/v1/health"]
         Boot["bootstrap.py<br/>dependency container"]
-        Agent["AI_core<br/>LangGraph"]
-        Data["Data<br/>ingest · retrieval"]
-        Svc["Services<br/>LLM · portal repo"]
+        Agent["agents/<br/>LangGraph"]
+        Data["data/<br/>ingest · retrieval"]
+        Svc["services/<br/>LLM adapter"]
     end
 
     subgraph Ext["Hạ tầng ngoài"]
         OpenAI["OpenAI API"]
         Qdrant[("Qdrant<br/>vector + payload")]
-        PG[("PostgreSQL")]
+        PG[("PostgreSQL<br/>Supabase")]
     end
 
     Browser --> Portal
     Browser --> Widget
-    Portal -->|"GET /listings /projects<br/>/demands /market"| API
-    Widget -->|"POST /chat/stream (SSE)"| API
-    API --> Boot
+    Portal -->|"GET /api/apartments /zones /sales..."| API
+    Widget -->|"POST /api/chat/stream (SSE)<br/>vite proxy → :8000"| ChatBridge
+    ChatBridge -->|"server-to-server<br/>AI_CORE_URL"| V1
+    Auth --> PG
+    Apt --> PG
+    Zones --> PG
+    Sales --> PG
+    Users --> PG
+    Docs --> PG
+    V1 --> Boot
     Boot --> Agent
     Boot --> Data
     Boot --> Svc
@@ -39,110 +60,115 @@ graph TB
     Agent --> Svc
     Svc --> OpenAI
     Data --> Qdrant
-    Svc --> PG
 ```
 
-**Điểm mấu chốt:** `bootstrap.py` là nơi duy nhất gắn interface với
-implementation. Mọi module chỉ phụ thuộc `contracts.py` của nhau, nên đổi
-Qdrant / embedder / LLM provider chỉ sửa một dòng. Xem
-[ADR-004](adr/ADR-004-module-contracts.md).
+**Điểm mấu chốt:**
 
-## 2. Luồng agent
+- **2 backend độc lập, không phải 1.** `interface/backend` (:8000) là API sản
+  phẩm — auth, tồn kho căn hộ, khu/toà, lịch sử bán, tài liệu. `src/` (:8001)
+  là lõi AI — agent graph + RAG, không biết gì về auth/CRUD. `interface/backend`
+  gọi sang lõi AI qua HTTP server-to-server bằng biến `AI_CORE_URL`; frontend
+  **không bao giờ** gọi thẳng cổng 8001.
+- `bootstrap.py` (trong `src/`) là nơi duy nhất gắn interface với
+  implementation của lõi AI. Mọi module trong `src/` chỉ phụ thuộc
+  `contracts.py` của nhau, nên đổi Qdrant / embedder / LLM provider chỉ sửa
+  một dòng. Xem [ADR-004](adr/ADR-004-module-contracts.md).
+- Frontend không gọi thẳng `:8000` bằng URL tuyệt đối — dev server Vite proxy
+  `/api/*` sang `http://localhost:8000` (xem `interface/frontend/vite.config.js`),
+  nên code frontend chỉ cần biết đường dẫn tương đối.
+
+## 2. Luồng agent (bên trong lõi AI, `src/agents/graph.py`)
 
 ```mermaid
 graph LR
     START(["Câu hỏi"]) --> Router["router<br/>model rẻ + luật từ khoá"]
-    Router -->|cần tra tài liệu| Retrieve["retrieve<br/>embed → search → rerank"]
+    Router -->|cần tra tài liệu| Tools["tools<br/>chạy tool khớp intent"]
     Router -->|không cần| Generate
+    Tools -->|cần tài liệu| Retrieve["retrieve<br/>embed → search → rerank"]
+    Tools -->|đủ dữ liệu rồi| Generate
     Retrieve --> Generate["generate<br/>model mạnh · grounding"]
     Generate --> Guard["guardrail<br/>độ phủ · gắn cờ nhạy cảm"]
     Guard --> END(["Trả lời + nguồn"])
 ```
 
-State machine chứ không phải chain thẳng: router rẽ nhánh, và về sau thêm được
-vòng lặp (truy hồi lại khi độ phủ thấp) mà không phải viết lại cấu trúc.
+State machine chứ không phải chain thẳng: router rẽ nhánh theo intent, tool
+chạy trước khi quyết định có cần truy hồi tài liệu hay không (tool đọc nguồn
+sự thật lúc hỏi — giá/tình trạng căn; vector store chỉ là bản chụp).
 
 **Guardrail** là chốt chặn: độ phủ dưới ngưỡng thì thay câu trả lời bằng thông
-điệp "chưa đủ dữ liệu" thay vì để LLM suy đoán.
+điệp "chưa đủ dữ liệu" — **trừ khi** đã có kết quả tool thật (không từ chối dù
+độ phủ 0 khi tool đã trả lời đúng).
 
-## 3. Luồng dữ liệu
+## 3. Luồng dữ liệu RAG (`src/data/`)
 
-**Ingest (ghi):**
+**Ingest (ghi) — một dòng lệnh duy nhất, xem `python -m src.cli`:**
 
 ```mermaid
 graph LR
-    F["Tài liệu<br/>PDF · Excel · ảnh"] --> L["loader"]
-    L --> C["chunker<br/>tôn trọng ranh giới đoạn"]
-    C --> E["embedder"]
-    E --> S[("Qdrant<br/>+ visibility · is_active")]
+    F["4 nguồn thật<br/>meeyland · batdongsan ·<br/>tồn kho CSV · tài liệu .md"] --> L["crawl/parse<br/>→ LoadedDocument"]
+    L --> San["sanitize_text<br/>làm sạch, giữ cấu trúc Markdown"]
+    San --> C["ParagraphChunker<br/>tôn trọng ranh giới đoạn"]
+    C --> E["Embedder<br/>OpenAI text-embedding-3-small"]
+    E --> S[("Qdrant<br/>+ visibility · is_active · project ·<br/>price/area/building/property_type")]
 ```
 
-Nạp lại cùng `doc_id` sẽ thay bản cũ — chỉ giữ bản đang hiệu lực.
+Nạp lại cùng `doc_id` sẽ thay bản cũ — chỉ giữ bản đang hiệu lực. Tin bị gỡ
+khỏi site nguồn thì đánh `is_active=False` (giữ lịch sử) thay vì xoá.
 
 **Query (đọc):**
 
 ```mermaid
 graph LR
     Q["Câu hỏi + quyền"] --> Emb["embed"]
-    Emb --> Search["Qdrant search<br/>LỌC QUYỀN TẠI ĐÂY"]
+    Emb --> Search["Qdrant search<br/>LỌC QUYỀN + LỌC DỰ ÁN TẠI ĐÂY"]
     Search --> Rank["rerank → top-n"]
     Rank --> Cov["tính độ phủ"]
     Cov --> LLM["LLM grounding"]
     LLM --> Out["Trả lời + citation"]
 ```
 
-Phân quyền lọc **tại truy vấn vector**, không lọc ở tầng giao diện — tài liệu nội
-bộ không bao giờ lọt vào context của LLM. Xem
-[ADR-001](adr/ADR-001-qdrant.md).
+Phân quyền (`public`/`internal`) và phân dự án (OCP1/OCP2/OCP3, tránh lẫn khu)
+lọc **tại truy vấn vector**, không lọc ở tầng giao diện — tài liệu nội bộ
+không bao giờ lọt vào context của LLM. Xem [ADR-001](adr/ADR-001-qdrant.md).
 
-## 4. Sự kiện SSE
+## 4. Sự kiện SSE (`/api/chat/stream` ở cả 2 backend)
 
 Widget nhận luồng `text/event-stream`, mỗi message là một JSON:
 
 | Event | Khi nào | Dùng làm gì |
 |---|---|---|
 | `start` | mở luồng | nhận `session_id` |
-| `route` | sau router *(bật cùng RAG)* | hiện nguồn định tuyến |
+| `route` | sau router | hiện nguồn định tuyến |
 | `token` | mỗi mảnh chữ | hiệu ứng gõ dần |
-| `sources` | sau truy hồi *(bật cùng RAG)* | chip trích nguồn |
+| `sources` | sau truy hồi | chip trích nguồn |
 | `done` | kết thúc | mở lại ô nhập |
 | `error` | có lỗi | hiện thông điệp tiếng Việt |
-
-Hợp đồng đã có đủ 6 event từ đầu, nên khi bật RAG thì FE không phải đổi gì.
 
 ## 5. Thành phần và lựa chọn công nghệ
 
 | Lớp | Công nghệ | Lý do |
 |---|---|---|
-| Frontend | Next.js 16 (App Router) · TypeScript · Tailwind v4 | Streaming tốt, token thiết kế tập trung |
-| Backend | FastAPI · Pydantic v2 | Async, tự sinh OpenAPI, validate mạnh |
-| Agent | LangGraph | State machine có rẽ nhánh và vòng lặp |
-| Vector | Qdrant | Payload filtering cho phân quyền — [ADR-001](adr/ADR-001-qdrant.md) |
-| Embedding | OpenAI → BGE-M3 | Cân giữa chất lượng và kích thước image — [ADR-002](adr/ADR-002-embedding-tieng-viet.md) |
+| Frontend | Vite · React 18 · React Router (JS thuần, không TypeScript/Tailwind) | Đơn giản, khởi động nhanh, không cần build phức tạp cho MVP |
+| API sản phẩm | FastAPI · Pydantic v2 (`interface/backend/`) | Tách khỏi lõi AI — auth/CRUD không phụ thuộc LLM, deploy độc lập |
+| Lõi AI | FastAPI · LangGraph (`src/`) | State machine có rẽ nhánh và vòng lặp cho câu hỏi nhiều bước |
+| Vector | Qdrant Cloud | Payload filtering cho phân quyền — [ADR-001](adr/ADR-001-qdrant.md) |
+| Embedding | OpenAI `text-embedding-3-small` → BGE-M3 | Cân giữa chất lượng và chi phí — [ADR-002](adr/ADR-002-embedding-tieng-viet.md) |
 | LLM | Hai tầng: rẻ cho router, mạnh cho câu trả lời | [ADR-003](adr/ADR-003-model-routing.md) |
-| DB | PostgreSQL | Dữ liệu có cấu trúc: giá, tài liệu/version, log |
+| DB | PostgreSQL (Supabase) | Dữ liệu có cấu trúc: user, căn hộ, lịch sử bán, tài liệu |
 | Quan sát | Structured JSON log · LangSmith | Truy vết từng bước agent |
 
-## 6. Triển khai
+## 6. Chạy local (3 terminal, xem `RUN.md`)
 
 ```mermaid
 graph LR
-    subgraph Vercel
-        FE["Next.js"]
-    end
-    subgraph Render
-        BE["FastAPI container"]
-    end
-    subgraph Cloud
-        Q[("Qdrant Cloud")]
-        P[("Postgres")]
-    end
-    GH["GitHub Actions<br/>lint · test · build"] -->|deploy| BE
-    GH -->|deploy| FE
-    FE --> BE
-    BE --> Q
-    BE --> P
+    T1["Terminal 1<br/>make run-ai → :8001"] --> AICore["Lõi AI"]
+    T2["Terminal 2<br/>make run-api → :8000"] --> API["API sản phẩm"]
+    T3["Terminal 3<br/>make fe → :5173"] --> FE["Frontend"]
+    T4["make infra<br/>Docker"] --> Q[("Qdrant")]
+    T4 --> P[("Postgres")]
+    API -.->|AI_CORE_URL| AICore
+    FE -.->|vite proxy /api| API
 ```
 
-Local: `make infra` bật Qdrant + Postgres bằng Docker; `make run` chạy backend;
-`make fe` chạy frontend.
+Cả `interface/backend` và `src/` đọc **chung một file `.env`** ở gốc repo —
+không có `.env` riêng cho từng service (xem `.env.example`).
