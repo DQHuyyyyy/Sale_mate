@@ -115,7 +115,14 @@ async def test_chay_tool_va_dua_so_lieu_vao_context():
 
 
 @pytest.mark.asyncio
-async def test_nguon_tu_tool_duoc_danh_dau_kind_db():
+async def test_nguon_tu_tool_lay_ma_can_lam_nhan():
+    """Nhãn nguồn phải là thứ người đọc KIỂM CHỨNG được, tức mã căn.
+
+    Bản cũ lấy câu đầu trong description ("Tool thử") — đúng kỹ thuật nhưng
+    người đọc không tra lại được gì từ nó, và nút bấm mở căn cũng không có chỗ
+    bám. Đây cũng là danh sách FE dựng dòng "Nguồn" khi model bỏ qua luật trích
+    dẫn, nên nó phải khớp đúng thứ model lẽ ra đã trích.
+    """
     node = ToolsNode(_registry_with(_EchoTool()))
 
     out = await node({"intent": Intent.LISTING, "query": "căn VOP345"})
@@ -123,8 +130,22 @@ async def test_nguon_tu_tool_duoc_danh_dau_kind_db():
     citation = out["tool_citations"][0]
     assert citation.kind == "db"
     assert citation.doc_id == "test:db"
-    # title lay cau dau cua description, khong nuot ca doan
-    assert citation.title == "Tool thử"
+    assert citation.title == "VOP345"
+
+
+@pytest.mark.asyncio
+async def test_khong_co_ma_can_thi_lui_ve_ten_tool():
+    """Tool không trả căn nào (tính khoản vay, tra chính sách) vẫn phải có nguồn."""
+
+    class _KhongCoMaCan(_EchoTool):
+        async def run(self, **kwargs):
+            return ToolResult(ok=True, data={"so_tien_vay": 1.5}, source="test:db")
+
+    node = ToolsNode(_registry_with(_KhongCoMaCan()))
+
+    out = await node({"intent": Intent.LISTING, "query": "căn VOP345"})
+
+    assert out["tool_citations"][0].title == "Tool thử"
 
 
 @pytest.mark.asyncio

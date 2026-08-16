@@ -61,6 +61,23 @@ services:
       - key: AI_CORE_TIMEOUT
         value: "60"
 
+      # ⚠️ TẮT TẠM ĐỂ LẤY FEEDBACK — NHỚ BẬT LẠI.
+      #
+      # Bật lại bằng cách đổi thành "true" ở đây rồi deploy, hoặc sửa thẳng
+      # trong Render dashboard nếu cần hiệu lực ngay.
+      #
+      # Một cờ này gác CẢ HAI endpoint tốn tiền, không chỉ chat:
+      #   /api/chat          khách 10 lượt · đã đăng nhập 60 lượt
+      #   /api/images/modify khách  5 lượt · đã đăng nhập 20 lượt
+      # Cửa sổ 10 phút. Sinh ảnh đắt hơn hỏi đáp nhiều lần, và giờ nó cũng không
+      # còn hạn mức nào.
+      #
+      # Cả hai endpoint đều CÔNG KHAI, không cần đăng nhập, và mỗi lượt đều gọi
+      # model thật. Trong lúc cờ này là false, bất kỳ ai có đường link đều gọi
+      # được không giới hạn — quota OpenAI cạn là hết cả bản demo.
+      - key: CHAT_RATE_LIMIT_ENABLED
+        value: "false"
+
   # ---- Lõi AI ----
   # Cũng theo develop. Để branch main thì nó chạy src/ của bản 05/08, lệch 13
   # file so với develop — API mới nói chuyện với lõi AI cũ, sai lệch rất khó lần.

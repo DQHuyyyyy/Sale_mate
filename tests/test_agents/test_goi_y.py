@@ -13,6 +13,7 @@ import pytest
 
 from src.agents.state import AgentState, Intent, initial_state
 from src.agents.suggest import (
+    TOI_DA_KY_TU,
     TOI_DA_PHUONG_AN,
     _co_tool_nhan,
     goi_y_bang_model,
@@ -292,3 +293,36 @@ class TestDanToiChotCan:
         cac_cau = goi_y_tiep_theo(_state(tool_context=_NHIEU_CAN))
 
         assert not any("cọc" in c.lower() for c in cac_cau)
+
+
+class TestKhuonNut:
+    """Gợi ý là chữ trên một nút bấm nhỏ, không phải một đoạn văn."""
+
+    @pytest.mark.asyncio
+    async def test_bo_cau_dai_thanh_doan_van(self) -> None:
+        """Ca thật trên production: model trả về nguyên ba câu và nó lên giao diện."""
+        doan_van = (
+            "Mình muốn biết rõ hơn về một phân khu cụ thể trong dự án Vinhomes Ocean Park 2. "
+            "Bạn có thể cho mình biết thêm thông tin về các tiêu chí như giá, diện tích hay "
+            "số phòng ngủ không? Mình đang muốn so sánh một số căn hộ trong phân khu này."
+        )
+        llm = _LLMGia(f"{doan_van}\nCăn rẻ nhất ở Ocean Park 2")
+
+        cac_cau = await goi_y_bang_model(_state(tool_context=_NHIEU_CAN), llm, "x")
+
+        assert doan_van not in cac_cau
+        assert "Căn rẻ nhất ở Ocean Park 2" in cac_cau
+
+    @pytest.mark.asyncio
+    async def test_bo_cau_viet_bang_giong_tro_ly(self) -> None:
+        """Bấm vào câu giọng trợ lý là khách tự hỏi chính mình."""
+        llm = _LLMGia("Bạn muốn xem căn nào ở Ocean Park 1?\nCăn rẻ nhất ở Ocean Park 1")
+
+        cac_cau = await goi_y_bang_model(_state(tool_context=_NHIEU_CAN), llm, "x")
+
+        assert cac_cau == ["Căn rẻ nhất ở Ocean Park 1"]
+
+    def test_moi_khuon_tat_dinh_deu_du_ngan(self) -> None:
+        for ten, cac_cau in _moi_tinh_huong():
+            for cau in cac_cau:
+                assert len(cau) <= TOI_DA_KY_TU, f"{ten}: {cau!r} dài {len(cau)} ký tự"

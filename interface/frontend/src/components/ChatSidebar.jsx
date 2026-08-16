@@ -277,6 +277,15 @@ export default function ChatSidebar({ open, onToggle }) {
               const boLoc = boLocTuTieuChi(event.data.filters);
               if (boLoc) navigate({ pathname: '/tim-kiem', search: `?${new URLSearchParams(boLoc)}` });
             }
+          } else if (event.type === 'sources') {
+            // Nguồn THẬT do backend gom từ tool và truy hồi. Phải dùng nó chứ
+            // không chỉ trông vào dấu [Mã căn] model tự viết trong câu trả lời:
+            // model yếu bỏ qua luật trích nguồn, và production đang chạy
+            // gpt-4o-mini nên dòng "Nguồn" biến mất hẳn trong khi local dùng
+            // gpt-4o thì vẫn có. Nguồn là thứ chứng minh trợ lý không bịa —
+            // không được phụ thuộc vào việc model có ngoan hay không.
+            const ten = (event.citations ?? []).map((c) => c?.title).filter(Boolean);
+            if (ten.length) capNhat({ nguonThat: ten });
           } else if (event.type === 'done') {
             // Trợ lý hỏi ngược thì kèm sẵn vài phương án bấm được. Gắn vào
             // đúng bong bóng vừa trả lời, không để state riêng — người dùng
@@ -464,6 +473,7 @@ export default function ChatSidebar({ open, onToggle }) {
                 ) : (
                   <CauTraLoi
                     text={item.content}
+                    nguonThat={item.nguonThat}
                     onChonCan={(ma) => navigate(`/apartments/${encodeURIComponent(ma)}`)}
                   />
                 )}

@@ -142,10 +142,32 @@ def _tra_loi_duoc(cau: str, ten_tai_lieu: list[str]) -> bool:
     return _co_tool_nhan(cau) or cau in ten_tai_lieu
 
 
+# Nút bấm nằm trong khung chat hẹp. Quá ngần này ký tự là nút tràn thành một
+# khối chữ, người dùng phải ĐỌC thay vì bấm — mất đúng lý do gợi sẵn tồn tại.
+# Đã xảy ra thật: model trả về nguyên một đoạn ba câu và nó lên thẳng giao diện.
+TOI_DA_KY_TU = 80
+
+# Model hay quên mình đang viết lời KHÁCH và trượt sang giọng trợ lý ("Bạn có
+# thể cho mình biết thêm…"). Bấm vào là khách tự hỏi chính mình.
+_GIONG_TRO_LY = ("bạn có thể", "bạn muốn", "bạn cần", "hãy cho mình", "mình có thể giúp", "cho mình biết")
+
+
+def _dung_khuon(cau: str) -> bool:
+    """Đủ ngắn để bấm, và viết bằng giọng của khách."""
+    if len(cau) > TOI_DA_KY_TU:
+        return False
+    thap = cau.lower()
+    return not any(cum in thap for cum in _GIONG_TRO_LY)
+
+
 def _loc(cac_cau: list[str], state: AgentState) -> list[str]:
-    """Bỏ câu trùng, bỏ câu hệ thống không trả lời nổi, cắt còn tối đa 4."""
+    """Bỏ câu trùng, sai khuôn, hoặc hệ thống không trả lời nổi. Cắt còn tối đa 4."""
     ten_tai_lieu = phuong_an_tu_tai_lieu(state)
-    giu = [c for c in dict.fromkeys(c.strip() for c in cac_cau if c.strip()) if _tra_loi_duoc(c, ten_tai_lieu)]
+    giu = [
+        c
+        for c in dict.fromkeys(c.strip() for c in cac_cau if c.strip())
+        if _dung_khuon(c) and _tra_loi_duoc(c, ten_tai_lieu)
+    ]
     return giu[:TOI_DA_PHUONG_AN]
 
 
@@ -316,7 +338,10 @@ Dữ kiện có thật của lượt này — chỉ được dùng đúng nhữn
 Viết tối đa {toi_da} câu, mỗi câu một dòng, không đánh số, không giải thích.
 
 Luật bắt buộc:
-1. Viết như KHÁCH nói với trợ lý, không phải trợ lý nói với khách.
+0. **Mỗi câu DƯỚI {toi_da_ky_tu} ký tự** — nó là chữ trên một nút bấm nhỏ, không
+   phải một đoạn văn. Một ý một câu. Ví dụ đúng: "Căn rẻ nhất ở Ocean Park 2".
+1. Viết như KHÁCH nói với trợ lý, không phải trợ lý nói với khách. Cấm mở đầu
+   bằng "Bạn có thể…", "Bạn muốn…" — đó là giọng trợ lý.
 2. Mỗi câu TỰ CHỨA đủ tiêu chí. Cấm "căn đó", "chỗ này", "như trên" — trợ lý
    không nhớ lượt trước, câu thiếu tiêu chí sẽ tra không ra.
 3. Chỉ nhắc mã căn, phân khu, tên tài liệu có trong dữ kiện trên. Không bịa
@@ -347,6 +372,7 @@ def _du_kien(state: AgentState, cau_tra_loi: str) -> str:
         tieu_chi=_rut_gon(_tieu_chi_da_dung(state), 200),
         tai_lieu=", ".join(phuong_an_tu_tai_lieu(state)) or "(không có)",
         toi_da=TOI_DA_PHUONG_AN,
+        toi_da_ky_tu=TOI_DA_KY_TU,
     )
 
 

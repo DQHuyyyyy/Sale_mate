@@ -156,8 +156,16 @@ function DungBang({ dong, khoa }) {
   );
 }
 
-export default function CauTraLoi({ text, onChonCan }) {
-  const { than, nguon } = gomNguon(text);
+/**
+ * @param nguonThat Nguồn backend gửi qua event `sources` — gom từ tool và truy
+ *   hồi thật. Đứng SAU nguồn model tự viết trong bài vì model chỉ trích những
+ *   thứ nó thực sự dùng, còn danh sách của backend là toàn bộ thứ đã tra.
+ *   Nhưng nó là thứ DUY NHẤT còn lại khi model bỏ qua luật trích nguồn — đúng
+ *   chuyện đang xảy ra trên production với gpt-4o-mini.
+ */
+export default function CauTraLoi({ text, onChonCan, nguonThat }) {
+  const { than, nguon: nguonTrongBai } = gomNguon(text);
+  const nguon = [...new Set([...nguonTrongBai, ...(nguonThat ?? [])])];
   const dong = than.split('\n');
   const phanTu = [];
   let danhSach = [];
