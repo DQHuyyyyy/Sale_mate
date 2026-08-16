@@ -231,12 +231,50 @@ async def test_guardrail_khong_tu_choi_khi_tool_da_co_so_lieu():
 async def test_guardrail_gop_nguon_tai_lieu_va_nguon_tool():
     state = initial_state("Giá căn VOP345?", "s1")
     state["citations"] = [Citation(doc_id="d1", title="Bảng giá", kind="doc")]
-    state["tool_citations"] = [Citation(doc_id="inventory:postgres", title="Tồn kho", kind="db")]
-    state["answer"] = "Căn VOP345 giá 2,7 tỷ."
+    state["tool_citations"] = [Citation(doc_id="inventory:postgres", title="VOP345", kind="db")]
+    state["answer"] = "Căn VOP345 giá 2,7 tỷ theo Bảng giá."
 
     result = await GuardrailNode(0.35)(state)
 
     assert [c.kind for c in result["citations"]] == ["doc", "db"]
+
+
+@pytest.mark.asyncio
+async def test_guardrail_bo_nguon_cau_tra_loi_khong_dung():
+    """Truy hồi trả về mọi chunk nó tìm thấy, không phải mọi chunk model dùng.
+
+    Ca thật: hỏi căn ở Ocean Park 1, trả lời ba căn OP1, mà dòng nguồn liệt kê
+    cả tổng quan OP2, OP3 và ưu đãi OP2 — vector search có trả về nhưng model
+    không hề dùng.
+    """
+    state = initial_state("Căn ở Ocean Park 1?", "s1")
+    state["tool_context"] = '[inventory_search] {"can_hien_thi": [{"unit_code": "VOP758"}]}'
+    state["citations"] = [
+        Citation(doc_id="d1", title="Tổng quan dự án Vinhomes Ocean Park 2", kind="doc"),
+        Citation(doc_id="d2", title="Ưu đãi của Vinhomes OceanPark 2", kind="doc"),
+    ]
+    state["tool_citations"] = [
+        Citation(doc_id="inventory:postgres", title="VOP758", kind="db"),
+        Citation(doc_id="inventory:postgres", title="VOP893", kind="db"),
+    ]
+    state["answer"] = "Căn VOP758 giá 2,750 tỷ, 1PN, hướng Đông Nam."
+
+    result = await GuardrailNode(0.35)(state)
+
+    assert [c.title for c in result["citations"]] == ["VOP758"]
+
+
+@pytest.mark.asyncio
+async def test_guardrail_khong_xoa_sach_nguon_khi_tra_loi_khong_nhac_ma_can():
+    """Không nhắc lại mã căn không có nghĩa là số liệu tự nhiên mà có."""
+    state = initial_state("Căn VOP345 giá bao nhiêu?", "s1")
+    state["tool_context"] = '[inventory_lookup] {"unit_code": "VOP345"}'
+    state["tool_citations"] = [Citation(doc_id="inventory:postgres", title="VOP345", kind="db")]
+    state["answer"] = "Căn này giá 2,7 tỷ và vẫn còn trống."
+
+    result = await GuardrailNode(0.35)(state)
+
+    assert [c.title for c in result["citations"]] == ["VOP345"]
 
 
 # ---------------- Retrieve: chọn lọc theo doc_kind ----------------

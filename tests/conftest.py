@@ -71,7 +71,7 @@ def _chan_postgres_that(monkeypatch):
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     db = InventoryDB("sqlite:///:memory:", engine=engine)
     db.ensure_table()
-    for module in ("src.agents.tools.inventory", "src.agents.tools.search"):
+    for module in ("src.agents.tools.inventory", "src.agents.tools.search", "src.agents.tools.so_sanh"):
         monkeypatch.setattr(f"{module}.get_inventory_db", lambda: db)
 
     engine_coc = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)

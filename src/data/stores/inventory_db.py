@@ -17,7 +17,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Any
 
-from sqlalchemy import JSON, Column, MetaData, Numeric, String, Table, create_engine, select
+from sqlalchemy import JSON, Column, MetaData, Numeric, String, Table, create_engine, or_, select
 from sqlalchemy.engine import Engine
 
 from src.core.config import get_settings
@@ -97,13 +97,22 @@ class InventoryDB:
         self,
         *,
         unit_code: str | None = None,
+        unit_codes: list[str] | None = None,
         building: str | None = None,
         unit_type: str | None = None,
     ) -> list[dict[str, Any]]:
+        """Tra căn theo mã, danh sách mã, toà hoặc loại căn.
+
+        `unit_codes` cho tool so sánh lấy nhiều căn trong MỘT truy vấn. Dùng
+        `ilike` từng mã thay vì `in_` để giữ đúng ngữ nghĩa không phân biệt hoa
+        thường của nhánh một mã — dữ liệu ghi mã căn không thống nhất.
+        """
         self.ensure_table()
         stmt = select(inventory_units_table)
         if unit_code is not None:
             stmt = stmt.where(inventory_units_table.c.unit_code.ilike(unit_code))
+        if unit_codes:
+            stmt = stmt.where(or_(*[inventory_units_table.c.unit_code.ilike(m) for m in unit_codes]))
         if building is not None:
             stmt = stmt.where(inventory_units_table.c.building.ilike(building))
         if unit_type is not None:

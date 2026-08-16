@@ -20,6 +20,7 @@ from typing import Any
 
 from src.agents.contracts import LLMProvider
 from src.agents.graph import CONTEXT_NODES
+from src.agents.nguon import loc_nguon_da_dung
 from src.agents.nodes.generate import build_messages
 from src.agents.nodes.guardrail import INSUFFICIENT_MESSAGE
 from src.agents.nodes.plan import RETRIEVE
@@ -162,8 +163,17 @@ class LangGraphAgentService:
                     session_id=session_id,
                 )
 
-            if citations:
-                yield ChatEvent(type=ChatEventType.SOURCES, session_id=session_id, citations=citations)
+            # Lọc SAU khi có đủ chữ: nguồn phải là thứ câu trả lời thật sự dùng,
+            # không phải mọi thứ đã tra. Đây là lý do SOURCES bị giữ lại từ
+            # `_prepare_context` rồi mới phát ở đây.
+            cau_tra_loi = "".join(da_tra_loi)
+            da_dung = loc_nguon_da_dung(
+                citations,
+                cau_tra_loi,
+                co_du_lieu_tool=bool(state.get("tool_context")),
+            )
+            if da_dung:
+                yield ChatEvent(type=ChatEventType.SOURCES, session_id=session_id, citations=da_dung)
 
             # Gợi ý sinh SAU khi chữ đã chảy hết: khách đang đọc câu trả lời nên
             # không cảm thấy nhịp chờ này. Dùng model rẻ, và mọi lỗi bên trong
@@ -176,7 +186,7 @@ class LangGraphAgentService:
                     "options": await goi_y_bang_model(
                         state,
                         self._llm,
-                        "".join(da_tra_loi),
+                        cau_tra_loi,
                         model=self._settings.llm_model_fast,
                     )
                 },

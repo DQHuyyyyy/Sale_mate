@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from src.agents.nguon import loc_nguon_da_dung
 from src.agents.nodes.base import BaseNode
 from src.agents.state import AgentState, Intent
 from src.models.chat import Citation
@@ -77,13 +78,19 @@ class GuardrailNode(BaseNode):
         return bool(state.get("chunks")) and state.get("coverage", 0.0) >= self._threshold
 
     def _all_citations(self, state: AgentState) -> list[Citation]:
-        """Gộp nguồn tài liệu với nguồn tool.
+        """Gộp nguồn tài liệu với nguồn tool, rồi bỏ thứ câu trả lời không dùng.
 
         Gộp ở đây vì guardrail là node cuối: node retrieve chạy sau tools và
         ghi đè `citations`, nên tool phải giữ nguồn của mình ở khoá riêng cho
-        tới bước này.
+        tới bước này. Cũng vì là node cuối nên đây là chỗ đầu tiên có cả nguồn
+        lẫn `answer` để đối chiếu — xem `src/agents/nguon.py`.
         """
-        return [*state.get("citations", []), *state.get("tool_citations", [])]
+        gop = [*state.get("citations", []), *state.get("tool_citations", [])]
+        return loc_nguon_da_dung(
+            gop,
+            state.get("answer", ""),
+            co_du_lieu_tool=bool(state.get("tool_context")),
+        )
 
     def _is_sensitive(self, state: AgentState) -> bool:
         answer = state.get("answer", "")

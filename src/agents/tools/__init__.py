@@ -9,6 +9,7 @@ from src.agents.tools import (
     inventory,  # noqa: F401 - import để tool tự đăng ký
     khoan_vay,  # noqa: F401 - import để tool tự đăng ký
     search,  # noqa: F401 - import để tool tự đăng ký
+    so_sanh,  # noqa: F401 - import để tool tự đăng ký
     summary,  # noqa: F401 - import để tool tự đăng ký
 )
 from src.agents.tools.registry import ToolRegistry, register_tool, registry

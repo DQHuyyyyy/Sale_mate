@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.agents.prompts import SYSTEM_PROMPT_VERSION
 from src.api.errors import register_error_handlers
 from src.api.v1 import router as v1_router
 from src.bootstrap import configure
@@ -85,3 +86,48 @@ async def log_requests(request: Request, call_next):
 async def root_health() -> dict[str, str]:
     """Giữ ở gốc để Docker HEALTHCHECK và uptime monitor gọi đơn giản."""
     return {"status": "ok", "environment": settings.app_env}
+
+
+@app.get("/health/config", tags=["health"], summary="Cấu hình đang chạy thật")
+async def config_dang_chay() -> dict[str, object]:
+    """Cấu hình mà tiến trình NÀY đang chạy — để so local với production.
+
+    Vì sao cần: biến môi trường của Render nằm trong dashboard, không ai đọc
+    được từ repo, và biến nào không khai thì code lặng lẽ lấy giá trị mặc định.
+    Hệ quả đã xảy ra thật: local bật `ENABLE_AGENT_LOOP` và chạy `gpt-4o`, prod
+    không khai biến nào trong hai cái đó nên rơi về `False` và `gpt-4o-mini` —
+    cùng một câu hỏi cho ra hai chất lượng khác hẳn, mà không có dấu hiệu gì.
+    Đoán mò hai bên lệch chỗ nào tốn nhiều thời gian hơn hẳn một endpoint.
+
+    CHỈ trả tên cấu hình và cờ có/không, KHÔNG trả giá trị bí mật: khoá API và
+    chuỗi kết nối chỉ hiện dưới dạng boolean. Endpoint này công khai như
+    `/health`, nên bất kỳ thứ gì trả về ở đây là công khai.
+    """
+    return {
+        "environment": settings.app_env,
+        "model": {
+            "tra_loi": settings.llm_model_answer,
+            "nhanh": settings.llm_model_fast,
+            "temperature": settings.llm_temperature,
+            "max_tokens": settings.llm_max_tokens,
+            "co_openai_key": bool(settings.openai_api_key),
+        },
+        "agent": {
+            "vong_lap": settings.enable_agent_loop,
+            "so_lan_lap_toi_da": settings.agent_max_iterations,
+            "prompt": SYSTEM_PROMPT_VERSION,
+        },
+        "rag": {
+            "bat": settings.enable_rag,
+            "reranker": settings.reranker,
+            "top_k": settings.retrieval_top_k,
+            "nguong_do_phu": settings.coverage_threshold,
+            "collection": settings.qdrant_collection,
+            "co_qdrant": bool(settings.qdrant_url) and "localhost" not in settings.qdrant_url,
+        },
+        "ton_kho": {
+            # Rơi về SQLite nghĩa là tool tồn kho tra một file rỗng trong
+            # container và trợ lý trả lời "chưa đủ dữ liệu" cho mọi câu hỏi căn.
+            "dung_postgres": settings.database_url.startswith("postgres"),
+        },
+    }

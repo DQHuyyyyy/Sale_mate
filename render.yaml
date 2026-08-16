@@ -104,10 +104,39 @@ services:
         sync: false
       - key: LLM_MODEL_FAST
         value: gpt-4o-mini
+      # Model TRẢ LỜI. Từng để gpt-4o-mini cho rẻ, và đó là nguyên nhân chính
+      # khiến prod trả lời tệ hơn hẳn local: cùng câu hỏi, bản mini bỏ mất toà,
+      # tầng, phòng, loại căn, và bỏ luôn luật trích nguồn nên dòng "Nguồn"
+      # biến mất. Model rẻ vẫn dùng cho router/plan/gợi ý qua LLM_MODEL_FAST —
+      # ba việc đó chỉ cần phân loại, không cần viết hay.
       - key: LLM_MODEL_ANSWER
-        value: gpt-4o-mini
+        value: gpt-4o
       - key: LOG_LEVEL
         value: INFO
+
+      # ---- Hành vi agent ----
+      # PHẢI khai tường minh, kể cả khi trùng mặc định. Biến không khai thì
+      # Render không có gì để hiện, người đọc repo tưởng prod chạy như .env của
+      # mình. Đã mất một buổi vì đúng chuyện này: local bật vòng lặp, prod im
+      # lặng chạy False, không ai thấy cho tới khi so hai ảnh chụp màn hình.
+      #
+      # Kiểm chứng bất cứ lúc nào: GET /health/config trên service này.
+      - key: ENABLE_AGENT_LOOP
+        value: "true"
+      - key: AGENT_MAX_ITERATIONS
+        value: "2"
+      - key: ENABLE_RAG
+        value: "true"
+      - key: RERANKER
+        value: keyword
+      - key: COVERAGE_THRESHOLD
+        value: "0.35"
+      - key: LLM_TEMPERATURE
+        value: "0.3"
+      - key: RETRIEVAL_TOP_K
+        value: "20"
+      - key: EMBEDDING_MODEL
+        value: text-embedding-3-small
 
       # ---- Vector store cho RAG ----
       # Thiếu ba biến này thì qdrant_url rơi về http://localhost:6333, trong

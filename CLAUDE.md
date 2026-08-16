@@ -224,6 +224,21 @@ Hai tầng lọc quyết định khi nào tool chạy:
 Nhờ tầng hai mà `intents` khai rộng vẫn an toàn: "tìm căn 2 phòng ngủ" và "căn
 VOP345 còn không" cùng nhãn `listing`, nhưng chỉ câu sau rút được mã căn.
 
+**Tool cùng nhãn phải tự nhường nhau ở `build_args`.** Ba tool tồn kho chia việc
+theo SỐ mã căn trong câu:
+
+| Số mã căn | Tool chạy |
+|---|---|
+| 0 | `inventory_search` / `inventory_summary` |
+| 1 | `inventory_lookup` |
+| ≥2 | `so_sanh_can` |
+
+Vì sao `so_sanh_can` phải tồn tại: `inventory_lookup` dùng `re.search` nên chỉ
+bắt mã ĐẦU TIÊN. "So sánh VOP619 với VOP893" tra được đúng VOP619, model thiếu
+một vế rồi từ chối — khách nhận "chưa đủ dữ liệu" giữa lúc đang cân nhắc mua.
+Vòng lặp agent vốn để chữa ca này, nhưng `ENABLE_AGENT_LOOP` mặc định TẮT và
+production không bật, nên so sánh phải chạy được ở đường tất định.
+
 `@register_tool` trần (không tham số) vẫn đăng ký tool cho LLM thấy qua
 `specs()` nhưng agent **không** tự gọi — dùng cho tool chỉ chạy khi được yêu cầu
 tường minh.
@@ -277,6 +292,36 @@ contract `{message, history} -> {reply}` cho client đơn giản và cho test.
 lại nó lấy thứ tự node từ `CONTEXT_NODES` trong `graph.py`, nên thêm node mới
 vào graph là stream tự chạy theo. Đừng liệt kê tay node ở `service.py`: đã có
 lần làm vậy và đường stream lặng lẽ bỏ qua node `tools`.
+
+## Trích nguồn — chỉ hiện thứ ĐÃ DÙNG
+
+Hai đường sinh nguồn đều trả về "đã tra cứu", không phải "đã dùng":
+`RetrieveNode` tạo một `Citation` cho **mọi** chunk lấy về, `ToolsNode` tạo cho
+mọi tool chạy được. [`src/agents/nguon.py`](src/agents/nguon.py) lọc lại trước
+khi hiện.
+
+| Loại nguồn | Luật giữ |
+|---|---|
+| `kind="db"` (mã căn) | mã căn xuất hiện trong câu trả lời |
+| `kind="doc"`, lượt CÓ dữ liệu tool | model trích tên tài liệu tường minh |
+| `kind="doc"`, lượt KHÔNG có tool | giữ 3 cái điểm cao nhất |
+
+Lọc ở đâu: đường stream lọc ngay trước khi phát `SOURCES` (đó là lý do event này
+bị giữ lại từ `_prepare_context` rồi mới phát sau khi hết token); đường graph lọc
+trong `GuardrailNode._all_citations`. Cả hai cần `answer` để đối chiếu.
+
+**Lưới an toàn:** lượt có dữ liệu tool mà không nguồn tool nào lọt (câu trả lời
+nói "căn này" thay vì nhắc mã) thì giữ lại vài cái đầu. Xoá sạch nguồn là xoá
+đúng thứ chứng minh trợ lý không bịa.
+
+Nhãn nguồn của tool là **mã căn**, không phải câu đầu trong description. Hàm
+`_ma_can_trong` phải đi xuống một tầng vì `inventory_search` trả
+`{tong_so_khop, can_hien_thi: [...]}` chứ không trả thẳng mảng căn — bản đầu chỉ
+dò tầng ngoài nên cả description dài ngoằng của tool leo lên dòng "Nguồn".
+
+FE hợp nhất hai nguồn: dấu `[Mã căn]` model tự viết, và event `sources`. Không
+được bỏ vế thứ hai — production chạy `gpt-4o-mini` và model đó bỏ qua luật trích
+nguồn, dòng "Nguồn" biến mất hẳn trong khi local dùng `gpt-4o` thì vẫn có.
 
 ## Gợi ý câu hỏi tiếp theo — và đường dẫn tới đặt cọc
 

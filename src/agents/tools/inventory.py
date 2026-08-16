@@ -42,11 +42,16 @@ def _extract_args(query: str) -> dict[str, Any] | None:
     Cố ý CHỈ nhận mã căn, không đoán toà hay loại căn từ ngôn ngữ tự nhiên.
     Tra sai một căn rồi báo giá cho khách còn tệ hơn là không tra. Khi nào cần
     lọc theo toà/loại, thêm một tool riêng với schema rõ ràng.
+
+    Từ HAI mã trở lên thì nhường `so_sanh_can`. Trước đây tool này vẫn chạy và
+    bắt mã đầu tiên, nên "so sánh VOP619 với VOP893" chỉ tra được VOP619 rồi
+    model từ chối vì thiếu căn kia. Chạy tiếp ở đây cũng chỉ nhồi thêm một bản
+    sao của căn đầu vào prompt.
     """
-    match = _UNIT_CODE.search(query)
-    if match is None:
+    ma = _UNIT_CODE.findall(query)
+    if len(ma) != 1:
         return None
-    return {"unit_code": match.group(1).upper()}
+    return {"unit_code": ma[0].upper()}
 
 
 class InventoryArgs(BaseModel):

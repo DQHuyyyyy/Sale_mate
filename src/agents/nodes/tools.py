@@ -37,10 +37,29 @@ def _ma_can_trong(result: ToolResult) -> list[str]:
     ("Tra tình trạng căn hộ THẬT theo thời gian thực…") — đúng về mặt kỹ thuật
     nhưng người đọc không kiểm chứng được gì từ nó. Mã căn thì bấm vào mở đúng
     căn đó.
+
+    Phải đi XUỐNG một tầng: `inventory_search` không trả thẳng mảng căn mà trả
+    `{tong_so_khop, day_du, can_hien_thi: [...]}`. Bản đầu chỉ dò tầng ngoài nên
+    không thấy mã nào, rơi vào nhánh dự phòng, và cả cái description dài ngoằng
+    của tool leo lên dòng "Nguồn" trước mặt người dùng.
     """
-    hang = result.data if isinstance(result.data, list) else [result.data]
-    ma = [str(r["unit_code"]) for r in hang if isinstance(r, dict) and r.get("unit_code")]
+    ma: list[str] = []
+    for hang in _cac_hang(result.data):
+        gia_tri = hang.get("unit_code")
+        if gia_tri:
+            ma.append(str(gia_tri))
     return list(dict.fromkeys(ma))
+
+
+def _cac_hang(data: Any) -> list[dict[str, Any]]:
+    """Mọi dict có thể chứa một căn, dù tool gói nó ở tầng nào."""
+    if isinstance(data, list):
+        return [r for r in data if isinstance(r, dict)]
+    if not isinstance(data, dict):
+        return []
+    if data.get("unit_code"):
+        return [data]
+    return [r for v in data.values() if isinstance(v, list) for r in v if isinstance(r, dict)]
 
 
 def _nguon_cua_tool(tool: AgentTool, result: ToolResult) -> list[Citation]:
