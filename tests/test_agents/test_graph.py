@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from src.agents.graph import build_graph, build_nodes, route_after_tools
+from src.agents.nodes.guardrail import INSUFFICIENT_MESSAGE
 from src.agents.nodes.tools import ToolsNode
 from src.agents.state import initial_state
 from src.rag.retriever import EmptyRetriever
@@ -53,7 +54,7 @@ async def test_graph_tu_choi_khi_can_tai_lieu_ma_khong_co_gi(scripted_llm, setti
 
     result = await graph.ainvoke(initial_state("Thủ tục sang tên sổ đỏ?", "s1"))
 
-    assert "chưa có đủ dữ liệu" in result["answer"].lower()
+    assert result["answer"] == INSUFFICIENT_MESSAGE
 
 
 @pytest.mark.asyncio
@@ -94,5 +95,5 @@ async def test_graph_hoi_can_cu_the_thi_so_lieu_tu_tool_di_vao_prompt(scripted_l
     assert "VOP345" in result["tool_context"]
     assert "2,7 tỷ" in result["tool_context"]
     # Khong bi guardrail chan du EmptyRetriever khong tra chunk nao
-    assert "chưa có đủ dữ liệu" not in result["answer"].lower()
+    assert result["answer"] != INSUFFICIENT_MESSAGE
     assert [c.kind for c in result["citations"]] == ["db"]

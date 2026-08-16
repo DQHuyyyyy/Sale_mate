@@ -57,10 +57,15 @@ def _chan_postgres_that(monkeypatch):
 
     Test nào cần dữ liệu tồn kho thì tự monkeypatch `get_inventory_db` trong
     module của mình, đè lên fixture này.
+
+    Bảng lead đặt cọc chặn cùng lý do, nhưng hậu quả nặng hơn một bậc: tool đó
+    GHI chứ không chỉ đọc. Một test lỡ chạm vào là chèn khách ma vào danh sách
+    đội sale gọi thật.
     """
     from sqlalchemy import create_engine
     from sqlalchemy.pool import StaticPool
 
+    from src.data.stores.dat_coc_db import DatCocDB
     from src.data.stores.inventory_db import InventoryDB
 
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -68,6 +73,17 @@ def _chan_postgres_that(monkeypatch):
     db.ensure_table()
     for module in ("src.agents.tools.inventory", "src.agents.tools.search"):
         monkeypatch.setattr(f"{module}.get_inventory_db", lambda: db)
+
+    engine_coc = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    db_coc = DatCocDB("sqlite:///:memory:", engine=engine_coc)
+    db_coc.ensure_table()
+    # Vá ở CẢ HAI chỗ, khác với tồn kho phía trên. Vá mỗi module tool thì mới
+    # chặn được đường gọi của tool; test nào `from src.data.stores.dat_coc_db
+    # import get_dat_coc_db` để đọc lại kết quả vẫn bắn thẳng vào Supabase. Đã
+    # xảy ra thật ngay khi viết test cho tool này: một dòng đọc lại danh sách
+    # lead đã tạo bảng `dat_coc_lead` trên production.
+    for muc_tieu in ("src.agents.tools.dat_coc", "src.data.stores.dat_coc_db"):
+        monkeypatch.setattr(f"{muc_tieu}.get_dat_coc_db", lambda: db_coc)
 
 
 @pytest_asyncio.fixture

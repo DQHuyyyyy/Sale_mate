@@ -72,6 +72,22 @@ const goiYTheoCan = (maCan) =>
     `Có căn nào tương tự ${maCan} không?`,
   ].map((cau) => ({ nhan: cau, cau_hoi: cau }));
 
+/**
+ * Bước tiếp sau khi sửa ảnh xong.
+ *
+ * Modify Object không đi qua lõi AI nên không có event `done` nào mang gợi ý về.
+ * Dựng tại chỗ, ngắn thôi: khách vừa xem căn này trong đúng phong cách họ muốn —
+ * đó là lúc gần quyết định nhất của cả phiên, đừng để màn hình dừng ở tấm ảnh.
+ *
+ * Cả ba câu đều tự chứa mã căn nên lõi AI tra được, giống luật của
+ * `src/agents/suggest.py`.
+ */
+const goiYSauKhiSuaAnh = (maCan) => [
+  `Đặt cọc giữ chỗ căn ${maCan}`,
+  `Căn ${maCan} còn không, giá bao nhiêu?`,
+  `Có căn nào tương tự ${maCan} không?`,
+];
+
 const TEN_TOOL = {
   inventory_lookup: 'thông tin căn',
   inventory_search: 'danh sách căn',
@@ -320,7 +336,12 @@ export default function ChatSidebar({ open, onToggle }) {
       setMessages((prev) =>
         prev.map((item) =>
           item.id === id
-            ? { ...item, content: `Ảnh căn ${maCanDangXem} sau khi ${yeuCau}`, anhAI: ket_qua.anh }
+            ? {
+                ...item,
+                content: `Ảnh căn ${maCanDangXem} sau khi ${yeuCau}`,
+                anhAI: ket_qua.anh,
+                options: goiYSauKhiSuaAnh(maCanDangXem),
+              }
             : item,
         ),
       );
@@ -458,17 +479,21 @@ export default function ChatSidebar({ open, onToggle }) {
                 )}
               </div>
 
-              {/* Phương án chọn sẵn cho câu hỏi ngược. Dùng lại đúng lớp `qa`
+              {/* Phương án chọn sẵn: vừa là đáp án cho câu hỏi ngược, vừa là
+                  gợi ý hỏi tiếp sau một câu trả lời. Dùng lại đúng lớp `qa`
                   của gợi ý mở đầu — cùng ý nghĩa "bấm để hỏi luôn" thì nên
                   trông giống nhau. Ô nhập vẫn mở, ai muốn gõ tay vẫn gõ. */}
               {item.options?.length > 0 && (
-                <div className="qa" role="group" aria-label="Phương án gợi ý">
-                  {item.options.map((text) => (
-                    <button key={text} disabled={sending} onClick={() => ask(text)}>
-                      {text}
-                    </button>
-                  ))}
-                </div>
+                <>
+                  <div className="cw-loi-moi">Bạn có thể hỏi tiếp:</div>
+                  <div className="qa" role="group" aria-label="Gợi ý câu hỏi tiếp theo">
+                    {item.options.map((text) => (
+                      <button key={text} disabled={sending} onClick={() => ask(text)}>
+                        {text}
+                      </button>
+                    ))}
+                  </div>
+                </>
               )}
             </Fragment>
           ))}

@@ -278,6 +278,74 @@ lại nó lấy thứ tự node từ `CONTEXT_NODES` trong `graph.py`, nên thê
 vào graph là stream tự chạy theo. Đừng liệt kê tay node ở `service.py`: đã có
 lần làm vậy và đường stream lặng lẽ bỏ qua node `tools`.
 
+## Gợi ý câu hỏi tiếp theo — và đường dẫn tới đặt cọc
+
+[`src/agents/suggest.py`](src/agents/suggest.py) ráp tối đa 4 câu hỏi bấm được sau
+mỗi lượt, gửi ra FE qua `data.options` của event `done`.
+
+**Đích của dãy nút không phải hỏi cho vui.** Nó dẫn khách từ danh sách về một
+căn, từ một căn sang so sánh và tài chính, rồi tới giữ chỗ. Bước cuối có thật:
+tool `dat_coc` ghi lead vào Postgres cho đội sale gọi lại.
+
+Hai tầng sinh gợi ý:
+
+| Tầng | Khi nào | Vì sao |
+|---|---|---|
+| `goi_y_bang_model` | mặc định | model rẻ (`llm_model_fast`) đọc câu vừa trả lời rồi viết gợi ý bám đúng mạch — khuôn cố định lộ ra sau vài lượt, khách thôi không đọc nút nữa |
+| `goi_y_tiep_theo` | model hỏng / trả rác | lưới an toàn, suy từ state, không gọi model |
+
+Gọi SAU khi chữ đã stream hết nên khách đang đọc, không thấy nhịp chờ. Mọi lỗi
+đều nuốt và rơi về khuôn — mất dãy nút thì tiếc, mất câu trả lời thì hỏng.
+
+Không làm thành `@register_tool`: `ToolsNode` chạy TRƯỚC `generate` và kết quả
+tool đi thẳng vào prompt, còn gợi ý sinh ra SAU câu trả lời và không được vào
+prompt.
+
+Ba luật, đừng gỡ:
+
+| Luật | Chặn chuyện gì |
+|---|---|
+| Mọi câu qua `_tra_loi_duoc`, kể cả câu model viết | nút bấm dẫn vào "chưa đủ dữ liệu" |
+| Câu tự chứa đủ tiêu chí | `build_args` chỉ đọc câu hiện tại, không nhớ lượt trước |
+| Mã căn và tên tài liệu lấy từ lượt này | model từng chào "ưu đãi Ocean Park 1" trong khi kho chỉ có OP2, OP3 |
+
+`_tra_loi_duoc` có **hai** tầng. Tầng một hỏi registry xem có `build_args` nào
+nhận câu đó không, nên thêm tool mới là tự động được tính. Tầng hai sinh ra từ
+một lỗ hổng test bắt được: "Ưu đãi Ocean Park 1 có gì" lọt qua tầng một vì
+`extract_criteria` thấy "Ocean Park 1" rồi rút ra phân khu — tool tìm căn chạy và
+trả về danh sách căn hộ, trong khi khách bấm vào để đọc ưu đãi và kho không hề có
+tài liệu ưu đãi cho OP1. Nên câu hỏi về chủ đề tài liệu còn phải khớp một tài
+liệu đã truy hồi thật.
+
+Nhánh chưa đủ dữ liệu cũng có gợi ý: nhặt lại tiêu chí từ lượt user gần nhất rồi
+trải ra ba phân khu. Chỉ dùng lịch sử để **dựng gợi ý** — `extract_criteria` giữ
+nguyên hành vi chỉ đọc câu hiện tại, nới chỗ đó là nới rủi ro tra nhầm sang tiêu
+chí người dùng đã bỏ.
+
+### Tool `dat_coc` — bước chốt
+
+[`src/agents/tools/dat_coc.py`](src/agents/tools/dat_coc.py) ghi lead vào bảng
+`dat_coc_lead` ([migration 009](interface/backend/migrations/009_dat_coc_lead.sql)).
+
+**Tool chạy ngay cả khi khách chưa cho số điện thoại** — chủ ý, không phải thiếu
+kiểm tra. Câu "đặt cọc căn VOP397" phải được nhận thì trợ lý mới có cớ hỏi xin
+số; đòi đủ số mới chạy thì câu đó rơi vào nhánh "chưa đủ dữ liệu" và khách bị từ
+chối đúng lúc muốn mua, còn bộ lọc gợi ý cũng loại luôn nút "Đặt cọc". Thiếu
+thông tin thì tool trả `trang_thai="can_bo_sung"` kèm `con_thieu` để `generate`
+hỏi xin đúng thứ đó.
+
+**Không bao giờ nêu số tiền cọc, thời hạn giữ chỗ hay mức phạt** — hệ thống không
+có dữ liệu nào về chúng. Prompt v6 cấm, và test khẳng định `data` của tool không
+chứa đơn vị tiền.
+
+Số điện thoại **không** được trả lại vào `data`: `data` đi vào prompt, rồi vào log
+của nhà cung cấp LLM. Bảng có RLS, log thì không.
+
+⚠️ `tests/conftest.py` vá `get_dat_coc_db` ở **cả hai** chỗ — module tool và
+module store. Tồn kho chỉ vá module tool là đủ vì nó chỉ đọc; tool này **ghi**.
+Đã xảy ra thật khi viết test cho nó: một dòng `from src.data.stores.dat_coc_db
+import get_dat_coc_db` để đọc lại kết quả đã tạo bảng thật trên Supabase.
+
 ## Tracing
 
 `trace()` trong `src/core/logging.py` dùng `ContextVar` — mọi dòng log phát ra

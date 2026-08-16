@@ -15,9 +15,14 @@ from src.agents.nodes.base import BaseNode
 from src.agents.state import AgentState, Intent
 from src.models.chat import Citation
 
+# Lời mời nêu thêm thông tin, KHÔNG phải lời từ chối cụt. Bản cũ ("Mình chưa có
+# đủ dữ liệu để trả lời chính xác câu này") đóng luôn cuộc trò chuyện: khách phải
+# tự đoán xem thiếu gì. Ca thật: hỏi "có bao nhiêu căn dưới 4 tỷ ở OP1" thì chạy,
+# hỏi tiếp "liệt kê 20 căn đó" thì câu không còn tiêu chí nào nên không tool nào
+# nhận — và khách nhận đúng câu từ chối đó. Nói rõ mình tra được theo trục nào
+# thì khách biết đường hỏi lại; dãy nút gợi ý đi kèm lo nốt phần còn lại.
 INSUFFICIENT_MESSAGE = (
-    "Mình chưa có đủ dữ liệu để trả lời chính xác câu này. "
-    "Bạn cho mình biết thêm khu vực, dự án hoặc mức ngân sách để tra cứu sát hơn nhé."
+    "Bạn cho mình thêm thông tin chi tiết nhé — mình tra được theo phân khu, khoảng giá hoặc mã căn cụ thể."
 )
 
 # Con số kèm đơn vị tiền/diện tích — dấu hiệu của thông tin có hệ quả.

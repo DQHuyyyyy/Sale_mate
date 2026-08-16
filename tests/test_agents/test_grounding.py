@@ -64,5 +64,5 @@ async def test_graph_grounding_end_to_end_tu_choi_khi_retrieval_rong(scripted_ll
 
     result = await graph.ainvoke(initial_state("Giá biệt thự Vinhomes Ocean Park 3 phòng ngủ?", "s2"))
 
-    assert "chưa có đủ dữ liệu" in result["answer"].lower()
+    assert result["answer"] == INSUFFICIENT_MESSAGE
     assert result["citations"] == []

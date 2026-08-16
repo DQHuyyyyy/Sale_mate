@@ -35,6 +35,7 @@ from src.agents.contracts import LLMProvider
 from src.agents.nodes.act import _chu_ky, _lam_sach
 from src.agents.nodes.base import BaseNode
 from src.agents.state import AgentState
+from src.agents.suggest import TOI_DA_PHUONG_AN, phuong_an_tu_tai_lieu
 from src.agents.tools.registry import ToolRegistry
 from src.agents.tools.registry import registry as default_registry
 from src.core.logging import get_logger
@@ -46,9 +47,9 @@ ANSWER = "answer"
 CLARIFY = "clarify"
 RETRIEVE = "retrieve"
 
-# Số phương án chọn sẵn tối đa kèm một câu hỏi ngược. Nhiều hơn thì người dùng
-# phải đọc thay vì bấm, mất luôn ý nghĩa của việc gợi sẵn.
-_TOI_DA_PHUONG_AN = 4
+# Trần số phương án dùng chung với module gợi ý — hai chỗ cùng dựng dãy nút bấm
+# cho một khung chat, lệch nhau là giao diện lúc 4 nút lúc 6.
+_TOI_DA_PHUONG_AN = TOI_DA_PHUONG_AN
 
 _PROMPT = """Bạn là bộ điều phối của trợ lý bán căn hộ. Chọn ĐÚNG MỘT hành động tiếp theo.
 
@@ -87,26 +88,6 @@ _MA_CAN = re.compile(r"\b[A-Za-z]{2,4}\d{2,5}\b")
 # Tên tool tra theo mã căn. Có nhắc tên cụ thể ở đây, nhưng luôn hỏi registry
 # trước khi dùng — thiếu tool thì rơi về để model tự quyết, không nổ.
 _TOOL_TRA_MA_CAN = "inventory_lookup"
-
-
-def _phuong_an_tu_tai_lieu(state: AgentState) -> list[str]:
-    """Phương án lấy thẳng TÊN TÀI LIỆU đã truy hồi, không hỏi model.
-
-    Vì sao không để model tự nghĩ: nó gợi ý thứ không tồn tại. Ca thật — kho chỉ
-    có ưu đãi của Ocean Park 2 và 3, model vẫn chào "ưu đãi của Ocean Park 1".
-    Người dùng bấm vào, agent tra không ra, lại hỏi ngược tiếp; hai lượt trôi đi
-    mà không ai tiến thêm bước nào.
-
-    Tên tài liệu là danh sách những gì THẬT SỰ có, đã xếp theo độ liên quan.
-    Cùng lý lẽ với `_ma_can_con_thieu`: câu hỏi có đáp án khách quan thì đối
-    chiếu dữ liệu, đừng đưa cho model đoán.
-
-    Chúng cũng sẵn là cụm danh từ ("Ưu đãi của Vinhomes OceanPark 2"), đọc như
-    một gợi ý bấm được — hơn hẳn câu hỏi đóng "Bạn có muốn biết… không?" mà
-    bấm vào chỉ như đang trả lời "có".
-    """
-    ten = [(c.doc_title or "").strip() for c in state.get("chunks") or []]
-    return list(dict.fromkeys(t for t in ten if t))[:_TOI_DA_PHUONG_AN]
 
 
 def _doc_phuong_an(data: dict[str, Any]) -> list[str]:
@@ -335,7 +316,7 @@ class PlanNode(BaseNode):
             return self._quyet(
                 CLARIFY,
                 reason or "Bạn cho mình thêm thông tin để tra cứu chính xác nhé.",
-                options=_phuong_an_tu_tai_lieu(state) or _doc_phuong_an(data),
+                options=phuong_an_tu_tai_lieu(state) or _doc_phuong_an(data),
             )
 
         if action == ACT:

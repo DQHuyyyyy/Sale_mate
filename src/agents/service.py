@@ -24,6 +24,7 @@ from src.agents.nodes.generate import build_messages
 from src.agents.nodes.guardrail import INSUFFICIENT_MESSAGE
 from src.agents.nodes.plan import RETRIEVE
 from src.agents.state import AgentState, initial_state
+from src.agents.suggest import goi_y_bang_model, goi_y_khi_thieu_du_lieu
 from src.core.config import Settings
 from src.core.exceptions import SalesMateError, UpstreamError
 from src.core.logging import get_logger, trace
@@ -133,20 +134,28 @@ class LangGraphAgentService:
                         content=INSUFFICIENT_MESSAGE,
                         session_id=session_id,
                     )
-                    yield ChatEvent(type=ChatEventType.DONE, session_id=session_id)
+                    # Không để khách ở ngõ cụt: nhặt lại tiêu chí của lượt trước
+                    # rồi trải ra ba phân khu thành nút bấm được.
+                    yield ChatEvent(
+                        type=ChatEventType.DONE,
+                        session_id=session_id,
+                        data={"options": goi_y_khi_thieu_du_lieu(state)},
+                    )
                     return
 
-            produced = False
+            # Gom lại chữ đã stream: gợi ý cần ĐỌC ĐƯỢC câu trả lời thì mới bám
+            # đúng mạch câu chuyện. Chỉ giữ trong biến cục bộ của một lượt.
+            da_tra_loi: list[str] = []
             async for token in self._llm.stream(
                 build_messages(state),
                 model=self._settings.llm_model_answer,
                 temperature=self._settings.llm_temperature,
                 max_tokens=self._settings.llm_max_tokens,
             ):
-                produced = True
+                da_tra_loi.append(token)
                 yield ChatEvent(type=ChatEventType.TOKEN, content=token, session_id=session_id)
 
-            if not produced:
+            if not da_tra_loi:
                 yield ChatEvent(
                     type=ChatEventType.TOKEN,
                     content="Mình chưa tạo được câu trả lời. Bạn thử hỏi lại nhé.",
@@ -156,7 +165,22 @@ class LangGraphAgentService:
             if citations:
                 yield ChatEvent(type=ChatEventType.SOURCES, session_id=session_id, citations=citations)
 
-            yield ChatEvent(type=ChatEventType.DONE, session_id=session_id)
+            # Gợi ý sinh SAU khi chữ đã chảy hết: khách đang đọc câu trả lời nên
+            # không cảm thấy nhịp chờ này. Dùng model rẻ, và mọi lỗi bên trong
+            # đều rơi về khuôn tất định. Gắn vào DONE để FE dựng nút khi câu trả
+            # lời đã hết chữ.
+            yield ChatEvent(
+                type=ChatEventType.DONE,
+                session_id=session_id,
+                data={
+                    "options": await goi_y_bang_model(
+                        state,
+                        self._llm,
+                        "".join(da_tra_loi),
+                        model=self._settings.llm_model_fast,
+                    )
+                },
+            )
 
         except SalesMateError as exc:
             logger.warning("Stream dừng do lỗi nghiệp vụ: %s", exc.code)

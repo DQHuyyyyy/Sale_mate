@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 
 from src.agents.graph import CONTEXT_NODES, build_graph, build_nodes
+from src.agents.nodes.guardrail import INSUFFICIENT_MESSAGE
 from src.agents.service import LangGraphAgentService
 from src.agents.state import Intent
 from src.core.logging import trace, trace_context
@@ -109,7 +110,7 @@ async def test_co_du_lieu_tool_thi_van_tra_loi_du_truy_hoi_rong(scripted_llm, se
     events = await _collect(_service(scripted_llm, settings, tools_node=_Tools()), "giá căn VOP345 bao nhiêu")
 
     noi_dung = "".join(e.content for e in events if e.type == ChatEventType.TOKEN)
-    assert "chưa có đủ dữ liệu" not in noi_dung.lower()
+    assert INSUFFICIENT_MESSAGE not in noi_dung
 
 
 @pytest.mark.asyncio
@@ -117,7 +118,7 @@ async def test_khong_co_gi_ca_thi_van_tu_choi(scripted_llm, settings):
     events = await _collect(_service(scripted_llm, settings), "Thủ tục sang tên sổ đỏ?")
 
     noi_dung = "".join(e.content for e in events if e.type == ChatEventType.TOKEN)
-    assert "chưa có đủ dữ liệu" in noi_dung.lower()
+    assert INSUFFICIENT_MESSAGE in noi_dung
 
 
 # ---------- Tracing ----------
@@ -151,3 +152,42 @@ async def test_stream_dat_session_id_vao_trace(scripted_llm, settings):
 
     assert thay and thay[0]["mode"] == "stream"
     assert thay[0]["session_id"]
+
+
+# ---------- Gợi ý câu hỏi tiếp theo ----------
+
+
+@pytest.mark.asyncio
+async def test_done_mang_goi_y_tren_duong_tra_loi_thuong(scripted_llm, settings):
+    """Widget dựng nút từ `data.options` của DONE — thiếu khoá này là mất tính năng."""
+
+    class _Tools:
+        name = "tools"
+
+        async def __call__(self, state):
+            return {
+                "tool_context": '[inventory_search] x\nKết quả:\n[{"unit_code": "VOP758", '
+                '"subdivision": "Ocean Park 1"}, {"unit_code": "VOP285", "subdivision": "Ocean Park 1"}]',
+                "tool_citations": [],
+                "tools_ran": ["inventory_search"],
+                "tool_filters": {"inventory_search": {"subdivision": "Ocean Park 1"}},
+            }
+
+    events = await _collect(_service(scripted_llm, settings, tools_node=_Tools()), "căn ở Ocean Park 1")
+
+    done = [e for e in events if e.type == ChatEventType.DONE]
+    assert len(done) == 1
+    goi_y = done[0].data.get("options")
+    assert goi_y and all(isinstance(c, str) and c for c in goi_y)
+    assert any("VOP758" in c for c in goi_y)
+
+
+@pytest.mark.asyncio
+async def test_thieu_du_lieu_van_co_loi_ra_thay_vi_ngo_cut(scripted_llm, settings):
+    """Ca thật trong ảnh: câu hỏi cụt lủn không được kết thúc bằng một lời từ chối trơ."""
+    events = await _collect(_service(scripted_llm, settings), "Thủ tục sang tên sổ đỏ?")
+
+    done = [e for e in events if e.type == ChatEventType.DONE]
+    goi_y = done[0].data.get("options")
+    assert len(goi_y) == 3
+    assert all("Ocean Park" in c for c in goi_y)

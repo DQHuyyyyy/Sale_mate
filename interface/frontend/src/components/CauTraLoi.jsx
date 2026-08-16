@@ -16,6 +16,11 @@
 // tầng giao diện, không phải bắt model đổi cách viết.
 const TRICH_DAN = /\[([^\]\n]{2,60})\]/g;
 
+// Nhiều dấu đứng liền nhau — "[VOP345], [VOP247]" hay "[A] và [B]" — gỡ CẢ CHÙM
+// một lượt, kể cả dấu phẩy/chữ "và" nối giữa. Gỡ từng dấu một thì phần nối ở
+// giữa còn lại thành ", ." lửng lơ giữa câu.
+const CHUOI_TRICH = /\[[^\]\n]{2,60}\](?:[ \t]*(?:,|;|và)?[ \t]*\[[^\]\n]{2,60}\])*/g;
+
 /**
  * Gỡ mọi dấu trích nguồn khỏi thân bài, trả về danh sách nguồn để in một lần
  * ở cuối.
@@ -29,16 +34,33 @@ const TRICH_DAN = /\[([^\]\n]{2,60})\]/g;
  */
 function gomNguon(text) {
   const ten = [];
-  const than = String(text ?? '').replace(TRICH_DAN, (_, nguon) => {
-    if (!ten.includes(nguon)) ten.push(nguon);
+  const than = String(text ?? '').replace(CHUOI_TRICH, (chuoi) => {
+    for (const [, nguon] of chuoi.matchAll(TRICH_DAN)) {
+      if (!ten.includes(nguon)) ten.push(nguon);
+    }
     return '';
   });
 
-  return {
-    // Gỡ dấu xong hay còn lại khoảng trắng thừa giữa câu hoặc trước dấu câu.
-    than: than.replace(/[ \t]{2,}/g, ' ').replace(/[ \t]+([.,;:)])/g, '$1'),
-    nguon: ten,
-  };
+  return { than: donDauCau(than), nguon: ten };
+}
+
+/**
+ * Dọn dấu câu mồ côi sau khi gỡ trích nguồn.
+ *
+ * Model hay kết bằng "Thông tin chi tiết được trích dẫn từ nguồn: [VOP345],
+ * [VOP247]." Gỡ hai dấu ngoặc xong còn trơ lại "...từ nguồn:,." — dấu chồng dấu,
+ * trông như lỗi hiển thị.
+ */
+function donDauCau(text) {
+  return (
+    text
+      // Dấu ngăn đứng ngay trước một dấu khác thì thừa: ":,." còn ".".
+      .replace(/[:,;](?=\s*[.,;:])/g, '')
+      .replace(/[ \t]{2,}/g, ' ')
+      .replace(/[ \t]+([.,;:)])/g, '$1')
+      // Dòng kết thúc bằng dấu ngăn treo lơ lửng ("Nguồn:") thì bỏ luôn dấu đó.
+      .replace(/[ \t]*[:,;]+[ \t]*$/gm, '')
+  );
 }
 
 /** Tách `**in đậm**` thành các phần tử, giữ nguyên phần còn lại. */
