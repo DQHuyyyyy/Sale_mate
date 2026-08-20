@@ -101,6 +101,11 @@ export function TaiLieuAIDanhSach() {
           Đây là toàn bộ nguồn trợ lý dùng để trả lời. Trợ lý không đọc gì ngoài danh sách này —
           bấm vào một tài liệu để xem đúng nội dung nó đã dùng.
         </p>
+        {/* Kho file admin tải lên là việc khác và không có mục nav riêng.
+            Không có lối này thì nó thành trang không ai vào được. */}
+        <p>
+          Tìm hồ sơ do quản trị viên tải lên? <Link to="/documents">Xem kho file đính kèm</Link>.
+        </p>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
