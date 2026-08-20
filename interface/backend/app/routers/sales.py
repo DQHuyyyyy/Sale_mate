@@ -62,6 +62,7 @@ def all_sales(_: CurrentUser = Depends(require_admin)) -> list[SaleRecordWithSal
     )
     return [SaleRecordWithSale(**row) for row in rows]
 
+
 # ⚠️ KHÔNG có route POST ở đây nữa.
 #
 # Ghi nhận đã bán CHỈ diễn ra ở màn Giao dịch, bằng cách chốt một lead —

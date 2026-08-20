@@ -102,8 +102,7 @@ def tao_lead(payload: TaoLead, nguoi_tao: CurrentUser | None = Depends(get_optio
         )
 
     dang_giu = fetch_one(
-        "SELECT count(DISTINCT ma_can) AS so_can FROM dat_coc_lead "
-        "WHERE so_dien_thoai = %s AND trang_thai = ANY(%s)",
+        "SELECT count(DISTINCT ma_can) AS so_can FROM dat_coc_lead WHERE so_dien_thoai = %s AND trang_thai = ANY(%s)",
         (sdt, list(_DANG_GIU)),
     )
     if dang_giu and dang_giu["so_can"] >= TOI_DA_GIU_MOI_SO:
@@ -260,8 +259,7 @@ def _chot_ban(lead_id: int, nguoi_doi: CurrentUser) -> dict | None:
             )
 
         cur.execute(
-            f"SELECT {COL_TINH_TRANG} AS tinh_trang, {gia_tri_select} "
-            "FROM salemate_v1 WHERE ma_can = %s FOR UPDATE",
+            f"SELECT {COL_TINH_TRANG} AS tinh_trang, {gia_tri_select} FROM salemate_v1 WHERE ma_can = %s FOR UPDATE",
             (lead["ma_can"],),
         )
         can = cur.fetchone()

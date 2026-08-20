@@ -48,7 +48,20 @@ Thumbs.db
 # Dữ liệu lớn — CHỈ thư mục data/ ở gốc repo.
 # Dấu / ở đầu là bắt buộc: nếu viết "data/" thì git bỏ qua MỌI thư mục tên data
 # ở mọi cấp, nuốt luôn cả src/data/ (module RAG) và làm CI đỏ vì thiếu module.
-/data/
+/data/*
+!/data/raw/
+/data/raw/*
+
+# NGOẠI LỆ: 11 file tài liệu kiến thức PHẢI nằm trong repo (60 KB).
+#
+# Chúng là nguồn cho `python -m src.cli ingest` và cho trang /tai-lieu. Để ngoài
+# repo thì: CI không có gì để đọc (4 test đỏ), Render deploy xong trang tài liệu
+# rỗng, và clone mới không nạp lại được kho — tài liệu chỉ còn tồn tại trong
+# Qdrant, tức không ai review được và mất hẳn nếu collection hỏng. Đúng cái bẫy
+# đã làm mất `phap-ly-thu-tuc`, phải ghép lại từ chunk mới cứu được.
+#
+# Quy tắc ở CLAUDE.md: `doc_id` trong Qdrant phải luôn có file nguồn trong repo.
+!/data/raw/knowledge/
 *.db
 *.sqlite3
 
