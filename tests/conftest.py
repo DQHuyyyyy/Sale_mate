@@ -71,7 +71,25 @@ def _chan_postgres_that(monkeypatch):
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     db = InventoryDB("sqlite:///:memory:", engine=engine)
     db.ensure_table()
-    for module in ("src.agents.tools.inventory", "src.agents.tools.search", "src.agents.tools.so_sanh"):
+    # ⚠️ Danh sách này phải phủ MỌI module gọi `get_inventory_db`. Thiếu một cái
+    # là test của module đó đọc Postgres thật mà không báo gì — nó chỉ vỡ ra khi
+    # dữ liệu production đổi. Đã xảy ra lần thứ hai với `dat_coc`: tool này thêm
+    # phép kiểm tình trạng căn, quên vá ở đây, và test xanh suốt chỉ vì VOP397
+    # tình cờ đang "Còn" trên production. Đến lúc căn đó chuyển sang "Đã đặt
+    # cọc" thì hai test đỏ — mà lỗi thật là chúng chưa bao giờ chạy độc lập.
+    #
+    # `summary` và `khoan_vay` cũng nằm ngoài danh sách này suốt từ đầu. Test của
+    # chúng tự vá nên vẫn đúng, nhưng bất kỳ test nào khác chạm phải hai tool đó
+    # đều đọc production. `test_moi_module_goi_inventory_deu_duoc_va_trong_conftest`
+    # giữ danh sách này không tụt lại nữa.
+    for module in (
+        "src.agents.tools.inventory",
+        "src.agents.tools.search",
+        "src.agents.tools.so_sanh",
+        "src.agents.tools.dat_coc",
+        "src.agents.tools.summary",
+        "src.agents.tools.khoan_vay",
+    ):
         monkeypatch.setattr(f"{module}.get_inventory_db", lambda: db)
 
     engine_coc = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)

@@ -176,3 +176,62 @@ async def test_muc_vay_lay_bac_nho_nhat_phu_du(ngay):
 )
 def test_rut_tham_so(query: str, mong_doi: dict | None):
     assert _rut_tham_so(query) == mong_doi
+
+
+class TestTrichNguonVeTaiLieuChinhSach:
+    """Mọi con số định lượng của tool này đến từ `chinh_sach_vay.json`, mà file
+    đó khai sẵn `doc_id` trỏ về tài liệu văn bản gốc — chính là để câu trả lời
+    trích ngược được.
+
+    Trước đây tool trả `source="tool:tinh_khoan_vay"`, nên dòng "Nguồn" hiện
+    `"tinh_khoan_vay"`: một cái tên máy, bấm vào không ra gì, và người đọc không
+    biết con số 6%/năm đến từ đâu để kiểm.
+    """
+
+    @pytest.mark.asyncio
+    async def test_source_tro_ve_tai_lieu_chinh_sach(self) -> None:
+        from src.agents.tools.khoan_vay import TinhKhoanVayTool
+
+        kq = await TinhKhoanVayTool().run(gia_can=2.7, von_tu_co=0.81)
+
+        assert kq.source.startswith("knowledge:")
+
+    @pytest.mark.asyncio
+    async def test_nguon_bam_duoc_va_qua_duoc_bo_loc(self) -> None:
+        """`kind` vẫn là "db" dù trỏ vào tài liệu.
+
+        Đặt `kind="doc"` thì `loc_nguon_da_dung` đòi model gọi tên tài liệu mới
+        giữ — luật đó đúng cho chunk truy hồi (chỉ "đã tra") nhưng sai cho tool
+        (đã DÙNG thật), và câu trả lời mất sạch nguồn cho chính khẳng định của nó.
+        """
+        from src.agents.nguon import loc_nguon_da_dung
+        from src.agents.nodes.tools import _nguon_cua_tool
+        from src.agents.tools.khoan_vay import TinhKhoanVayTool
+
+        tool = TinhKhoanVayTool()
+        nguon = _nguon_cua_tool(tool, await tool.run(gia_can=2.7, von_tu_co=0.81))
+
+        assert nguon[0].kind == "db"
+        assert nguon[0].doc_id.startswith("knowledge:")
+        # Nhãn là TÊN tài liệu, không phải tên tool.
+        assert "tinh_khoan_vay" not in nguon[0].title
+
+        giu = loc_nguon_da_dung(nguon, "Cần vay 1,89 tỷ đồng.", co_du_lieu_tool=True)
+        assert len(giu) == 1, "nguồn tool phải sống sót dù model không gọi tên tài liệu"
+
+
+def test_doc_id_trong_chinh_sach_tro_ve_tai_lieu_co_that() -> None:
+    """Chốt chặn chống trôi lệch: `doc_id` khai trong JSON phải khớp một tài
+    liệu đang có trong `data/raw/knowledge/`.
+
+    Đổi tên file tài liệu mà quên sửa JSON thì nút trích nguồn dẫn tới 404 —
+    im lặng, chỉ người dùng bấm vào mới biết.
+    """
+    from src.agents.tools.chinh_sach_vay import tai_chinh_sach
+    from src.data.sources.knowledge_docs import load_knowledge_dir
+
+    co_that = {d.doc_id for d in load_knowledge_dir()}
+    khai = {cs.doc_id for cs in tai_chinh_sach() if cs.doc_id}
+
+    assert khai, "chinh_sach_vay.json phải khai doc_id để câu trả lời trích ngược được"
+    assert khai <= co_that, f"doc_id không có tài liệu tương ứng: {sorted(khai - co_that)}"

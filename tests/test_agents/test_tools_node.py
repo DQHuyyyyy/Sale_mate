@@ -135,7 +135,12 @@ async def test_nguon_tu_tool_lay_ma_can_lam_nhan():
 
 @pytest.mark.asyncio
 async def test_khong_co_ma_can_thi_lui_ve_ten_tool():
-    """Tool không trả căn nào (tính khoản vay, tra chính sách) vẫn phải có nguồn."""
+    """Tool không trả căn nào (tính khoản vay, tra chính sách) vẫn phải có nguồn.
+
+    Nhãn là TÊN tool, không phải câu đầu trong `description`: mô tả viết cho
+    model đọc, không viết cho khách. Dòng "Nguồn" từng hiện nguyên "Đếm số căn
+    còn trống / đã bán trong tồn kho, tổng hợp theo toà và loại căn".
+    """
 
     class _KhongCoMaCan(_EchoTool):
         async def run(self, **kwargs):
@@ -145,7 +150,24 @@ async def test_khong_co_ma_can_thi_lui_ve_ten_tool():
 
     out = await node({"intent": Intent.LISTING, "query": "căn VOP345"})
 
-    assert out["tool_citations"][0].title == "Tool thử"
+    assert out["tool_citations"][0].title == "echo"
+
+
+@pytest.mark.asyncio
+async def test_tool_khai_nhan_nguon_thi_dung_nhan_do():
+    """`nhan_nguon` cho tool tổng hợp một nhãn người đọc hiểu được."""
+
+    class _CoNhan(_EchoTool):
+        nhan_nguon = "Dữ liệu tồn kho"
+
+        async def run(self, **kwargs):
+            return ToolResult(ok=True, data={"con_trong": 30}, source="test:db")
+
+    node = ToolsNode(_registry_with(_CoNhan()))
+
+    out = await node({"intent": Intent.LISTING, "query": "còn bao nhiêu căn"})
+
+    assert out["tool_citations"][0].title == "Dữ liệu tồn kho"
 
 
 @pytest.mark.asyncio

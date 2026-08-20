@@ -14,8 +14,9 @@ from src.agents.nodes.guardrail import INSUFFICIENT_MESSAGE
 from src.agents.service import LangGraphAgentService
 from src.agents.state import Intent
 from src.core.logging import trace, trace_context
-from src.models.chat import ChatEventType, ChatRequest
+from src.models.chat import ChatEventType, ChatRequest, Citation
 from src.rag.retriever import EmptyRetriever
+from src.services.llm import ScriptedProvider, ScriptedToolCallingProvider
 
 
 def _service(scripted_llm, settings, *, retriever=None, tools_node=None):
@@ -33,10 +34,25 @@ async def _collect(service, message):
 
 
 def test_context_nodes_khop_voi_node_dung_trong_graph(scripted_llm, settings):
-    """Mọi node trong CONTEXT_NODES phải tồn tại — sai tên là stream bỏ qua âm thầm."""
-    nodes = build_nodes(scripted_llm, EmptyRetriever(), settings)
+    """Mọi node trong CONTEXT_NODES phải tồn tại — sai tên là stream bỏ qua âm thầm.
+
+    Dựng bản ĐẦY ĐỦ (bật mọi cờ) vì `orchestrate` là node tuỳ chọn: nó chỉ có
+    khi `enable_orchestrator` bật. Kiểm trên bản tối thiểu thì node tuỳ chọn
+    nào cũng làm test đỏ, còn kiểm trên bản đầy đủ thì vẫn bắt được lỗi thật —
+    gõ sai tên node trong CONTEXT_NODES.
+    """
+    day_du = settings.model_copy(update={"enable_orchestrator": True})
+    nodes = build_nodes(scripted_llm, EmptyRetriever(), day_du, ScriptedToolCallingProvider())
 
     assert set(CONTEXT_NODES) <= set(nodes)
+
+
+def test_node_tuy_chon_tat_co_thi_stream_van_chay(scripted_llm, settings):
+    """Tắt cờ thì `orchestrate` không tồn tại, và đường stream phải bỏ qua nó."""
+    nodes = build_nodes(scripted_llm, EmptyRetriever(), settings)
+
+    assert "orchestrate" not in nodes
+    assert set(CONTEXT_NODES) - set(nodes) == {"orchestrate"}
 
 
 def test_tools_nam_trong_duong_lay_context():
@@ -191,3 +207,49 @@ async def test_thieu_du_lieu_van_co_loi_ra_thay_vi_ngo_cut(scripted_llm, setting
     goi_y = done[0].data.get("options")
     assert len(goi_y) == 3
     assert all("Ocean Park" in c for c in goi_y)
+
+
+# ---------- Cờ chặn FE tự dựng nguồn ----------
+
+
+@pytest.mark.asyncio
+async def test_thieu_du_lieu_thi_cam_trich_nguon(scripted_llm, settings):
+    """Ca thật: trợ lý hỏi ngược "bạn muốn lọc theo tiêu chí nào?" mà dưới đó
+    vẫn có Nguồn: VOP758, VOP247, VOP619.
+
+    Backend đã lọc sạch nguồn rồi, nhưng FE còn một đường sinh nguồn THỨ HAI —
+    dấu `[Mã căn]` model tự viết trong bài — và đường đó không đi qua bộ lọc
+    nào. Nên backend phải nói thẳng ra là lượt này cấm trích.
+    """
+    events = await _collect(_service(scripted_llm, settings), "Thủ tục sang tên sổ đỏ?")
+
+    done = [e for e in events if e.type == ChatEventType.DONE]
+
+    assert done[0].data.get("cho_trich_nguon") is False
+
+
+@pytest.mark.asyncio
+async def test_luot_co_nguon_that_thi_van_cho_trich(scripted_llm, settings):
+    """Chốt ngược: cờ này không được tắt nguồn của lượt trả lời đàng hoàng."""
+
+    class _Tools:
+        name = "tools"
+
+        async def __call__(self, state):
+            return {
+                "tool_context": '[inventory_lookup] x\nKết quả:\n[{"unit_code": "VOP758"}]',
+                "tool_citations": [Citation(doc_id="inventory:postgres", title="VOP758", kind="db")],
+                "tools_ran": ["inventory_lookup"],
+                "tool_filters": {"inventory_lookup": {"unit_code": "VOP758"}},
+            }
+
+    svc = _service(scripted_llm, settings, tools_node=_Tools())
+    svc._llm = ScriptedProvider("Căn VOP758 giá 2,750 tỷ đồng.", delay_s=0)
+
+    events = await _collect(svc, "Căn VOP758 giá bao nhiêu?")
+
+    done = [e for e in events if e.type == ChatEventType.DONE]
+    nguon = [e for e in events if e.type == ChatEventType.SOURCES]
+
+    assert done[0].data.get("cho_trich_nguon") is True
+    assert [c.title for c in nguon[0].citations] == ["VOP758"]

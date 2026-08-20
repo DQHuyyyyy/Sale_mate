@@ -99,3 +99,10 @@ class GuardrailNode(BaseNode):
         has_price = bool(_PRICE_PATTERN.search(answer))
         has_commitment = any(word in answer.lower() for word in _COMMITMENT_WORDS)
         return (has_price and has_commitment) or state.get("intent") == Intent.DRAFT
+
+    def tom_tat(self, result: dict[str, Any]) -> str:
+        """Quyết định cuối: giữ câu trả lời hay thay bằng lời mời nêu thêm."""
+        if result.get("answer") == INSUFFICIENT_MESSAGE:
+            return f"TỪ CHỐI — chưa đủ dữ liệu (ngưỡng độ phủ {self._threshold})"
+        co_co = " · CÓ CỜ NHẠY CẢM" if result.get("is_sensitive") else ""
+        return f"giữ câu trả lời · {len(result.get('citations') or [])} nguồn sau khi lọc{co_co}"

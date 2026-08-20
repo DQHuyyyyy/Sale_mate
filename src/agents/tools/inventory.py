@@ -21,22 +21,19 @@ from pydantic import BaseModel, Field
 
 from src.agents.contracts import AgentTool, ToolResult
 from src.agents.state import Intent
+from src.agents.thuc_the import ma_can as ma_can_tu_thuc_the
 from src.agents.tools.args import doc_tham_so
 from src.agents.tools.registry import register_tool
+from src.agents.tools.search import bo_ngu_canh_giao_dien, la_cau_hoi_dem
+from src.agents.tools.trang_thai import nhan as nhan_trang_thai
 from src.data.stores.inventory_db import get_inventory_db
-
-_STATUS_LABEL = {
-    "available": "Còn trống",
-    "reserved": "Giữ chỗ",
-    "sold": "Đã bán",
-}
 
 # Mã căn: 2-4 chữ cái rồi 2-5 chữ số, ví dụ VOP345. Bao bằng \b để "VOP345"
 # trong câu dài vẫn bắt được, còn "abcVOP345" thì không.
 _UNIT_CODE = re.compile(r"\b([A-Za-z]{2,4}\d{2,5})\b")
 
 
-def _extract_args(query: str) -> dict[str, Any] | None:
+def _extract_args(query: str, entities: dict[str, Any] | None = None) -> dict[str, Any] | None:
     """Rút mã căn từ câu hỏi. Không có mã thì trả None — tool không chạy.
 
     Cố ý CHỈ nhận mã căn, không đoán toà hay loại căn từ ngôn ngữ tự nhiên.
@@ -48,10 +45,21 @@ def _extract_args(query: str) -> dict[str, Any] | None:
     model từ chối vì thiếu căn kia. Chạy tiếp ở đây cũng chỉ nhồi thêm một bản
     sao của căn đầu vào prompt.
     """
-    ma = _UNIT_CODE.findall(query)
+    # Câu hỏi ĐẾM không nói về một căn. Mã căn duy nhất trong đó là do widget
+    # chèn ("(căn đang xem: VOP758)"), nên tra nó chỉ nhồi một căn không liên
+    # quan vào prompt — đúng thứ đã làm trợ lý trả lời "Ocean Park 3 còn bao
+    # nhiêu căn?" bằng "căn đang xem là VOP758 thuộc Ocean Park 1".
+    if la_cau_hoi_dem(query) and not _UNIT_CODE.search(bo_ngu_canh_giao_dien(query)):
+        return None
+
+    ma = [m.upper() for m in _UNIT_CODE.findall(query)]
+    if not ma:
+        # Câu không nêu mã ("căn đó còn không") thì lấy mã router đã giải tham
+        # chiếu từ lịch sử. Vẫn giữ luật nhường nhau: đúng MỘT mã mới nhận.
+        ma = ma_can_tu_thuc_the(entities)
     if len(ma) != 1:
         return None
-    return {"unit_code": ma[0].upper()}
+    return {"unit_code": ma[0]}
 
 
 class InventoryArgs(BaseModel):
@@ -61,7 +69,7 @@ class InventoryArgs(BaseModel):
 
 
 def _to_row(record: dict[str, Any]) -> dict[str, Any]:
-    return {**record, "status_label": _STATUS_LABEL.get(record["status"], record["status"])}
+    return {**record, "status_label": nhan_trang_thai(record["status"])}
 
 
 # LISTING và PRICE là hai nhãn mà câu hỏi về một căn cụ thể hay rơi vào. Khai
@@ -73,7 +81,7 @@ class InventoryLookupTool(AgentTool):
 
     name = "inventory_lookup"
     description = (
-        "Tra tình trạng căn hộ THẬT theo thời gian thực (Còn trống / Giữ chỗ / Đã bán), "
+        "Tra tình trạng căn hộ THẬT theo thời gian thực (Còn / Đã đặt cọc / Đã bán), "
         "kèm giá — từ tồn kho nội bộ. Dùng khi người dùng hỏi còn căn nào trống, "
         "giá/tình trạng một căn cụ thể theo mã căn hoặc toà nhà."
     )

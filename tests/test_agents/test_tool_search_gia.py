@@ -380,3 +380,39 @@ async def test_phan_khu_ket_hop_voi_gia():
     ket_qua = await InventorySearchTool().run(subdivision="Ocean Park 2", price_max=3, price_max_nghiem_ngat=True)
 
     assert {r["unit_code"] for r in ket_qua.data["can_hien_thi"]} == {"VOP002"}
+
+
+class TestDienTichKhongBiDocThanhGia:
+    """Ca thật: bấm gợi ý "Tìm căn khoảng 43m² ở Ocean Park 1" rồi vào ngõ cụt.
+
+    `khoảng 43` khớp mẫu giá vì đơn vị tiền là TUỲ CHỌN, ra `price 42,8 – 43,2`
+    TỶ. Kho không có căn nào giá 43 tỷ nên trả rỗng; lượt gợi ý sau lại dựng
+    "giá 42,8–43,2" từ chính tiêu chí sai đó, và người dùng bấm hai lần liên
+    tiếp vào hai ngõ cụt.
+    """
+
+    def test_khoang_43m2_ra_dien_tich_khong_ra_gia(self) -> None:
+        tieu_chi = extract_criteria("Tìm căn khoảng 43m² ở Ocean Park 1")
+
+        assert tieu_chi == {"area_min": 40.0, "area_max": 46.0, "subdivision": "Ocean Park 1"}
+
+    def test_khong_co_tu_chi_muc_van_ra_dien_tich(self) -> None:
+        """ "Tìm căn 43m2" — trước đây diện tích rơi ra ngoài hoàn toàn."""
+        tieu_chi = extract_criteria("Tìm căn 43m2 ở Ocean Park 1")
+
+        assert tieu_chi["area_min"] == 40.0
+        assert tieu_chi["area_max"] == 46.0
+
+    def test_khoang_hai_dau_dien_tich(self) -> None:
+        assert extract_criteria("căn từ 40 đến 50 m2") == {"area_min": 40.0, "area_max": 50.0}
+
+    def test_dien_tich_va_gia_cung_luc_khong_gianh_nhau(self) -> None:
+        tieu_chi = extract_criteria("căn trên 60m2 dưới 3 tỷ")
+
+        assert tieu_chi["area_min"] == 60.0
+        assert tieu_chi["price_max"] == 3.0
+        assert "price_min" not in tieu_chi
+
+    def test_gia_khong_don_vi_van_chay_nhu_cu(self) -> None:
+        """Chốt ngược: lookahead diện tích không được làm hỏng "khoảng 3"."""
+        assert extract_criteria("Tìm căn khoảng 3 tỷ") == {"price_min": 2.8, "price_max": 3.2}

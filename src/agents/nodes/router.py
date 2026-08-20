@@ -6,11 +6,14 @@ Có luật ưu tiên trước, chỉ gọi LLM khi luật không quyết đượ
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from src.agents.contracts import LLMProvider
 from src.agents.nodes.base import BaseNode
 from src.agents.state import AgentState, Intent
+from src.agents.thuc_the import lam_sach
+from src.core.exceptions import SalesMateError
 from src.core.logging import get_logger
 from src.models.chat import ChatMessage, MessageRole
 
@@ -59,6 +62,54 @@ _KEYWORD_RULES: list[tuple[Intent, tuple[str, ...]]] = [
 _KHONG_TRA_CUU = {Intent.GENERAL, Intent.DRAFT}
 
 
+# Chỉ hỏi DANH TỪ, không hỏi ý định. Xem `src/agents/thuc_the.py` về lý do:
+# kế thừa ý định từ lượt trước làm `dat_coc` ghi thêm lead ngoài ý muốn.
+_THUC_THE_PROMPT = """Đọc lịch sử hội thoại rồi viết lại các TIÊU CHÍ mà câu hỏi mới
+đang nhắc tới, kể cả khi nó dùng từ thay thế ("căn đó", "20 căn đó", "dự án vừa nói").
+
+Lịch sử:
+{lich_su}
+
+Câu hỏi mới: {query}
+
+Trả về ĐÚNG một object JSON, không giải thích, chỉ dùng các khoá sau khi thật sự
+suy ra được (bỏ hẳn khoá không biết, KHÔNG điền null hay chuỗi rỗng):
+
+  ma_can        mảng mã căn, dạng "VOP397"
+  phan_khu      "Ocean Park 1" | "Ocean Park 2" | "Ocean Park 3"
+  loai_can      ví dụ "2PN"
+  huong         ví dụ "Đông Nam"
+  gia_min       số, đơn vị TỶ đồng
+  gia_max       số, đơn vị TỶ đồng
+  dien_tich_min số, đơn vị m2
+  dien_tich_max số, đơn vị m2
+  von_tu_co     số, đơn vị TỶ đồng
+
+Tuyệt đối không suy đoán tiêu chí mà hội thoại chưa hề nêu. Không có gì thì trả {{}}."""
+
+# Chỉ lấy vài lượt gần nhất: tham chiếu ("căn đó") gần như luôn trỏ về lượt liền
+# trước, còn nhét cả hội thoại dài vào vừa tốn token vừa cho model nhiều cơ hội
+# lôi lại tiêu chí mà người dùng đã bỏ.
+_SO_LUOT_NHIN_LAI = 4
+
+
+def _tom_tat(history: list[ChatMessage]) -> str:
+    return "\n".join(f"{m.role.value}: {m.content}" for m in history[-_SO_LUOT_NHIN_LAI:])
+
+
+def _doc_json(raw: str) -> Any:
+    """Đọc JSON model trả về, chịu được rào chữ ```json và chữ thừa hai đầu."""
+    van_ban = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    dau, cuoi = van_ban.find("{"), van_ban.rfind("}")
+    if dau == -1 or cuoi <= dau:
+        return {}
+    try:
+        return json.loads(van_ban[dau : cuoi + 1])
+    except json.JSONDecodeError:
+        logger.warning("Thực thể không phải JSON hợp lệ, bỏ qua")
+        return {}
+
+
 class RouterNode(BaseNode):
     """Xác định intent và có cần truy hồi tài liệu không."""
 
@@ -74,7 +125,45 @@ class RouterNode(BaseNode):
         return {
             "intent": intent,
             "needs_retrieval": intent not in _KHONG_TRA_CUU,
+            "entities": await self._rut_thuc_the(query, state.get("history") or []),
         }
+
+    def tom_tat(self, result: dict[str, Any]) -> str:
+        nhan = result.get("intent")
+        tra_cuu = "cần tra cứu" if result.get("needs_retrieval") else "không tra cứu"
+        thuc_the = result.get("entities") or {}
+        phan = f"nhãn={getattr(nhan, 'value', nhan)} · {tra_cuu}"
+        if thuc_the:
+            phan += f" · giải tham chiếu: {', '.join(sorted(thuc_the))}"
+        return phan
+
+    async def _rut_thuc_the(self, query: str, history: list[ChatMessage]) -> dict[str, Any]:
+        """Giải tham chiếu bằng lịch sử. KHÔNG có lịch sử thì không gọi model.
+
+        Điều kiện "có lịch sử" không phải để tiết kiệm tiền — với model rẻ thì
+        một lượt gọi gần như không đáng kể. Nó để BẢO TOÀN hành vi: lượt đầu
+        tiên vốn không có gì để giải tham chiếu, nên bỏ hẳn bước này thì đường
+        một-lượt chạy y hệt trước khi có tính năng, và mọi con số đo cũ vẫn so
+        sánh được.
+        """
+        if not history:
+            return {}
+
+        messages = [
+            ChatMessage(
+                role=MessageRole.USER,
+                content=_THUC_THE_PROMPT.format(lich_su=_tom_tat(history), query=query),
+            )
+        ]
+        try:
+            raw = await self._llm.complete(messages, model=self._model, temperature=0.0, max_tokens=200)
+        except SalesMateError as exc:
+            # Rút thực thể là phần THÊM. Hỏng thì quay về hành vi cũ, không được
+            # làm đứt lượt hỏi — tool vẫn còn regex trên câu hiện tại làm dự phòng.
+            logger.warning("Rút thực thể hỏng, bỏ qua: %s", exc.code)
+            return {}
+
+        return lam_sach(_doc_json(raw))
 
     def _match_keywords(self, query: str) -> Intent | None:
         lowered = query.lower()

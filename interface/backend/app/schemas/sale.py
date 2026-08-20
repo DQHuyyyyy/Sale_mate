@@ -3,21 +3,11 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
-from app.schemas.apartment import PRICE_MAX, PRICE_MIN
-
-
-class SaleCreate(BaseModel):
-    """Ghi nhận một lượt bán.
-
-    KHÔNG có sale_id — backend lấy từ token. Client gửi lên cũng bị bỏ qua.
-    """
-
-    ma_can: str = Field(min_length=1, max_length=50)
-    customer_name: str | None = Field(default=None, max_length=100)
-    customer_phone: str | None = Field(default=None, max_length=20)
-    sold_price: Decimal | None = Field(default=None, ge=PRICE_MIN, le=PRICE_MAX)
+# `SaleCreate` đã bị gỡ cùng với route POST /api/sales. Ghi nhận đã bán giờ chỉ
+# diễn ra ở màn Giao dịch, và dữ liệu khách lấy thẳng từ lead — không có form
+# nào nhận payload bán hàng nữa. Xem chú thích cuối `routers/sales.py`.
 
 
 class SaleRecord(BaseModel):

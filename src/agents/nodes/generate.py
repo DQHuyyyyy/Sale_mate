@@ -27,15 +27,20 @@ def merged_context(state: AgentState) -> str:
     return "\n\n".join(part for part in parts if part)
 
 
-def build_messages(state: AgentState) -> list[ChatMessage]:
+def build_messages(state: AgentState, *, system: str | None = None) -> list[ChatMessage]:
     """Dựng prompt từ state.
 
     Tách riêng để tầng streaming (`agents/service.py`) dùng lại đúng cách dựng
     prompt này, không tự ghép lần nữa.
+
+    `system` cho phép ép một bản prompt cụ thể, dùng cho eval so sánh v6 với v7
+    trên cùng bộ câu hỏi. Bỏ trống thì lấy bản đang chạy. Eval phải đi qua ĐÚNG
+    hàm này chứ không tự ghép prompt riêng — tự ghép là đo một thứ khác với thứ
+    sản phẩm đang chạy.
     """
     return build_grounded_messages(
         state.get("query", ""),
-        system_prompt=system_prompt(),
+        system_prompt=system or system_prompt(),
         context=merged_context(state),
         history=state.get("history", []),
     )
@@ -73,3 +78,6 @@ class GenerateNode(BaseNode):
             max_tokens=self._max_tokens,
         )
         return {"answer": answer.strip()}
+
+    def tom_tat(self, result: dict[str, Any]) -> str:
+        return f"model={self._model} · sinh {len(result.get('answer') or '')} ký tự"

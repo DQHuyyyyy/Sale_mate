@@ -16,6 +16,11 @@ env/
 .env
 .env.local
 .env.production
+# ⚠️ Bản sao lưu của .env cũng chứa NGUYÊN khoá production — OPENAI_API_KEY,
+# SUPABASE_SERVICE_ROLE_KEY (bỏ qua RLS), DATABASE_URL kèm mật khẩu. Chỉ chặn
+# `.env` thôi thì một file `.env.bak` nằm cạnh vẫn lọt vào `git add -A`.
+.env.*
+!.env.example
 
 # Khoá dịch vụ — KHÔNG BAO GIỜ commit
 service_account.json
@@ -56,6 +61,7 @@ Thumbs.db
 /eval/results/batdongsan_chunks.json
 /eval/results/inventory_chunks.json
 /eval/results/manual_eval_results.json
+/eval/results/answer_eval_*.json
 
 # Logs
 logs/
@@ -105,3 +111,8 @@ interface/frontend/dist/
 .coverage
 coverage.xml
 htmlcov/
+
+# Windows tạo file rác tên NUL khi shell POSIX chạy `2>NUL` — nó là tên thiết bị
+# trên Windows nhưng thành file thật dưới Git Bash. Luôn rỗng, không bao giờ có
+# nghĩa gì.
+NUL

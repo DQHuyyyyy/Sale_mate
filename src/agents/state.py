@@ -33,6 +33,10 @@ class AgentState(TypedDict, total=False):
         session_id: ID phiên hội thoại.
         intent: Kết quả phân loại của router.
         needs_retrieval: Router quyết định có phải tra tài liệu không.
+        entities: Tiêu chí router rút được, ĐÃ giải tham chiếu bằng lịch sử —
+            "20 căn đó" thành khoảng giá và phân khu thật. Rỗng ở lượt đầu vì
+            không có gì để giải tham chiếu, và khi rỗng thì mọi tool rơi về đúng
+            hành vi cũ. Xem `src/agents/thuc_the.py`.
         da_truy_hoi: Node retrieve ĐÃ chạy thật chưa. Khác `chunks` rỗng ở chỗ
             nó phân biệt "tìm rồi mà không có" với "chưa hề tìm" — plan cần
             phân biệt đó để không hỏi ngược người dùng khi chưa tra cứu lần nào.
@@ -58,6 +62,13 @@ class AgentState(TypedDict, total=False):
             không đốt sạch quota.
         da_thu: Chữ ký các hành động đã thử — để nhận ra agent đang lặp lại
             chính nó và cắt sớm.
+        leo_thang: Tên luật đã kích hoạt orchestrator (""=không leo thang). Ghi
+            lại tên chứ không ghi bool để lúc hết ngân sách còn biết luật nào
+            kéo chi phí lên. Xem `src/agents/leo_thang.py`.
+        orchestrator_loi: Lý do orchestrator hỏng, nếu có. Có giá trị ở đây thì
+            câu trả lời vẫn được sinh bình thường từ bằng chứng đã gom.
+        orchestrator_token_vao / _ra / _cache: Token của riêng nhánh leo thang,
+            để tính chi phí và chặn ngân sách ngày.
         answer: Câu trả lời cuối.
         citations: Nguồn kèm theo câu trả lời.
         is_sensitive: Có chứa giá/cam kết cần người duyệt không.
@@ -72,6 +83,7 @@ class AgentState(TypedDict, total=False):
     intent: Intent
     needs_retrieval: bool
     da_truy_hoi: bool
+    entities: dict[str, Any]
 
     chunks: list[Chunk]
     coverage: float
@@ -89,6 +101,12 @@ class AgentState(TypedDict, total=False):
     plan_options: list[str]
     iterations: int
     da_thu: list[str]
+
+    leo_thang: str
+    orchestrator_loi: str
+    orchestrator_token_vao: int
+    orchestrator_token_ra: int
+    orchestrator_token_cache: int
 
     answer: str
     citations: list[Citation]

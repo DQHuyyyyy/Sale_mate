@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.core.db import close_pool, open_pool
-from app.routers import apartments, auth, chat, documents, images, sales, users, zones
+from app.routers import apartments, auth, chat, dat_coc, documents, images, sales, tai_lieu, users, zones
 
 logging.basicConfig(
     level=logging.INFO,
@@ -71,6 +71,8 @@ app.include_router(users.router)
 app.include_router(documents.router)
 app.include_router(chat.router)
 app.include_router(images.router)
+app.include_router(dat_coc.router)
+app.include_router(tai_lieu.router)
 
 
 @app.exception_handler(Exception)

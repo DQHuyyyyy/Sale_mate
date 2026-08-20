@@ -35,7 +35,11 @@ class ApartmentBase(BaseModel):
     gia: str | None = None
     gia_tri: Decimal | None = None
     noi_that: str | None = None
+    # Còn/Hết thô từ `salemate_v1` — vẫn là thứ điều khiển luồng BÁN.
     tinh_trang: str | None = None
+    # Ba mức suy ra trong VIEW `inventory_units` (migration 010), dùng để HIỂN
+    # THỊ: available · reserved · sold. Có thể None khi chưa chạy 010.
+    tinh_trang_chi_tiet: str | None = None
     # Ocean Park 1 / 2 / 3 (migration 008).
     phan_khu: str | None = None
 

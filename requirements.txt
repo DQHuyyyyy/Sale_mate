@@ -21,6 +21,10 @@ langchain-core==1.5.3
 langchain-openai==1.4.1
 openai==2.52.0
 langsmith==0.10.15
+# Nhà cung cấp thứ hai, CHỈ dùng cho orchestrator ở nhánh leo thang. Thiếu gói
+# này thì app vẫn chạy đủ chức năng — `src/services/anthropic_llm.py` import
+# SDK bên trong hàm chứ không ở đầu file, đúng cho mục đích đó.
+anthropic==0.116.0
 
 # ---- Vector store ----
 qdrant-client==1.18.0

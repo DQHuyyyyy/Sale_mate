@@ -120,16 +120,30 @@ function boLocTuTieuChi(filters) {
   return Object.keys(params).length ? params : null;
 }
 
-/** Đổi event tiến trình của lõi AI thành một câu người đọc hiểu được. */
-function moTaBuoc(event) {
-  const { step, tools, found, chunks, action, tool, iteration } = event.data ?? {};
+/**
+ * Đổi event tiến trình của lõi AI thành một câu người đọc hiểu được.
+ *
+ * `daTraTonKho` là việc đã xảy ra ở bước TRƯỚC. Cần truyền vào vì dòng trạng
+ * thái chỉ có một chỗ hiện: mỗi event ghi đè event trước, nên người dùng chỉ
+ * kịp thấy dòng CUỐI. Với câu so sánh căn hộ, dòng cuối là bước đọc tài liệu,
+ * và nó khiến người xem tưởng giá với diện tích lấy từ tài liệu — ngược hẳn
+ * nguyên tắc số một của dự án, vốn là số liệu căn KHÔNG BAO GIỜ lấy từ tài liệu.
+ */
+function moTaBuoc(event, daTraTonKho = false) {
+  const { step, tools, found, action, tool, iteration } = event.data ?? {};
 
   if (step === 'router') return 'Đang xác định câu hỏi…';
   if (step === 'tools') {
     const ten = TEN_TOOL[(tools ?? [])[0]] ?? 'dữ liệu';
     return found ? `Đã tra ${ten} trong kho dữ liệu` : `Đã tra ${ten}, chưa thấy khớp`;
   }
-  if (step === 'retrieve') return `Đang đọc ${chunks} đoạn tài liệu…`;
+  // CỐ Ý không nêu số đoạn. `rerank_top_n` cố định ở 5 nên con số đó LUÔN là 5
+  // với mọi câu hỏi — nó nói về cấu hình chứ không nói gì về câu người dùng vừa
+  // hỏi. Tệ hơn, 5 đoạn thường chỉ đến từ 2-3 tài liệu (mỗi tài liệu bị cắt
+  // nhiều đoạn), nên "5 đoạn tài liệu" khiến người đọc tưởng có 5 nguồn.
+  if (step === 'retrieve') {
+    return daTraTonKho ? 'Đã tra tồn kho · đang đọc thêm các tài liệu…' : 'Đang đọc các tài liệu…';
+  }
 
   // Vòng lặp agent: hiện thẳng lý do model tự nêu, đó chính là "suy luận" mà
   // người dùng muốn thấy. Chỉ ẩn nhánh clarify vì câu hỏi ngược sẽ hiện ngay
@@ -139,6 +153,16 @@ function moTaBuoc(event) {
     const ten = TEN_TOOL[tool] ?? tool;
     return `Đang tra ${ten}${iteration > 1 ? ` (lượt ${iteration})` : ''}…`;
   }
+
+  // Nhánh leo thang: câu nhiều bước được chuyển sang orchestrator. Nói theo
+  // VIỆC nó vừa làm chứ không nói tên luật hay tên model — người dùng không
+  // quan tâm R1 là gì, họ chỉ cần biết trợ lý còn đang làm việc.
+  if (step === 'orchestrate') {
+    if (event.data?.loi) return 'Đã tra thêm nhưng chưa lấy được dữ liệu';
+    const ten = (tools ?? []).map((t) => TEN_TOOL[t] ?? t);
+    return ten.length ? `Đã tra thêm ${ten.join(', ')}` : 'Đang tra cứu kỹ hơn…';
+  }
+
   return null;
 }
 
@@ -250,6 +274,11 @@ export default function ChatSidebar({ open, onToggle }) {
     setBuoc('');
     setDangTraLoi(false);
 
+    // Đặt lại theo TỪNG LƯỢT hỏi. Dùng biến thường chứ không dùng state: nó chỉ
+    // phục vụ việc dựng câu trạng thái ngay trong vòng lặp event này, và đẩy
+    // lên state sẽ kéo theo một lần render thừa cho mỗi bước.
+    let daTraTonKho = false;
+
     if (maCanDangXem) daMoiRef.current.add(maCanDangXem);
 
     try {
@@ -267,7 +296,11 @@ export default function ChatSidebar({ open, onToggle }) {
               ),
             );
           } else if (event.type === 'route') {
-            const mo_ta = moTaBuoc(event);
+            // Ghi nhận TRƯỚC khi dựng câu: bước `tools` chạy trước `retrieve`,
+            // nên tới lượt retrieve thì cờ này đã đúng.
+            if (event.data?.step === 'tools' && event.data?.found) daTraTonKho = true;
+
+            const mo_ta = moTaBuoc(event, daTraTonKho);
             if (mo_ta) setBuoc(mo_ta);
 
             // Trợ lý vừa lọc theo tiêu chí nào thì lưới bên ngoài lọc theo đúng
@@ -284,14 +317,24 @@ export default function ChatSidebar({ open, onToggle }) {
             // gpt-4o-mini nên dòng "Nguồn" biến mất hẳn trong khi local dùng
             // gpt-4o thì vẫn có. Nguồn là thứ chứng minh trợ lý không bịa —
             // không được phụ thuộc vào việc model có ngoan hay không.
-            const ten = (event.citations ?? []).map((c) => c?.title).filter(Boolean);
-            if (ten.length) capNhat({ nguonThat: ten });
+            // Giữ NGUYÊN đối tượng citation, không rút lấy mỗi `title`: cần
+            // `doc_id` để dựng đường dẫn tới trang tài liệu, và `kind` để biết
+            // nhãn là mã căn hay tên tài liệu.
+            const nguon = (event.citations ?? []).filter((c) => c?.title);
+            if (nguon.length) capNhat({ nguonThat: nguon });
           } else if (event.type === 'done') {
             // Trợ lý hỏi ngược thì kèm sẵn vài phương án bấm được. Gắn vào
             // đúng bong bóng vừa trả lời, không để state riêng — người dùng
             // cuộn lên vẫn thấy các lựa chọn của lượt cũ.
             const chon = event.data?.options;
             if (Array.isArray(chon) && chon.length) capNhat({ options: chon });
+
+            // Backend đã lọc nguồn và quyết định lượt này không được trích.
+            // Phải nghe theo: dấu [Mã căn] model tự viết KHÔNG đi qua bộ lọc
+            // nào, nên nó dựng lại đúng những nguồn backend vừa loại. Đã thấy
+            // thật — trợ lý hỏi "bạn muốn lọc theo tiêu chí nào?" mà dưới đó
+            // vẫn có "Nguồn: VOP758, VOP247, VOP619".
+            if (event.data?.cho_trich_nguon === false) capNhat({ choTrichNguon: false });
           } else if (event.type === 'error') {
             capNhat({ content: event.content, error: true });
           }
@@ -474,6 +517,7 @@ export default function ChatSidebar({ open, onToggle }) {
                   <CauTraLoi
                     text={item.content}
                     nguonThat={item.nguonThat}
+                    choTrichNguon={item.choTrichNguon}
                     onChonCan={(ma) => navigate(`/apartments/${encodeURIComponent(ma)}`)}
                   />
                 )}

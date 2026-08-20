@@ -26,8 +26,10 @@ from pydantic import BaseModel, Field
 
 from src.agents.contracts import AgentTool, ToolResult
 from src.agents.state import Intent
+from src.agents.thuc_the import ma_can as ma_can_tu_thuc_the
 from src.agents.tools.args import doc_tham_so
 from src.agents.tools.registry import register_tool
+from src.agents.tools.trang_thai import nhan as nhan_trang_thai
 from src.data.stores.inventory_db import get_inventory_db
 
 _UNIT_CODE = re.compile(r"\b([A-Za-z]{2,4}\d{2,5})\b")
@@ -36,8 +38,6 @@ _UNIT_CODE = re.compile(r"\b([A-Za-z]{2,4}\d{2,5})\b")
 # chiếu rồi. "VOP619 và VOP893 cái nào tốt hơn" không chứa chữ nào trong danh
 # sách từ khoá nào cả, mà rõ ràng là so sánh.
 TOI_DA_CAN = 4
-
-_STATUS_LABEL = {"available": "Còn trống", "reserved": "Giữ chỗ", "sold": "Đã bán"}
 
 # Trường đem ra so sánh. Bỏ ảnh (model không dùng được) và hai cột số (bản số
 # của price_label/area_m2, lặp lại) để bảng không phình.
@@ -56,13 +56,16 @@ _TRUONG_SO_SANH = (
 )
 
 
-def _rut_tham_so(query: str) -> dict[str, Any] | None:
+def _rut_tham_so(query: str, entities: dict[str, Any] | None = None) -> dict[str, Any] | None:
     """Từ hai mã căn trở lên thì đây là việc so sánh, tool nhận.
 
     Một mã căn thì nhường `inventory_lookup` — nó tra một căn gọn hơn và câu
     trả lời không cần dựng bảng.
+
+    Gộp thêm mã router giải tham chiếu từ lịch sử: "so sánh nó với VOP893" chỉ
+    nêu MỘT mã trong câu, mã còn lại nằm ở lượt trước.
     """
-    ma = list(dict.fromkeys(m.upper() for m in _UNIT_CODE.findall(query)))
+    ma = list(dict.fromkeys([m.upper() for m in _UNIT_CODE.findall(query)] + ma_can_tu_thuc_the(entities)))
     if len(ma) < 2:
         return None
     return {"unit_codes": ma[:TOI_DA_CAN], "bo_bot": len(ma) - TOI_DA_CAN if len(ma) > TOI_DA_CAN else 0}
@@ -128,5 +131,5 @@ def _gon(row: dict[str, Any]) -> dict[str, Any]:
     gon = {k: row[k] for k in _TRUONG_SO_SANH if k in row}
     trang_thai = row.get("status")
     if trang_thai:
-        gon["status_label"] = _STATUS_LABEL.get(str(trang_thai), str(trang_thai))
+        gon["status_label"] = nhan_trang_thai(trang_thai)
     return gon

@@ -31,11 +31,15 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CSV_PATH = REPO_ROOT / "data" / "raw" / "inventory.csv"
 DEFAULT_PHOTOS_DIR = REPO_ROOT / "data" / "raw" / "photos"
 
-# Sheet hiện chỉ có "Còn"/"Hết"; thêm "giữ chỗ" phòng khi sau này có cột đó.
+# Sheet chỉ có "Còn"/"Hết". Hai trạng thái giữ chỗ KHÔNG đến từ đây mà suy ra
+# từ `dat_coc_lead` trong VIEW `inventory_units` (migration 010) — giữ ở đây để
+# nguồn nào có sẵn cột đó thì đọc được, và để tên khớp `tools/trang_thai.py`.
 _STATUS_MAP = {
     "còn": "available",
     "hết": "sold",
     "giữ chỗ": "reserved",
+    "đã đặt cọc": "reserved",
+    "đặt cọc": "reserved",
 }
 
 _IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}

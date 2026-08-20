@@ -133,3 +133,71 @@ class TestChay:
 
         assert not ket_qua.ok
         assert "Chưa lưu được" in ket_qua.error
+
+
+class TestKhongTuTaoBangTrenPostgres:
+    """Sự cố thật 19/08/2026: `ensure_table()` chạy ở đầu MỌI thao tác và đã
+    lặng lẽ tạo `dat_coc_lead` trên database thật TRƯỚC khi ai chạy migration
+    009. `CREATE TABLE IF NOT EXISTS` của 009 sau đó thấy bảng đã có nên bỏ qua.
+
+    Bảng SQLAlchemy dựng ra thiếu DEFAULT, thiếu CHECK, thiếu unique index và
+    **thiếu RLS** — bảng chứa tên với số điện thoại khách thật nằm mở cho role
+    `anon`. Migration mới là nguồn sự thật của schema trên Postgres.
+    """
+
+    def test_postgres_thi_khong_dung_toi_engine(self) -> None:
+        """Engine Postgres giả, không có server nào ở đầu kia. Hàm mà thật sự
+        chạy `create_all` thì nó phải kết nối, và test này sẽ nổ."""
+        from sqlalchemy import create_engine
+
+        from src.data.stores.dat_coc_db import DatCocDB
+
+        db = DatCocDB("", engine=create_engine("postgresql://khong-co-that:5432/x"))
+
+        db.ensure_table()  # không được raise, và không được kết nối
+
+    def test_sqlite_van_tao_bang(self) -> None:
+        """Test dùng SQLite in-memory, ở đó không migration nào chạy."""
+        from sqlalchemy import create_engine, inspect
+
+        from src.data.stores.dat_coc_db import DatCocDB
+
+        engine = create_engine("sqlite:///:memory:")
+        DatCocDB("", engine=engine).ensure_table()
+
+        assert inspect(engine).has_table("dat_coc_lead")
+
+    def test_hai_cot_hay_bi_bo_qua_co_server_default(self) -> None:
+        """`default=` của SQLAlchemy là mặc định phía PYTHON, không sinh ra
+        DEFAULT trong DDL — INSERT bằng SQL thuần vẫn ăn NotNullViolation."""
+        from src.data.stores.dat_coc_db import dat_coc_lead_table
+
+        for ten in ("trang_thai", "created_at"):
+            assert dat_coc_lead_table.c[ten].server_default is not None
+
+
+def test_moi_module_goi_inventory_deu_duoc_va_trong_conftest() -> None:
+    """Chốt chặn cho một lỗi đã xảy ra HAI lần.
+
+    `get_inventory_db()` đọc `get_settings()` toàn cục, tức `.env`, tức Supabase
+    production. `tests/conftest.py` vá nó bằng SQLite rỗng — nhưng vá theo TÊN
+    MODULE, nên module mới nào gọi hàm này mà quên thêm vào danh sách thì test
+    của nó đọc thẳng dữ liệu thật, xanh hay đỏ tuỳ hôm đó production có gì.
+
+    Lần gần nhất: `dat_coc` thêm phép kiểm tình trạng căn, quên vá, và hai test
+    xanh suốt chỉ vì VOP397 tình cờ đang "Còn". Chúng đỏ đúng lúc căn đó chuyển
+    sang "Đã đặt cọc" — nghĩa là chúng chưa bao giờ chạy độc lập.
+    """
+    import pathlib
+    import re
+
+    goc = pathlib.Path(__file__).resolve().parents[2]
+    goi_ham = {
+        f"src.agents.tools.{f.stem}"
+        for f in (goc / "src" / "agents" / "tools").glob("*.py")
+        if "get_inventory_db" in f.read_text(encoding="utf-8")
+    }
+    da_va = set(re.findall(r'"(src\.agents\.tools\.\w+)"', (goc / "tests" / "conftest.py").read_text(encoding="utf-8")))
+
+    thieu = goi_ham - da_va
+    assert not thieu, f"Module gọi get_inventory_db nhưng chưa vá trong conftest: {sorted(thieu)}"

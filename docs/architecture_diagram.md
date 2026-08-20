@@ -81,13 +81,15 @@ graph TB
 
 ```mermaid
 graph LR
-    START(["Câu hỏi"]) --> Router["router<br/>model rẻ + luật từ khoá"]
-    Router -->|cần tra tài liệu| Tools["tools<br/>chạy tool khớp intent"]
-    Router -->|không cần| Generate
+    START(["Câu hỏi"]) --> Router["router<br/>luna · nhãn + thực thể"]
+    Router --> Tools["tools<br/>chạy tool khớp intent"]
     Tools -->|cần tài liệu| Retrieve["retrieve<br/>embed → search → rerank"]
-    Tools -->|đủ dữ liệu rồi| Generate
-    Retrieve --> Generate["generate<br/>model mạnh · grounding"]
-    Generate --> Guard["guardrail<br/>độ phủ · gắn cờ nhạy cảm"]
+    Tools -->|không cần| Cong
+    Retrieve --> Cong{{"cổng leo thang<br/>luật, không gọi model"}}
+    Cong -->|~90%| Generate
+    Cong -->|khớp luật| Orch["orchestrate<br/>Sonnet 5 · vòng lặp tool"]
+    Orch --> Generate["generate<br/>ép grounding"]
+    Generate --> Guard["guardrail<br/>độ phủ · cờ nhạy cảm"]
     Guard --> END(["Trả lời + nguồn"])
 ```
 
@@ -98,6 +100,11 @@ sự thật lúc hỏi — giá/tình trạng căn; vector store chỉ là bản
 **Guardrail** là chốt chặn: độ phủ dưới ngưỡng thì thay câu trả lời bằng thông
 điệp "chưa đủ dữ liệu" — **trừ khi** đã có kết quả tool thật (không từ chối dù
 độ phủ 0 khi tool đã trả lời đúng).
+
+📖 **Chi tiết đầy đủ ở [`kien-truc-loi-ai.md`](kien-truc-loi-ai.md)**: trách
+nhiệm từng node, ba luật leo thang, phân bổ model kèm chi phí đo thật, hợp đồng
+Protocol, và danh sách bẫy đã gặp. Mục này chỉ giữ mức toàn cảnh — sửa chi tiết
+thì sửa ở tài liệu kia, đừng chép sang đây.
 
 ## 3. Luồng dữ liệu RAG (`src/data/`)
 

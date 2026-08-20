@@ -26,9 +26,15 @@ from pydantic import BaseModel, Field
 
 from src.agents.contracts import AgentTool, ToolResult
 from src.agents.state import Intent
+from src.agents.thuc_the import ma_can as ma_can_tu_thuc_the
+from src.agents.tools import trang_thai as tt
 from src.agents.tools.args import doc_tham_so
 from src.agents.tools.registry import register_tool
-from src.data.stores.dat_coc_db import get_dat_coc_db
+from src.core.logging import get_logger
+from src.data.stores.dat_coc_db import TOI_DA_GIU_MOI_SO, get_dat_coc_db
+from src.data.stores.inventory_db import get_inventory_db
+
+logger = get_logger(__name__)
 
 _UNIT_CODE = re.compile(r"\b([A-Za-z]{2,4}\d{2,5})\b")
 
@@ -63,18 +69,25 @@ def chuan_hoa_sdt(thô: str) -> str:
     return so
 
 
-def _rut_tham_so(query: str) -> dict[str, Any] | None:
+def _rut_tham_so(query: str, entities: dict[str, Any] | None = None) -> dict[str, Any] | None:
     """Có ý định cọc và có mã căn thì tool chạy. Tên và số lấy được thì lấy.
 
     Không đòi đủ số điện thoại ở đây — xem docstring đầu file.
+
+    Ý ĐỊNH CỌC chỉ đọc câu hiện tại, không bao giờ kế thừa từ lịch sử: khách nói
+    "đặt cọc VOP397" ở lượt 1 rồi lượt 3 hỏi "căn đó hướng nào" mà kế thừa ý
+    định thì tool ghi thêm một lead nữa, khách không hề yêu cầu. Mã căn thì
+    ngược lại — kế thừa được, vì "chốt căn đó luôn" đúng là căn vừa bàn.
     """
     if not _Y_DINH_COC.search(query):
         return None
-    ma = _UNIT_CODE.search(query)
+
+    khop = _UNIT_CODE.search(query)
+    ma = khop.group(1).upper() if khop else next(iter(ma_can_tu_thuc_the(entities)), None)
     if ma is None:
         return None
 
-    args: dict[str, Any] = {"unit_code": ma.group(1).upper()}
+    args: dict[str, Any] = {"unit_code": ma}
 
     sdt = _SDT.search(query)
     if sdt is not None:
@@ -129,6 +142,42 @@ class DatCocTool(AgentTool):
         db = get_dat_coc_db()
         ma_can = args.unit_code.upper()
 
+        da_giu = _trang_thai_can(ma_can)
+        if da_giu in tt.DANG_CO_NGUOI_GIU or da_giu == tt.DA_BAN:
+            # Khách KHÁC đang giữ căn này (hoặc căn đã bán). Ghi thêm lead thứ
+            # hai là hứa với hai người cùng một căn — đội sale phát hiện lúc gọi
+            # điện, tức là quá muộn. `da_co_hom_nay` bên dưới chỉ chặn CÙNG một
+            # số bấm hai lần, không chặn được ca này.
+            return ToolResult(
+                ok=True,
+                data={
+                    "trang_thai": "da_co_nguoi_giu",
+                    "ma_can": ma_can,
+                    "tinh_trang_can": tt.nhan(da_giu),
+                    "loi_nhan": (
+                        f"Căn {ma_can} hiện {tt.nhan(da_giu).lower()}, chưa nhận thêm giữ chỗ. "
+                        "Mình tìm giúp bạn căn tương tự nhé."
+                    ),
+                },
+                source="dat_coc:postgres",
+            )
+
+        if db.so_can_dang_giu(sdt) >= TOI_DA_GIU_MOI_SO:
+            # Phanh chống khoá sạch tồn kho. Nút "Đặt cọc" trên portal chặn y
+            # hệt — chặn một đường thôi thì đường còn lại vẫn mở.
+            return ToolResult(
+                ok=True,
+                data={
+                    "trang_thai": "giu_qua_nhieu",
+                    "ma_can": ma_can,
+                    "loi_nhan": (
+                        f"Số này đang giữ chỗ {TOI_DA_GIU_MOI_SO} căn rồi. Đội sale sẽ liên hệ "
+                        "để chốt trước khi giữ thêm căn mới."
+                    ),
+                },
+                source="dat_coc:postgres",
+            )
+
         if db.da_co_hom_nay(ma_can, sdt):
             return ToolResult(
                 ok=True,
@@ -160,6 +209,21 @@ class DatCocTool(AgentTool):
             },
             source="dat_coc:postgres",
         )
+
+
+def _trang_thai_can(ma_can: str) -> str:
+    """Trạng thái hiện tại của căn, hoặc chuỗi rỗng nếu không tra được.
+
+    Rỗng khi hỏng chứ không raise: tồn kho đứt kết nối thì vẫn phải ghi được
+    lead. Mất một lead là mất một khách thật đang muốn mua; ghi thừa một lead
+    trùng thì đội sale gọi điện là biết ngay.
+    """
+    try:
+        rows = get_inventory_db().query_units(unit_code=ma_can)
+    except Exception as exc:  # noqa: BLE001 - xem docstring
+        logger.warning("Không tra được tình trạng căn %s: %s", ma_can, exc)
+        return ""
+    return str(rows[0].get("status") or "") if rows else ""
 
 
 def _hop_le_sdt(so: str) -> bool:

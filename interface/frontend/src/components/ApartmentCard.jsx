@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { formatArea, formatPrice } from '../utils/format';
 import { AreaIcon, CompassIcon, HouseIcon } from './Icons';
+import { lopTrangThai, nhanTrangThai } from '../utils/trangThai';
 
 export default function ApartmentCard({ apartment }) {
   const {
@@ -17,6 +18,7 @@ export default function ApartmentCard({ apartment }) {
     gia,
     gia_tri: giaTri,
     tinh_trang: tinhTrang,
+    tinh_trang_chi_tiet: tinhTrangChiTiet,
     phan_khu: phanKhu,
     thumbnail,
   } = apartment;
@@ -25,7 +27,9 @@ export default function ApartmentCard({ apartment }) {
     <Link className="lcard" to={`/apartments/${encodeURIComponent(maCan)}`}>
       <div className="thumb">
         {thumbnail ? <img src={thumbnail} alt={`Ảnh căn ${maCan}`} loading="lazy" /> : <HouseIcon className="house" />}
-        <span className={tinhTrang === 'Còn' ? 'badge-st' : 'badge-st sold'}>{tinhTrang}</span>
+        <span className={`badge-st ${lopTrangThai(tinhTrangChiTiet, tinhTrang)}`}>
+          {nhanTrangThai(tinhTrangChiTiet, tinhTrang)}
+        </span>
         <span className="badge-code">{maCan}</span>
         {/* Phân khu nằm trên ảnh: lưới bốn cột chật, thêm một dòng chữ nữa là
             thẻ cao lên và bớt căn hiện trong màn hình đầu. */}

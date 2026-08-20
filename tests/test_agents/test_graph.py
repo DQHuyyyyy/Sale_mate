@@ -58,15 +58,22 @@ async def test_graph_tu_choi_khi_can_tai_lieu_ma_khong_co_gi(scripted_llm, setti
 
 
 @pytest.mark.asyncio
-async def test_graph_hoi_can_cu_the_thi_so_lieu_tu_tool_di_vao_prompt(scripted_llm, settings, monkeypatch):
+async def test_graph_hoi_can_cu_the_thi_so_lieu_tu_tool_di_vao_prompt(settings, monkeypatch):
     """Luồng đầu-cuối cho chính ca đã hỏng trên production: hỏi một mã căn.
 
     Không có tool thì retrieve rỗng ⇒ guardrail từ chối. Có tool thì số liệu
     phải vào context và câu trả lời đi qua được.
+
+    Dùng câu trả lời giả CÓ NHẮC mã căn thay vì `FAKE_REPLY` chung: bộ lọc nguồn
+    đối chiếu nhãn nguồn với câu chữ, nên một câu trả lời không khẳng định gì
+    ("Xin chào, đây là câu trả lời thử nghiệm") đúng ra phải cho ra 0 nguồn.
     """
     from src.agents.contracts import AgentTool, ToolResult
     from src.agents.state import Intent
     from src.agents.tools.registry import ToolBinding, ToolRegistry
+    from src.services.llm import ScriptedProvider
+
+    scripted_llm = ScriptedProvider("Căn VOP345 giá 2,7 tỷ và vẫn còn trống.", delay_s=0)
 
     class _Ton(AgentTool):
         name = "ton_kho_gia"

@@ -1,79 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { createSale, getApartment } from '../api';
+import { getApartment } from '../api';
 import { BackIcon, HouseIcon } from '../components/Icons';
-import { useAuth } from '../context/AuthContext';
 import { formatArea, formatPrice, orDash } from '../utils/format';
-
-function SellModal({ apartment, onClose, onSold }) {
-  const [form, setForm] = useState({ customerName: '', customerPhone: '', soldPrice: '' });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  const update = (key) => (event) => setForm({ ...form, [key]: event.target.value });
-
-  const submit = async (event) => {
-    event.preventDefault();
-    setError('');
-    setSaving(true);
-    try {
-      await createSale({ maCan: apartment.ma_can, ...form });
-      onSold();
-    } catch (submitError) {
-      setError(submitError.message);
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="modal-bg" onClick={(event) => event.target === event.currentTarget && onClose()}>
-      <form className="modal" onSubmit={submit}>
-        <h3>Ghi nhận đã bán căn {apartment.ma_can}</h3>
-        <p className="sub">
-          Căn sẽ chuyển sang trạng thái “Đã bán” và không còn hiện trong kết quả tìm kiếm.
-        </p>
-
-        {error && <div className="alert alert-error">{error}</div>}
-
-        <div className="field">
-          <label htmlFor="customerName">Tên khách hàng</label>
-          <input id="customerName" value={form.customerName} onChange={update('customerName')} />
-        </div>
-        <div className="field">
-          <label htmlFor="customerPhone">Điện thoại khách</label>
-          <input id="customerPhone" value={form.customerPhone} onChange={update('customerPhone')} />
-        </div>
-        <div className="field">
-          <label htmlFor="soldPrice">Giá bán thực tế (tỷ VND)</label>
-          <input
-            id="soldPrice"
-            type="number"
-            step="0.001"
-            min="0"
-            max="20"
-            placeholder={apartment.gia_tri ?? ''}
-            value={form.soldPrice}
-            onChange={update('soldPrice')}
-          />
-          <div className="hint">Bỏ trống thì lấy đúng giá niêm yết.</div>
-        </div>
-
-        <div className="form-actions">
-          <button className="btn btn-primary" type="submit" disabled={saving}>
-            {saving ? 'Đang lưu…' : 'Xác nhận đã bán'}
-          </button>
-          <button className="btn btn-ghost" type="button" onClick={onClose} disabled={saving}>
-            Huỷ
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
+import DatCocModal from '../components/DatCocModal';
+import { conBanDuoc, lopTrangThai, nhanTrangThai } from '../utils/trangThai';
 
 export default function ApartmentDetail() {
   const { maCan } = useParams();
-  const { isSale } = useAuth();
   const [apartment, setApartment] = useState(null);
 
   // Ảnh đang xem nằm trên URL (?anh=2), KHÔNG phải state cục bộ. Trợ lý S là
@@ -92,8 +26,8 @@ export default function ApartmentDetail() {
   };
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [sellOpen, setSellOpen] = useState(false);
-  const [sold, setSold] = useState('');
+  const [datCocOpen, setDatCocOpen] = useState(false);
+  const [thongBao, setThongBao] = useState('');
 
   const load = () => {
     setLoading(true);
@@ -128,7 +62,13 @@ export default function ApartmentDetail() {
   // ảnh chính thành khung trống.
   const chiSoAnh = images.length ? Math.min(activeImage, images.length - 1) : 0;
   const current = images[chiSoAnh];
-  const canSell = isSale && apartment.tinh_trang === 'Còn';
+  // Nút đặt cọc hiện cho MỌI người xem, kể cả khách chưa đăng nhập — đó là cả
+  // mục đích của nó. Chỉ ẩn khi căn không còn nhận giữ chỗ được nữa.
+  //
+  // KHÔNG có nút "Ghi nhận đã bán" ở đây nữa: chốt bán chỉ diễn ra ở màn Giao
+  // dịch, bằng cách chốt một lead — chỗ đó đã có sẵn tên và số điện thoại người
+  // mua, không bắt gõ lại.
+  const coTheDatCoc = conBanDuoc(apartment.tinh_trang_chi_tiet, apartment.tinh_trang);
 
   return (
     <div className="wrap">
@@ -146,7 +86,7 @@ export default function ApartmentDetail() {
         </p>
       </div>
 
-      {sold && <div className="alert alert-ok">{sold}</div>}
+      {thongBao && <div className="alert alert-ok">{thongBao}</div>}
 
       <div className="detail-grid">
         <div>
@@ -181,8 +121,8 @@ export default function ApartmentDetail() {
           <div className="ltype" style={{ fontSize: 15 }}>
             {orDash(apartment.loai_can)}
           </div>
-          <span className={apartment.tinh_trang === 'Còn' ? 'ltag' : 'ltag'}>
-            {apartment.tinh_trang}
+          <span className={`ttag ${lopTrangThai(apartment.tinh_trang_chi_tiet, apartment.tinh_trang)}`}>
+            {nhanTrangThai(apartment.tinh_trang_chi_tiet, apartment.tinh_trang)}
           </span>
 
           <dl className="spec-list">
@@ -212,10 +152,10 @@ export default function ApartmentDetail() {
             </div>
           </dl>
 
-          {canSell && (
+          {coTheDatCoc && (
             <div className="form-actions">
-              <button className="btn btn-primary" onClick={() => setSellOpen(true)}>
-                Ghi nhận đã bán
+              <button className="btn btn-primary" onClick={() => setDatCocOpen(true)}>
+                Đặt cọc căn này
               </button>
             </div>
           )}
@@ -227,17 +167,21 @@ export default function ApartmentDetail() {
         Về trang tìm kiếm
       </Link>
 
-      {sellOpen && (
-        <SellModal
+      {datCocOpen && (
+        <DatCocModal
           apartment={apartment}
-          onClose={() => setSellOpen(false)}
-          onSold={() => {
-            setSellOpen(false);
-            setSold(`Đã ghi nhận bán căn ${apartment.ma_can}. Xem lại ở “Lịch sử bán của tôi”.`);
+          onClose={() => setDatCocOpen(false)}
+          onDone={(loiNhan) => {
+            setDatCocOpen(false);
+            setThongBao(loiNhan);
+            // Tải lại để tình trạng căn đổi sang "Đã đặt cọc" ngay trước mắt
+            // khách — không có bước này thì họ vừa gửi xong vẫn thấy "Còn" và
+            // tưởng yêu cầu chưa vào.
             load();
           }}
         />
       )}
+
     </div>
   );
 }

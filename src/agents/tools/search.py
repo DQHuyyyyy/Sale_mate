@@ -27,6 +27,9 @@ from pydantic import BaseModel, Field
 
 from src.agents.contracts import AgentTool, ToolResult
 from src.agents.state import Intent
+from src.agents.thuc_the import ma_can as ma_can_tu_thuc_the
+from src.agents.thuc_the import tieu_chi_tim
+from src.agents.tools import trang_thai as tt
 from src.agents.tools.args import doc_tham_so
 from src.agents.tools.registry import register_tool
 from src.core.logging import get_logger
@@ -63,8 +66,15 @@ _TRUONG_GON = (
 
 
 def _gon(row: dict[str, Any]) -> dict[str, Any]:
-    """Bản rút gọn của một căn, để chở được nhiều căn trong cùng ngân sách token."""
-    return {k: row[k] for k in _TRUONG_GON if k in row}
+    """Bản rút gọn của một căn, để chở được nhiều căn trong cùng ngân sách token.
+
+    Kèm `status_label` vì kết quả tìm kiếm giờ có cả căn đang giữ chỗ / đã đặt
+    cọc. Thiếu nhãn thì model đọc danh sách và chào tất cả như nhau — khách gọi
+    hỏi mua một căn đã có người đặt.
+    """
+    gon = {k: row[k] for k in _TRUONG_GON if k in row}
+    gon["status_label"] = tt.nhan(row.get("status"))
+    return gon
 
 
 # Từ vựng đọc từ SQL nên phải làm mới, nhưng không phải mỗi lượt hỏi.
@@ -85,6 +95,49 @@ _UNIT_CODE = re.compile(r"\b[A-Za-z]{2,4}\d{2,5}\b")
 # `inventory_lookup` VẪN đọc cả câu — nó cần mã đó. Chỉ tool tìm kiếm mới phải
 # bỏ qua, vì nó quyết định dựa trên việc người dùng CÓ tự nêu mã căn hay không.
 _NGU_CANH_GIAO_DIEN = re.compile(r"\s*\(căn đang xem:[^)]*\)\s*", re.IGNORECASE)
+
+
+def bo_ngu_canh_giao_dien(query: str) -> str:
+    """Bỏ đuôi widget chèn, để lại đúng lời người dùng gõ.
+
+    MỌI tool quyết định dựa trên "người dùng CÓ tự nêu mã căn không" đều phải
+    gọi hàm này trước. `inventory_summary` từng quên: nó bỏ chạy khi thấy mã căn,
+    mà mã đó do FE chèn — nên "Ocean Park 3 còn bao nhiêu căn đang bán?" hỏi lúc
+    đang mở VOP758 thì tool đếm im lặng, và trợ lý trả lời "chưa đủ dữ liệu…
+    căn đang xem là VOP758 thuộc Ocean Park 1".
+    """
+    return _NGU_CANH_GIAO_DIEN.sub("", query)
+
+
+# Câu hỏi ĐẾM — hỏi một con số tổng hợp, không hỏi danh sách căn.
+#
+# Tách riêng khỏi `_DAU_HIEU` rộng hơn của `inventory_summary`: danh sách này
+# quyết định `inventory_search` có NHƯỜNG hay không, nên phải hẹp. "cho tôi xem
+# các căn đã bán" cũng là câu tổng hợp với summary, nhưng người dùng muốn một
+# DANH SÁCH — nhường ở đó là trả nhầm một con số.
+_DAU_HIEU_DEM = (
+    "bao nhiêu căn",
+    "còn bao nhiêu",
+    "số lượng căn",
+    "mấy căn",
+    "tổng số căn",
+    "còn mấy",
+    "đếm số",
+    "thống kê",
+)
+
+
+def la_cau_hoi_dem(query: str) -> bool:
+    """Câu hỏi xin một CON SỐ tổng hợp chứ không xin danh sách căn."""
+    thap = bo_ngu_canh_giao_dien(query).lower()
+    return any(dau in thap for dau in _DAU_HIEU_DEM)
+
+
+# Tiêu chí mà `inventory_summary` lọc được — đúng các trường của `SummaryArgs`.
+# Nó KHÔNG biết giá, diện tích, hướng hay view.
+_SUMMARY_LO_DUOC = frozenset({"subdivision", "building", "unit_type"})
+
+
 # "2 phòng ngủ", "2pn", "2 PN" — số phòng ngủ là tiêu chí hay được hỏi nhất.
 _BEDROOMS = re.compile(r"(\d)\s*(?:phòng\s*ngủ|pn\b)", re.IGNORECASE)
 # Phân khu: "Ocean Park 2", "OceanPark 2", "OP2", "phân khu 2", "khu 3".
@@ -186,11 +239,30 @@ def _match_direction(query: str, values: list[str]) -> str | None:
     return None
 
 
+# Đơn vị DIỆN TÍCH. Phải khai ở đây vì số tiền cũng nhận đơn vị tuỳ chọn, nên
+# không loại trừ thì "43m²" bị đọc thành 43 TỶ.
+_DON_VI_DIEN_TICH = r"m\s*(?:²|2\b)|met\s*vuong|mét\s*vuông|mét\s*vuong"
+
 # Số tiền: một con số kèm đơn vị TUỲ CHỌN. Người dùng viết đủ kiểu —
 # "3 tỷ", "2,5 tỷ", "500 triệu", "5.000.000.000", "5000000000".
-_SO = r"(\d[\d.,]*)"
+#
+# Hai lookahead sau con số, cả hai đều cần thiết:
+#
+# - `(?![\d.,])` chặn regex lùi lại khớp một phần con số. Không có nó thì ở
+#   "43m²" máy thử "43" → hỏng vì lookahead diện tích → lùi về "4" → "4" đứng
+#   trước "3" nên lookahead diện tích qua được, và "4 tỷ" lọt vào tiêu chí.
+# - lookahead diện tích chặn chính ca đã xảy ra thật: bấm gợi ý "Tìm căn khoảng
+#   43m² ở Ocean Park 1" thì `khoảng 43` khớp _QUANH, ra `price 42,8 – 43,2`
+#   TỶ. Kho không có căn nào giá 43 tỷ nên trả rỗng, trợ lý nói "chưa đủ dữ
+#   liệu", rồi lượt gợi ý sau lại dựng "giá 42,8–43,2" từ chính tiêu chí sai đó
+#   — người dùng bấm hai lần liên tiếp vào hai ngõ cụt.
+_SO = rf"(\d[\d.,]*)(?![\d.,])(?!\s*(?:{_DON_VI_DIEN_TICH}))"
 _DON_VI = r"\s*(tỷ|ty|triệu|trieu|tr|đồng|dong|vnd|vnđ)?"
 _TIEN = rf"{_SO}{_DON_VI}"
+
+# Diện tích: cùng cách nói với giá nhưng đơn vị BẮT BUỘC, nếu không thì "khoảng
+# 43" ở câu về giá lại thành diện tích.
+_DT = rf"(\d[\d.,]*)\s*(?:{_DON_VI_DIEN_TICH})"
 
 _KHOANG = re.compile(rf"(?:từ\s*)?{_TIEN}\s*(?:-|–|—|đến|tới)\s*{_TIEN}", re.IGNORECASE)
 
@@ -217,6 +289,17 @@ _QUANH = re.compile(rf"{_TU_CHI_MUC}{_TU_DEM}\s*{_TIEN}", re.IGNORECASE)
 _BIEN_DO_QUANH_TY = 0.2
 _RE_NHAT = re.compile(r"rẻ nhất|thấp nhất|giá tốt nhất", re.IGNORECASE)
 _DAT_NHAT = re.compile(r"đắt nhất|cao nhất", re.IGNORECASE)
+
+# Diện tích — cùng bốn cách nói với giá. Đơn vị bắt buộc nên không cần từ đệm:
+# "khoảng 43m²", "từ 40 đến 50 m2", "trên 60m2", "dưới 50 m²".
+_DT_KHOANG = re.compile(rf"(?:từ\s*)?(\d[\d.,]*)\s*(?:-|–|—|đến|tới)\s*{_DT}", re.IGNORECASE)
+_DT_QUANH = re.compile(rf"{_TU_CHI_MUC}(?:\s*(?:diện\s*tích|dien\s*tich))?\s*{_DT}", re.IGNORECASE)
+_DT_DUOI = re.compile(rf"(?:dưới|nhỏ hơn|ít hơn|thấp hơn|không quá|tối đa|<=?)\s*{_DT}", re.IGNORECASE)
+_DT_TREN = re.compile(rf"(?:trên|lớn hơn|rộng hơn|hơn|từ|tối thiểu|ít nhất|>=?)\s*{_DT}", re.IGNORECASE)
+_DT_TRAN = re.compile(_DT, re.IGNORECASE)
+# Biên độ cho "khoảng 43m²": ±3 m². Đủ để gom 43 và 45 m² lại — hai con số cùng
+# nghĩa với người mua — mà không kéo sang loại căn khác.
+_BIEN_DO_QUANH_M2 = 3.0
 
 # Dưới ngưỡng này mà không có đơn vị thì hiểu là "tỷ" (người dùng gõ "dưới 3").
 # Trên ngưỡng thì chắc chắn là đồng ("5.000.000.000").
@@ -286,6 +369,62 @@ def _rut_gia(query: str, criteria: dict[str, Any]) -> None:
     _rut_mot_dau(query, criteria, _TREN_BAO_GOM, "price_min", nghiem_ngat=False)
 
 
+def _rut_dien_tich(query: str, criteria: dict[str, Any]) -> str:
+    """Đọc khoảng diện tích. Trả về câu đã XOÁ phần nói về diện tích.
+
+    Cùng thứ tự xét với giá, vì cùng cách nói.
+
+    Phải chạy TRƯỚC `_rut_gia` và trả câu đã xoá, không thì hai bên tranh nhau
+    cùng một con số: "căn từ 40 đến 50 m2" có `từ 40` khớp luôn mẫu giá cận
+    dưới, và tiêu chí lòi ra thêm `price_min = 40` tỷ.
+
+    Trước đây không có hàm này: "43m²" chỉ có hai kết cục, hoặc bị đọc thành 43
+    TỶ, hoặc rơi ra ngoài hoàn toàn — cả hai đều dẫn tới "chưa đủ dữ liệu" trong
+    khi kho có 6 căn 43 m² ở Ocean Park 1.
+    """
+
+    def _xoa(span: tuple[int, int]) -> str:
+        return query[: span[0]] + " " + query[span[1] :]
+
+    khoang = _DT_KHOANG.search(query)
+    if khoang:
+        thap, cao = _doc_so(khoang.group(1)), _doc_so(khoang.group(2))
+        if thap is not None and cao is not None:
+            criteria["area_min"], criteria["area_max"] = thap, cao
+            return _xoa(khoang.span())
+
+    quanh = _DT_QUANH.search(query)
+    if quanh:
+        moc = _doc_so(quanh.group(1))
+        if moc is not None:
+            criteria["area_min"] = round(max(0.0, moc - _BIEN_DO_QUANH_M2), 1)
+            criteria["area_max"] = round(moc + _BIEN_DO_QUANH_M2, 1)
+            return _xoa(quanh.span())
+
+    con_lai = query
+    for mau, khoa in ((_DT_DUOI, "area_max"), (_DT_TREN, "area_min")):
+        khop = mau.search(con_lai)
+        if khop:
+            so = _doc_so(khop.group(1))
+            if so is not None:
+                criteria[khoa] = so
+                con_lai = con_lai[: khop.start()] + " " + con_lai[khop.end() :]
+    if con_lai != query:
+        return con_lai
+
+    # "Tìm căn 43m2 ở Ocean Park 1" — không từ chỉ mức nào, chỉ một con số trần.
+    # Hiểu như "khoảng": người mua nói diện tích là nói mức mong muốn, không ai
+    # đòi đúng 43,00 m².
+    tran = _DT_TRAN.search(query)
+    if tran:
+        moc = _doc_so(tran.group(1))
+        if moc is not None:
+            criteria["area_min"] = round(max(0.0, moc - _BIEN_DO_QUANH_M2), 1)
+            criteria["area_max"] = round(moc + _BIEN_DO_QUANH_M2, 1)
+            return _xoa(tran.span())
+    return query
+
+
 def _rut_mot_dau(
     query: str,
     criteria: dict[str, Any],
@@ -313,20 +452,27 @@ def _rut_mot_dau(
         criteria[f"{khoa}_nghiem_ngat"] = True
 
 
-def extract_criteria(query: str) -> dict[str, Any] | None:
-    """Rút tiêu chí lọc từ câu hỏi. Trả None nghĩa là tool không nên chạy."""
+def extract_criteria(query: str, entities: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    """Rút tiêu chí lọc từ câu hỏi. Trả None nghĩa là tool không nên chạy.
+
+    Tiêu chí trong CÂU HIỆN TẠI luôn thắng tiêu chí kế thừa từ lịch sử: người
+    dùng vừa gõ ra điều gì thì đó là điều họ muốn bây giờ. Thực thể chỉ lấp chỗ
+    trống — nhờ vậy "liệt kê 20 căn đó" (không tiêu chí nào trong câu) chạy được,
+    còn "đổi sang Ocean Park 2 đi" thì phân khu mới đè lên phân khu cũ.
+    """
     # Bỏ phần ngữ cảnh do giao diện chèn TRƯỚC khi soi mã căn. Mã căn trong đó
     # là căn người dùng đang mở, không phải căn họ đang hỏi.
-    loi_nguoi_dung = _NGU_CANH_GIAO_DIEN.sub("", query)
+    loi_nguoi_dung = bo_ngu_canh_giao_dien(query)
 
-    if _UNIT_CODE.search(loi_nguoi_dung):
-        return None  # Người dùng tự nêu mã căn -> việc của inventory_lookup
+    if _UNIT_CODE.search(loi_nguoi_dung) or ma_can_tu_thuc_the(entities):
+        return None  # Đang nói về căn cụ thể -> việc của inventory_lookup / so_sanh_can
 
     query = loi_nguoi_dung
     values = vocabulary.get()
     criteria: dict[str, Any] = {}
 
-    _rut_gia(query, criteria)
+    # Diện tích trước, rồi mới giá — xem docstring `_rut_dien_tich`.
+    _rut_gia(_rut_dien_tich(query, criteria), criteria)
 
     if _RE_NHAT.search(query):
         criteria["sort"] = "gia_tang"
@@ -357,6 +503,22 @@ def extract_criteria(query: str) -> dict[str, Any] | None:
     phan_khu = doc_phan_khu(query)
     if phan_khu:
         criteria["subdivision"] = phan_khu
+
+    # Lấp chỗ trống bằng thực thể kế thừa. `setdefault` chứ không `update`:
+    # câu hiện tại đã nêu gì thì giữ nguyên cái đó.
+    for khoa, gia_tri in tieu_chi_tim(entities).items():
+        criteria.setdefault(khoa, gia_tri)
+
+    if la_cau_hoi_dem(loi_nguoi_dung) and not set(criteria) - _SUMMARY_LO_DUOC:
+        # Câu ĐẾM mà `inventory_summary` lọc được hết tiêu chí thì nhường hẳn.
+        # Chạy cả hai chỉ đặt một con số tổng hợp cạnh vài căn lấy mẫu, và dòng
+        # "Nguồn" của câu trả lời "còn 30 căn" hoá ra ba mã căn ngẫu nhiên —
+        # không mã nào là bằng chứng cho con số 30.
+        #
+        # Chỉ nhường khi summary lọc ĐƯỢC HẾT: nó không biết giá lẫn diện tích,
+        # nên "có bao nhiêu căn dưới 4 tỷ" mà nhường thì con số trả về là đếm cả
+        # kho, sai mà nghe rất chắc chắn.
+        return None
 
     return criteria or None
 
@@ -493,7 +655,14 @@ class InventorySearchTool(AgentTool):
         Gom về một chỗ để không có hai luật khớp khác nhau (SQL một kiểu, Python
         một kiểu) rồi lệch nhau lúc dữ liệu ghi không thống nhất.
         """
-        result = [r for r in rows if r.get("status") == "available"]
+        # Bỏ căn ĐÃ BÁN, giữ căn đang có người giữ chỗ / đã đặt cọc.
+        #
+        # Cọc có thể huỷ, nên giấu hẳn là chào thiếu hàng. Và khách đang xem dở
+        # một căn rồi quay lại thấy nó biến mất mà không lời giải thích thì tệ
+        # hơn là thấy nó kèm nhãn "Đã đặt cọc". `_gon` đính `status_label` vào
+        # từng dòng để model nói được điều đó ra; các tool đếm thì không tính
+        # chúng vào "đang bán".
+        result = [r for r in rows if str(r.get("status") or "") != tt.DA_BAN]
 
         if args.subdivision:
             # So sau khi chuẩn hoá: dữ liệu ghi "Ocean Park 2" còn model có thể

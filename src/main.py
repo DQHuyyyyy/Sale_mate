@@ -26,7 +26,7 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI):
     """Khởi tạo tài nguyên một lần lúc app start, dọn dẹp lúc stop."""
     settings = get_settings()
-    setup_logging(settings.log_level)
+    setup_logging(settings.log_level, thu_muc_nhat_ky=settings.log_dir or None)
     configure()
     logger.info(
         "Khởi động %s",

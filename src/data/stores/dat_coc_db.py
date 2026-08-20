@@ -26,6 +26,7 @@ from sqlalchemy import (
     Table,
     create_engine,
     desc,
+    func,
     select,
 )
 from sqlalchemy.engine import Engine
@@ -43,9 +44,20 @@ dat_coc_lead_table = Table(
     Column("so_dien_thoai", String, nullable=False),
     Column("ghi_chu", String, nullable=False, default=""),
     Column("session_id", String, nullable=False, default=""),
-    Column("trang_thai", String, nullable=False, default="new"),
-    Column("created_at", DateTime(timezone=True), nullable=False),
+    # `server_default` chứ không chỉ `default`: `default` là mặc định phía
+    # PYTHON, chỉ áp dụng khi ghi QUA SQLAlchemy. Route portal ghi bằng SQL
+    # thuần và đã ăn NotNullViolation vì cột không có DEFAULT thật trong DDL.
+    Column("trang_thai", String, nullable=False, server_default="new"),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
 )
+
+
+# Trạng thái lead ĐANG giữ căn — khớp migration 010 và bản ở portal backend.
+_DANG_GIU = ("new", "da_goi", "da_coc")
+
+# Số căn một số điện thoại được giữ cùng lúc. Người mua thật cân nhắc vài căn là
+# chuyện bình thường, ba là rộng rãi.
+TOI_DA_GIU_MOI_SO = 3
 
 
 class DatCocDB:
@@ -55,6 +67,25 @@ class DatCocDB:
         self._engine = engine or create_engine(database_url)
 
     def ensure_table(self) -> None:
+        """Tạo bảng — CHỈ trên SQLite của test. Trên Postgres thì tuyệt đối không.
+
+        ⚠️ Đây là chỗ đã gây ra một sự cố thật. Hàm này chạy ở đầu MỌI thao tác,
+        và trên database thật nó đã lặng lẽ tạo `dat_coc_lead` trước khi ai kịp
+        chạy migration 009. Bảng SQLAlchemy dựng ra KHÁC bảng migration khai:
+
+        - `default="new"` của SQLAlchemy là mặc định phía PYTHON, không sinh ra
+          `DEFAULT` trong DDL → INSERT bằng SQL thuần (route portal) ném
+          NotNullViolation.
+        - Không có CHECK trên `trang_thai` → nhận mọi chuỗi, và migration 010
+          suy trạng thái căn từ đúng cột đó.
+        - Không có unique index chống trùng → chốt chặn "bấm hai lần" biến mất.
+        - **Không có RLS** → bảng chứa tên và số điện thoại khách thật nằm mở.
+
+        Migration là nguồn sự thật của schema trên Postgres. Test dùng SQLite
+        in-memory nên vẫn cần tạo bảng, và ở đó không có migration nào chạy.
+        """
+        if self._engine.dialect.name == "postgresql":
+            return
         metadata.create_all(self._engine, tables=[dat_coc_lead_table])
 
     def da_co_hom_nay(self, ma_can: str, so_dien_thoai: str) -> bool:
@@ -76,6 +107,25 @@ class DatCocDB:
                 if tao_luc is not None and _ngay(tao_luc) == hom_nay:
                     return True
         return False
+
+    def so_can_dang_giu(self, so_dien_thoai: str) -> int:
+        """Số căn KHÁC NHAU mà một số điện thoại đang giữ.
+
+        Phanh chống khoá sạch tồn kho: một lead còn hiệu lực làm căn thành
+        "Đã đặt cọc", và cọc không tự hết hạn, nên không chặn thì một người gửi được trăm
+        yêu cầu và cả kho thành "hết hàng" cho tới khi có người dọn tay.
+
+        `interface/backend/app/routers/dat_coc.py` có bản y hệt cho nút bấm trên
+        portal. Hai service tách nhau nên không dùng chung được — nhưng chặn một
+        bên thôi là vô nghĩa, đường còn lại vẫn mở.
+        """
+        self.ensure_table()
+        stmt = select(dat_coc_lead_table.c.ma_can).where(
+            dat_coc_lead_table.c.so_dien_thoai == so_dien_thoai,
+            dat_coc_lead_table.c.trang_thai.in_(_DANG_GIU),
+        )
+        with self._engine.connect() as conn:
+            return len({ma for (ma,) in conn.execute(stmt)})
 
     def ghi_lead(
         self,

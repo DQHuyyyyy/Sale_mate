@@ -326,3 +326,42 @@ class TestKhuonNut:
         for ten, cac_cau in _moi_tinh_huong():
             for cau in cac_cau:
                 assert len(cau) <= TOI_DA_KY_TU, f"{ten}: {cau!r} dài {len(cau)} ký tự"
+
+
+class TestKhongLapCauVuaHoi:
+    """Gợi lại đúng câu vừa trả lời là mời người dùng bấm để đọc lại thứ đang nhìn."""
+
+    def test_bo_goi_y_trung_cau_hien_tai(self) -> None:
+        """Ca thật: trả lời xong tài liệu chính sách thì nút gợi ý lại đúng câu đó."""
+        state = _state(chunks=[_chunk("Chính sách hỗ trợ lãi suất chung của Vinhomes")])
+        state["query"] = "Chính sách hỗ trợ lãi suất chung của Vinhomes"
+
+        assert goi_y_tiep_theo(state) == []
+
+    def test_bo_ca_khi_lech_dau_va_hoa_thuong(self) -> None:
+        state = _state(chunks=[_chunk("Ưu đãi của Vinhomes OceanPark 2")])
+        state["query"] = "uu dai cua vinhomes oceanpark 2"
+
+        assert goi_y_tiep_theo(state) == []
+
+    def test_bo_goi_y_trung_cau_hoi_luot_truoc(self) -> None:
+        state = _state(
+            chunks=[_chunk("Vị trí Vinhomes Ocean Park 2")],
+            history=[_hoi("Vị trí Vinhomes Ocean Park 2")],
+        )
+        state["query"] = "còn gì nữa không"
+
+        assert goi_y_tiep_theo(state) == []
+
+    def test_duoi_ngu_canh_widget_khong_lam_lech_so_khop(self) -> None:
+        """FE chèn "(căn đang xem: X)" nên chuỗi không trùng từng ký tự."""
+        state = _state(chunks=[_chunk("Vị trí Vinhomes Ocean Park 2")])
+        state["query"] = "Vị trí Vinhomes Ocean Park 2 (căn đang xem: VOP437)"
+
+        assert goi_y_tiep_theo(state) == []
+
+    def test_cau_khac_thi_van_giu(self) -> None:
+        state = _state(chunks=[_chunk("Vị trí Vinhomes Ocean Park 2")])
+        state["query"] = "Ưu đãi Ocean Park 2"
+
+        assert goi_y_tiep_theo(state) == ["Vị trí Vinhomes Ocean Park 2"]

@@ -34,6 +34,23 @@ from src.models.chat import ChatEvent, ChatEventType, ChatRequest, ChatResponse,
 logger = get_logger(__name__)
 
 
+def _ghi_cau_hoi(request: ChatRequest) -> None:
+    """Dòng ĐẦU TIÊN của mỗi phiên: người dùng hỏi gì.
+
+    Thiếu nó thì file nhật ký chỉ còn một chuỗi bước không rõ đang giải quyết
+    việc gì — xem lại sau vài giờ là vô dụng.
+
+    Câu hỏi là dữ liệu người dùng gõ, nên chỗ này chỉ chấp nhận được vì nhật ký
+    nằm ở máy local và đã bị .gitignore chặn. Đừng chuyển thư mục này lên nơi
+    dùng chung mà không xem lại quyết định đó.
+    """
+    logger.info(
+        "%s",
+        request.message,
+        extra={"context": {"buoc": "CÂU HỎI", "so_luot_truoc": len(request.history or [])}},
+    )
+
+
 class LangGraphAgentService:
     """Cài đặt AgentService trên LangGraph."""
 
@@ -59,6 +76,7 @@ class LangGraphAgentService:
         session_id = request.session_id or new_session_id()
 
         with trace(session_id=session_id, mode="answer"):
+            _ghi_cau_hoi(request)
             state = initial_state(request.message, session_id, request.history)
             result = await self._graph.ainvoke(state)
 
@@ -91,6 +109,7 @@ class LangGraphAgentService:
         """Phát ChatEvent: start → route* → token* → sources → done."""
         session_id = request.session_id or new_session_id()
         with trace(session_id=session_id, mode="stream"):
+            _ghi_cau_hoi(request)
             async for event in self._stream(request, session_id):
                 yield event
 
@@ -123,7 +142,12 @@ class LangGraphAgentService:
                     yield ChatEvent(
                         type=ChatEventType.DONE,
                         session_id=session_id,
-                        data={"options": state.get("plan_options", [])},
+                        data={
+                            "options": state.get("plan_options", []),
+                            # Hỏi ngược thì chưa khẳng định gì — không có gì để
+                            # chứng minh, nên không nguồn.
+                            "cho_trich_nguon": False,
+                        },
                     )
                     return
 
@@ -140,7 +164,12 @@ class LangGraphAgentService:
                     yield ChatEvent(
                         type=ChatEventType.DONE,
                         session_id=session_id,
-                        data={"options": goi_y_khi_thieu_du_lieu(state)},
+                        data={
+                            "options": goi_y_khi_thieu_du_lieu(state),
+                            # Từ chối mà vẫn trưng nguồn là tự phủ định trước
+                            # mặt khách — cùng luật với `loc_nguon_da_dung`.
+                            "cho_trich_nguon": False,
+                        },
                     )
                     return
 
@@ -188,7 +217,13 @@ class LangGraphAgentService:
                         self._llm,
                         cau_tra_loi,
                         model=self._settings.llm_model_fast,
-                    )
+                    ),
+                    # Backend là nơi DUY NHẤT quyết định lượt này có nguồn hay
+                    # không. FE còn một đường sinh nguồn thứ hai — dấu [Mã căn]
+                    # model tự viết trong bài — và đường đó không đi qua bộ lọc
+                    # nào, nên nó dựng nguồn cả ở lượt vừa bị loại sạch. Xem
+                    # `cho_trich_nguon` ở ChatSidebar.jsx.
+                    "cho_trich_nguon": bool(da_dung),
                 },
             )
 
@@ -332,6 +367,27 @@ class LangGraphAgentService:
                         # Tiêu chí đã lọc, để giao diện đồng bộ danh sách bên
                         # ngoài với câu trả lời trong chat.
                         "filters": state.get("tool_filters", {}),
+                    },
+                )
+            ]
+
+        if node == "orchestrate":
+            # Chỉ báo khi THẬT SỰ leo thang. Node vẫn chạy ở mọi lượt (nó tự gác
+            # cổng), nên báo vô điều kiện sẽ hiện một dòng trạng thái vô nghĩa
+            # cho cả câu chào hỏi.
+            luat = state.get("leo_thang") or ""
+            if not luat:
+                return []
+            return [
+                ChatEvent(
+                    type=ChatEventType.ROUTE,
+                    content=", ".join(state.get("tools_ran", [])) or "đang lập kế hoạch",
+                    session_id=session_id,
+                    data={
+                        "step": "orchestrate",
+                        "luat": luat,
+                        "tools": list(state.get("tools_ran", [])),
+                        "loi": state.get("orchestrator_loi", ""),
                     },
                 )
             ]

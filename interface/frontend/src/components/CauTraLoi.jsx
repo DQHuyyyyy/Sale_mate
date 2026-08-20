@@ -11,6 +11,8 @@
  * một trình dựng đầy đủ là thừa và thêm phụ thuộc phải bảo trì.
  */
 
+import { Link } from 'react-router-dom';
+
 // Trích nguồn model phát ra dạng [VOP781] hoặc [Chính sách bán hàng]. Giữ dấu
 // ngoặc vuông trong prompt vì nó là dấu MÁY đọc được; đổi cách hiện là việc của
 // tầng giao diện, không phải bắt model đổi cách viết.
@@ -20,6 +22,32 @@ const TRICH_DAN = /\[([^\]\n]{2,60})\]/g;
 // một lượt, kể cả dấu phẩy/chữ "và" nối giữa. Gỡ từng dấu một thì phần nối ở
 // giữa còn lại thành ", ." lửng lơ giữa câu.
 const CHUOI_TRICH = /\[[^\]\n]{2,60}\](?:[ \t]*(?:,|;|và)?[ \t]*\[[^\]\n]{2,60}\])*/g;
+
+// Chỗ điền trong prompt, không phải tên nguồn nào. Prompt dạy cách trích dẫn
+// bằng ví dụ `[Mã căn]` và `[Tên tài liệu]`; model yếu chép luôn cái ví dụ thay
+// vì thay bằng giá trị thật, rồi FE dựng nó thành một nguồn bấm được. Đã thấy
+// `Nguồn: "Tên tài liệu"` hiện ra trước mặt người dùng trên production.
+const CHO_DIEN = new Set([
+  'mã căn',
+  'tên tài liệu',
+  'ma can',
+  'ten tai lieu',
+  'thông tin cụ thể còn thiếu',
+  'tên nguồn',
+  'nguồn',
+  // Tên TOOL, không phải tên nguồn. Câu trả lời tổng hợp ("còn 30 căn") không
+  // có mã căn lẫn tên tài liệu nào, nên model hay lấy định danh duy nhất nó
+  // nhìn thấy trong ngữ cảnh — tên tool — làm nguồn. Backend đã cấp nhãn đúng
+  // ("Dữ liệu tồn kho"); đây là lưới chặn khi model vẫn chép tên máy.
+  'inventory_lookup',
+  'inventory_search',
+  'inventory_summary',
+  'so_sanh_can',
+  'tinh_khoan_vay',
+  'dat_coc',
+]);
+
+const laChoDien = (ten) => CHO_DIEN.has(ten.trim().toLowerCase());
 
 /**
  * Gỡ mọi dấu trích nguồn khỏi thân bài, trả về danh sách nguồn để in một lần
@@ -36,7 +64,8 @@ function gomNguon(text) {
   const ten = [];
   const than = String(text ?? '').replace(CHUOI_TRICH, (chuoi) => {
     for (const [, nguon] of chuoi.matchAll(TRICH_DAN)) {
-      if (!ten.includes(nguon)) ten.push(nguon);
+      // Vẫn gỡ khỏi thân bài, chỉ không tính là nguồn.
+      if (!laChoDien(nguon) && !ten.includes(nguon)) ten.push(nguon);
     }
     return '';
   });
@@ -77,19 +106,37 @@ function dungInDam(text, khoa) {
     );
 }
 
-// Trích nguồn là mã căn thì bấm được để mở đúng căn đó. Tên tài liệu ("Chính
-// sách hỗ trợ lãi suất…") thì không — chưa có trang riêng cho tài liệu, làm nó
-// trông bấm được mà bấm không ra gì còn tệ hơn để chữ thường.
 const LA_MA_CAN = /^[A-Za-z]{2,4}\d{2,5}$/;
 
-/** Một tên nguồn: nút bấm nếu là mã căn, chữ thường nếu không. */
-function MotNguon({ ten, onChonCan }) {
-  if (!onChonCan || !LA_MA_CAN.test(ten)) return `"${ten}"`;
-  return (
-    <button type="button" className="ctl-trich-nut" onClick={() => onChonCan(ten)}>
-      &quot;{ten}&quot;
-    </button>
-  );
+/**
+ * Một nguồn — bấm được cho cả hai loại.
+ *
+ * Mã căn mở đúng căn đó; tên tài liệu mở `/tai-lieu/{doc_id}` xem toàn văn.
+ * Trước đây tên tài liệu để chữ thường vì chưa có trang nào để mở, nên trích
+ * nguồn chỉ là lời hứa: người đọc phải tin mà không kiểm được.
+ */
+function MotNguon({ nguon, onChonCan }) {
+  const ten = nguon.title;
+  if (LA_MA_CAN.test(ten) && onChonCan) {
+    return (
+      <button type="button" className="ctl-trich-nut" onClick={() => onChonCan(ten)}>
+        &quot;{ten}&quot;
+      </button>
+    );
+  }
+  // Bấm được hay không do TIỀN TỐ `doc_id` quyết, KHÔNG do `kind`. `kind` nói
+  // nguồn đến từ đâu (tool hay truy hồi); tiền tố nói nó trỏ vào đâu. Tool
+  // `tinh_khoan_vay` đọc số từ tài liệu chính sách nên `kind="db"` mà `doc_id`
+  // vẫn là `knowledge:…` — mở được. Còn "Dữ liệu tồn kho" (`inventory:postgres`)
+  // thì không có trang nào để mở.
+  if (String(nguon.doc_id ?? '').startsWith('knowledge:')) {
+    return (
+      <Link className="ctl-trich-nut" to={`/tai-lieu/${encodeURIComponent(nguon.doc_id)}`}>
+        &quot;{ten}&quot;
+      </Link>
+    );
+  }
+  return `"${ten}"`;
 }
 
 /** Dựng một đoạn chữ. Dấu trích nguồn đã được `gomNguon` gỡ từ trước. */
@@ -104,10 +151,10 @@ function DongNguon({ nguon, onChonCan }) {
   return (
     <p className="ctl-nguon">
       <span className="ctl-nguon-nhan">Nguồn:</span>{' '}
-      {nguon.map((ten, i) => (
-        <span key={ten}>
+      {nguon.map((n, i) => (
+        <span key={n.doc_id ? `${n.doc_id}-${n.title}` : n.title}>
           {i > 0 && ', '}
-          <MotNguon ten={ten} onChonCan={onChonCan} />
+          <MotNguon nguon={n} onChonCan={onChonCan} />
         </span>
       ))}
     </p>
@@ -162,10 +209,27 @@ function DungBang({ dong, khoa }) {
  *   thứ nó thực sự dùng, còn danh sách của backend là toàn bộ thứ đã tra.
  *   Nhưng nó là thứ DUY NHẤT còn lại khi model bỏ qua luật trích nguồn — đúng
  *   chuyện đang xảy ra trên production với gpt-4o-mini.
+ * @param choTrichNguon Backend đã lọc và kết luận lượt này KHÔNG được trích
+ *   nguồn (hỏi ngược, từ chối, chưa khẳng định gì). Chỉ `false` mới chặn —
+ *   `undefined` nghĩa là chưa có event `done`, giữ nguyên hành vi cũ để một
+ *   lượt stream đứt giữa chừng không mất sạch nguồn.
  */
-export default function CauTraLoi({ text, onChonCan, nguonThat }) {
-  const { than, nguon: nguonTrongBai } = gomNguon(text);
-  const nguon = [...new Set([...nguonTrongBai, ...(nguonThat ?? [])])];
+export default function CauTraLoi({ text, onChonCan, nguonThat, choTrichNguon }) {
+  // `gomNguon` vẫn chạy để GỠ dấu trích khỏi thân bài — "[VOP758]" giữa câu là
+  // cú pháp nội bộ, người đọc không cần thấy. Nhưng TÊN nó rút ra thì bỏ đi.
+  const { than } = gomNguon(text);
+
+  // Chỉ hiện nguồn BACKEND duyệt. Tên model tự viết trong ngoặc vuông không
+  // được tính nữa: model đọc mục "Nguồn tham khảo" ở cuối tài liệu, thấy
+  // "[Sang tên Sổ đỏ 2026 — LuatVietnam](https://…)" — trùng đúng cú pháp trích
+  // dẫn — rồi chép làm nhãn nguồn. Dòng "Nguồn" hoá ra trỏ sang một bài báo
+  // ngoài, trong khi thứ trợ lý thật sự đọc là tài liệu nội bộ. Người đọc tưởng
+  // trợ lý vừa tra web thời gian thực; nó không hề, và không có tool nào làm
+  // được việc đó.
+  //
+  // Nguồn của backend có `doc_id` nên bấm vào mở được tài liệu — thứ tên model
+  // tự nghĩ ra không bao giờ có.
+  const nguon = choTrichNguon === false ? [] : (nguonThat ?? []);
   const dong = than.split('\n');
   const phanTu = [];
   let danhSach = [];

@@ -36,12 +36,13 @@ prompt — sai chỗ thì model sẽ coi gợi ý là dữ kiện.
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Any
 
 from src.agents.state import AgentState
 from src.agents.tools import registry
 from src.agents.tools.khoan_vay import _VON_TU_CO
-from src.agents.tools.search import _doc_tien, extract_criteria
+from src.agents.tools.search import _NGU_CANH_GIAO_DIEN, _doc_tien, extract_criteria
 from src.core.logging import get_logger
 from src.models.chat import ChatMessage, MessageRole
 
@@ -90,7 +91,10 @@ def _co_tool_nhan(cau: str) -> bool:
         if binding is None:
             continue
         try:
-            if binding.build_args(cau) is not None:
+            # CỐ Ý không truyền thực thể: gợi ý là câu người dùng sẽ bấm ở lượt
+            # SAU, và lượt đó có ngữ cảnh riêng. Nới ở đây thì "liệt kê 20 căn
+            # đó" lọt qua bộ lọc nhờ ngữ cảnh của lượt NÀY, rồi hỏng khi bấm.
+            if binding.dung_args(cau) is not None:
                 return True
         except Exception:  # noqa: BLE001 - một tool kén tham số không được chặn cả dãy gợi ý
             continue
@@ -160,13 +164,40 @@ def _dung_khuon(cau: str) -> bool:
     return not any(cum in thap for cum in _GIONG_TRO_LY)
 
 
+def _chuan(cau: str) -> str:
+    """Dạng so khớp: bỏ dấu, bỏ đuôi ngữ cảnh widget chèn, gộp khoảng trắng.
+
+    `đ` phải thay tay. NFD tách được dấu của ư, ã, ê… vì chúng là chữ cái cộng
+    dấu tổ hợp, nhưng `đ` là MỘT ký tự riêng (U+0111) không tách ra `d` được —
+    nó rơi vào nhánh xoá ký tự lạ và "ưu đãi" thành "uu ai", không khớp với
+    "uu dai" người dùng gõ không dấu.
+    """
+    sach = _NGU_CANH_GIAO_DIEN.sub(" ", cau).lower().replace("đ", "d")
+    khong_dau = unicodedata.normalize("NFD", sach)
+    khong_dau = "".join(k for k in khong_dau if unicodedata.category(k) != "Mn")
+    return re.sub(r"[^a-z0-9]+", " ", khong_dau).strip()
+
+
+def _da_hoi_roi(state: AgentState) -> set[str]:
+    """Câu người dùng vừa hỏi, và vài lượt trước đó.
+
+    Gợi lại đúng câu vừa trả lời là mời người dùng bấm để đọc lại thứ họ đang
+    nhìn. Đã xảy ra thật: trả lời xong "Chính sách hỗ trợ lãi suất chung của
+    Vinhomes" thì nút gợi ý duy nhất lại đúng câu đó — bấm vào là quay vòng.
+    Gốc là `phuong_an_tu_tai_lieu` lấy tên tài liệu ĐÃ TRUY HỒI, mà tài liệu
+    khớp nhất với câu hỏi thì đương nhiên là tài liệu vừa dùng để trả lời.
+    """
+    return {_chuan(state.get("query", "")), *(_chuan(c) for c in _cau_hoi_nguoi_dung(state)[:3])}
+
+
 def _loc(cac_cau: list[str], state: AgentState) -> list[str]:
-    """Bỏ câu trùng, sai khuôn, hoặc hệ thống không trả lời nổi. Cắt còn tối đa 4."""
+    """Bỏ câu trùng, sai khuôn, đã hỏi rồi, hoặc hệ thống không trả lời nổi."""
     ten_tai_lieu = phuong_an_tu_tai_lieu(state)
+    da_hoi = _da_hoi_roi(state)
     giu = [
         c
         for c in dict.fromkeys(c.strip() for c in cac_cau if c.strip())
-        if _dung_khuon(c) and _tra_loi_duoc(c, ten_tai_lieu)
+        if _dung_khuon(c) and _chuan(c) not in da_hoi and _tra_loi_duoc(c, ten_tai_lieu)
     ]
     return giu[:TOI_DA_PHUONG_AN]
 

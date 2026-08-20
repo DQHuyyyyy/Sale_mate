@@ -11,10 +11,10 @@ vi bằng biến môi trường, không phải sửa code rồi commit.
 
 from __future__ import annotations
 
-from src.agents.contracts import AgentService, LLMProvider
+from src.agents.contracts import AgentService, LLMProvider, ToolCallingProvider
 from src.agents.graph import build_graph, build_nodes
 from src.agents.service import LangGraphAgentService
-from src.core.config import Settings, get_settings
+from src.core.config import Settings, canh_bao_env_ghi_de, get_settings
 from src.core.container import Container, container
 from src.core.exceptions import ConfigurationError
 from src.core.logging import get_logger
@@ -29,7 +29,7 @@ from src.rag.rerankers import (
     PassthroughReranker,
 )
 from src.rag.retriever import DefaultRetriever, EmptyRetriever
-from src.services.llm import OpenAIProvider, ScriptedProvider
+from src.services.llm import OpenAIProvider, ScriptedProvider, ScriptedToolCallingProvider
 
 logger = get_logger(__name__)
 
@@ -40,6 +40,10 @@ def configure(target: Container | None = None, settings: Settings | None = None)
     cfg = settings or get_settings()
 
     box.register_instance(Settings, cfg)
+
+    # Chạy SỚM, trước mọi lần gọi model: biến môi trường che mất khoá trong
+    # `.env` là lỗi câm, phải hiện thành một dòng WARNING lúc khởi động.
+    canh_bao_env_ghi_de()
 
     # Đồ giả lập CHỈ được dùng trong môi trường test. Ở dev và production, thiếu
     # khoá là dừng ngay — thà không chạy còn hơn phục vụ nội dung bịa ra.
@@ -66,6 +70,43 @@ def configure(target: Container | None = None, settings: Settings | None = None)
         )
 
     box.register(LLMProvider, make_llm)
+
+    # ---------- Tool calling (orchestrator) ----------
+    def make_tool_provider() -> ToolCallingProvider:
+        """Thiếu key hoặc thiếu SDK Anthropic KHÔNG chặn khởi động.
+
+        Khác hẳn `LLMProvider` ở trên: chỗ đó nằm trên đường đi chung nên thiếu
+        key là trợ lý câm, phải dừng sớm. Orchestrator chỉ phục vụ nhánh leo
+        thang; hỏng thì cổng tự đóng và mọi câu vẫn được trả lời bằng đường tất
+        định.
+
+        Bọc try/except quanh cả việc DỰNG provider chứ không chỉ việc gọi nó:
+        `AnthropicToolProvider.__init__` dựng client ngay, và thiếu gói
+        `anthropic` sẽ ném ngay tại đây. Không bắt thì lỗi lan lên
+        `make_agent` → `AgentService` không resolve được → mọi request trả 502,
+        tức một tính năng phụ chưa bật làm chết cả trợ lý.
+        """
+        if not cfg.enable_orchestrator:
+            return ScriptedToolCallingProvider()
+        if not cfg.has_anthropic_key:
+            logger.warning("ENABLE_ORCHESTRATOR bật nhưng thiếu ANTHROPIC_API_KEY — nhánh leo thang tắt")
+            return ScriptedToolCallingProvider()
+
+        try:
+            from src.services.anthropic_llm import AnthropicToolProvider
+
+            return AnthropicToolProvider(
+                cfg.anthropic_api_key,
+                default_model=cfg.orchestrator_model,
+                effort=cfg.orchestrator_effort,
+                max_tokens=cfg.orchestrator_max_tokens,
+                timeout_s=cfg.orchestrator_timeout_s,
+            )
+        except Exception as exc:  # noqa: BLE001 - hỏng ở đây không được làm sập app
+            logger.warning("Không dựng được orchestrator Anthropic, nhánh leo thang tắt: %s", exc)
+            return ScriptedToolCallingProvider()
+
+    box.register(ToolCallingProvider, make_tool_provider)
 
     # ---------- Embedder ----------
     def make_embedder() -> Embedder:
@@ -121,7 +162,7 @@ def configure(target: Container | None = None, settings: Settings | None = None)
     # ---------- Agent ----------
     def make_agent() -> AgentService:
         llm = box.resolve(LLMProvider)
-        nodes = build_nodes(llm, box.resolve(Retriever), cfg)
+        nodes = build_nodes(llm, box.resolve(Retriever), cfg, box.resolve(ToolCallingProvider))
         return LangGraphAgentService(
             build_graph(nodes),
             llm,
@@ -141,6 +182,7 @@ def configure(target: Container | None = None, settings: Settings | None = None)
                 "qdrant_cloud": cfg.uses_qdrant_cloud,
                 "reranker": cfg.reranker,
                 "llm_real": cfg.has_openai_key,
+                "orchestrator": cfg.orchestrator_model if cfg.has_anthropic_key else "tắt",
             }
         },
     )

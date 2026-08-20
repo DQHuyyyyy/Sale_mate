@@ -43,5 +43,21 @@ class BaseNode(ABC):
         metadata = dict(state.get("metadata", {}))
         metadata[f"{self.name}_ms"] = round(elapsed_ms, 1)
         result.setdefault("metadata", metadata)
-        logger.debug("Node %s xong", self.name, extra={"context": {"node": self.name, "ms": elapsed_ms}})
+
+        # Một dòng cho MỖI bước, ở mức INFO chứ không phải DEBUG. Đây là thứ trả
+        # lời câu hỏi hay được hỏi nhất khi chẩn đoán: "agent vừa làm gì, theo
+        # thứ tự nào, mất bao lâu". Để ở DEBUG thì phải đổi cấu hình mới thấy,
+        # mà lúc cần thấy nhất thường là lúc không kịp đổi.
+        #
+        # `tom_tat()` do node con tự khai — mỗi node biết rõ thứ gì của mình
+        # đáng nhìn, và không node nào phải nhớ tự gọi logger.
+        logger.info(
+            "%s",
+            self.tom_tat(result) or "xong",
+            extra={"context": {"buoc": self.name, "ms": round(elapsed_ms)}},
+        )
         return result
+
+    def tom_tat(self, result: dict[str, Any]) -> str:
+        """Một câu ngắn mô tả node vừa làm gì. Node con ghi đè khi có gì đáng nói."""
+        return ""

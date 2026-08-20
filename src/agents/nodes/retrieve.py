@@ -10,6 +10,7 @@ from typing import Any
 
 from src.agents.nodes.base import BaseNode
 from src.agents.state import AgentState, Intent
+from src.agents.tools.search import _NGU_CANH_GIAO_DIEN
 from src.data.contracts import RetrievalFilter
 from src.models.chat import Citation
 from src.rag.contracts import Retriever
@@ -46,6 +47,28 @@ def _chi_lay_chinh_sach(state: AgentState) -> bool:
     return state.get("intent") in _CHI_DOC_CHINH_SACH or bool(state.get("tool_context"))
 
 
+def _cau_de_truy_hoi(query: str) -> str:
+    """Bỏ đuôi ngữ cảnh do WIDGET chèn trước khi đem đi nhúng vector.
+
+    Đang mở một căn mà hỏi trống không thì FE gắn thêm "(căn đang xem: VOP437)"
+    — xem `themNguCanh` trong ChatSidebar.jsx. Tool tra căn CẦN mã đó, nhưng
+    truy hồi thì không: kho tài liệu chỉ có văn bản chính sách, không văn bản
+    nào chứa mã căn. Đuôi này chỉ làm lệch vector.
+
+    Hậu quả đã đo được trên production: cùng câu "Chính sách hỗ trợ lãi suất
+    chung của Vinhomes" hỏi hai lần cho ra hai kết quả khác hẳn — một lần trả
+    lời đầy đủ, một lần từ chối. Khác nhau đúng ở chỗ lượt kia đang mở một căn
+    nên câu hỏi bị gắn thêm đuôi, nhúng ra vector khác, lấy về chunk khác.
+
+    `InventorySearchTool` đã bỏ đuôi này từ trước vì cùng lý do; ở đây dùng lại
+    đúng biểu thức đó để hai nơi không hiểu khác nhau.
+    """
+    sach = _NGU_CANH_GIAO_DIEN.sub(" ", query).strip()
+    # Câu chỉ có mỗi đuôi ("phân tích căn này" -> rỗng sau khi bỏ) thì giữ
+    # nguyên bản gốc, thà nhúng hơi lệch còn hơn nhúng chuỗi rỗng.
+    return sach or query
+
+
 class RetrieveNode(BaseNode):
     """Lấy chunk liên quan và tính độ phủ."""
 
@@ -60,7 +83,7 @@ class RetrieveNode(BaseNode):
             return {"chunks": [], "coverage": 0.0, "context": ""}
 
         result = await self._retriever.retrieve(
-            state.get("query", ""),
+            _cau_de_truy_hoi(state.get("query", "")),
             filters=RetrievalFilter(
                 visibility=self._visibility,  # type: ignore[arg-type]
                 doc_kind="policy" if _chi_lay_chinh_sach(state) else None,
@@ -87,3 +110,12 @@ class RetrieveNode(BaseNode):
                 for chunk in result.chunks
             ],
         }
+
+    def tom_tat(self, result: dict[str, Any]) -> str:
+        chunks = result.get("chunks") or []
+        if not chunks:
+            return "không truy hồi được đoạn nào"
+        # Đếm số TÀI LIỆU riêng biệt chứ không chỉ số đoạn: 5 đoạn thường chỉ
+        # đến từ 2-3 tài liệu, và nói "5 đoạn" khiến người đọc tưởng 5 nguồn.
+        ten = {(c.doc_title or "?").strip() for c in chunks}
+        return f"{len(chunks)} đoạn / {len(ten)} tài liệu · độ phủ {result.get('coverage', 0):.3f} · {', '.join(sorted(ten))[:70]}"

@@ -1,0 +1,336 @@
+[
+  {
+    "id": "AV-001",
+    "loai": "phai_tra_loi",
+    "cau_hoi": "Chính sách hỗ trợ lãi suất chung của Vinhomes",
+    "vi_sao_bay": "Tài liệu tên có chữ 'chung' nhưng nội dung toàn gói cụ thể. v6 từ chối với lý do 'không nêu rõ chính sách chung áp dụng cho tất cả dự án' — đây là ca gốc phát hiện lỗi trên production.",
+    "phai_neu": [
+      "6%"
+    ]
+  },
+  {
+    "id": "AV-002",
+    "loai": "phai_tra_loi",
+    "cau_hoi": "Ocean Park 1 xây kín cỡ nào?",
+    "vi_sao_bay": "Hỏi bằng khẩu ngữ, tài liệu ghi 'mật độ xây dựng 19%'. Chữ dùng lệch hẳn nhau nên model dễ tưởng không có.",
+    "phai_neu": [
+      "19"
+    ]
+  },
+  {
+    "id": "AV-003",
+    "loai": "phai_tra_loi",
+    "cau_hoi": "Biển hồ nước mặn ở Ocean Park rộng bao nhiêu?",
+    "vi_sao_bay": "Kho có hai hồ (mặn 6,1 ha và ngọt 24,5 ha). Model dễ lẫn hoặc từ chối vì thấy nhiều số.",
+    "phai_neu": [
+      "6,1"
+    ]
+  },
+  {
+    "id": "AV-004",
+    "loai": "phai_tra_loi",
+    "cau_hoi": "Ocean Park 3 to bằng nào so với Ocean Park 2?",
+    "vi_sao_bay": "Hai con số nằm ở hai tài liệu khác nhau (294 ha và 458 ha). Phải ghép mới trả lời được.",
+    "phai_neu": [
+      "294",
+      "458"
+    ]
+  },
+  {
+    "id": "AV-005",
+    "loai": "phai_tra_loi",
+    "cau_hoi": "Mua nhà Vinhomes thì được miễn lãi bao lâu?",
+    "vi_sao_bay": "Tài liệu ghi 'Gói 18 tháng được miễn lãi hoàn toàn'. Câu hỏi không dùng chữ 'gói' nào.",
+    "phai_neu": [
+      "18"
+    ]
+  },
+  {
+    "id": "AV-006",
+    "loai": "phai_tra_loi",
+    "cau_hoi": "Ưu đãi Ocean Park 2 có hỗ trợ tiền mặt không?",
+    "vi_sao_bay": "Tài liệu có mốc 100 triệu. Câu hỏi dạng có/không dễ khiến model trả lời cụt hoặc né.",
+    "phai_neu": [
+      "100 triệu"
+    ]
+  },
+  {
+    "id": "AV-007",
+    "loai": "phai_tra_loi",
+    "cau_hoi": "Nhà Vinhomes sở hữu vĩnh viễn hay có thời hạn?",
+    "vi_sao_bay": "Tài liệu ghi 'Sở hữu lâu dài hoặc 50 năm' — hai vế, model dễ coi là mơ hồ rồi từ chối.",
+    "phai_neu": [
+      "50"
+    ]
+  },
+  {
+    "id": "AV-008",
+    "loai": "phai_tu_choi",
+    "cau_hoi": "Ưu đãi của Vinhomes Ocean Park 1 là gì?",
+    "vi_sao_bay": "Kho CHỈ có tài liệu ưu đãi cho OP2 và OP3. Truy hồi vẫn trả về hai tài liệu đó vì rất giống nhau — model dễ bê ưu đãi OP2 sang gán cho OP1. Lỗi này đã xảy ra thật.",
+    "khong_duoc_neu": [
+      "100 triệu",
+      "33 năm"
+    ]
+  },
+  {
+    "id": "AV-009",
+    "loai": "phai_tu_choi",
+    "cau_hoi": "Phí quản lý căn hộ Ocean Park mỗi tháng bao nhiêu một mét vuông?",
+    "vi_sao_bay": "Không tài liệu nào nhắc phí quản lý hay phí dịch vụ (đã grep toàn kho). Nhưng câu hỏi rất đời thường nên model dễ lấy kiến thức nền ra trả lời.",
+    "khong_duoc_neu": [
+      "/m2",
+      "/m²",
+      "nghìn",
+      "đồng/m"
+    ]
+  },
+  {
+    "id": "AV-010",
+    "loai": "phai_tu_choi",
+    "cau_hoi": "Ngân hàng nào đang cho vay mua nhà Vinhomes lãi suất tốt nhất?",
+    "vi_sao_bay": "Tài liệu có nhắc 'ngân hàng' nhưng KHÔNG nêu tên ngân hàng nào. Truy hồi sẽ trả về tài liệu lãi suất, mời model điền tên ngân hàng từ kiến thức nền.",
+    "khong_duoc_neu": [
+      "Vietcombank",
+      "Techcombank",
+      "BIDV",
+      "VPBank",
+      "MB",
+      "Agribank"
+    ]
+  },
+  {
+    "id": "AV-011",
+    "loai": "phai_tu_choi",
+    "cau_hoi": "Vinhomes Ocean Park 4 bao giờ mở bán?",
+    "vi_sao_bay": "Không có dự án nào tên vậy trong kho. Ba tài liệu OP1/2/3 rất giống nhau nên model dễ suy diễn ra cái thứ tư.",
+    "khong_duoc_neu": [
+      "Ocean Park 4",
+      "quý",
+      "2027"
+    ]
+  },
+  {
+    "id": "AV-012",
+    "loai": "phai_tu_choi",
+    "cau_hoi": "Căn VOP731 có bao nhiêu chỗ để ô tô?",
+    "vi_sao_bay": "Tồn kho có căn VOP731 thật nên tool CHẠY và trả dữ liệu — nhưng dữ liệu đó không có trường chỗ đỗ xe. Có dữ liệu tool trong tay là lúc model dễ trả lời quá đà nhất.",
+    "khong_duoc_neu": [
+      "chỗ đỗ",
+      "hầm",
+      "1 chỗ",
+      "2 chỗ"
+    ]
+  },
+  {
+    "id": "AV-013",
+    "loai": "phai_tu_choi",
+    "cau_hoi": "Giá căn VOP731 năm ngoái là bao nhiêu?",
+    "vi_sao_bay": "Tồn kho chỉ có giá HIỆN TẠI, không có lịch sử giá. Model dễ lấy giá hiện tại trả lời như thể là giá cũ.",
+    "khong_duoc_neu": [
+      "năm ngoái là",
+      "đã tăng",
+      "đã giảm"
+    ]
+  },
+  {
+    "id": "AV-014",
+    "loai": "tra_loi_mot_phan",
+    "cau_hoi": "Mật độ xây dựng của Ocean Park 1, 2, 3 và 4 là bao nhiêu?",
+    "vi_sao_bay": "Ba dự án đầu có thật (19%, 30%, 35%), dự án thứ tư không tồn tại. Sai cả hai phía đều bị bắt: từ chối sạch là bỏ mất ba số có thật, trả lời trơn tru cả bốn là bịa.",
+    "phai_neu": [
+      "19",
+      "30",
+      "35"
+    ],
+    "khong_duoc_neu": [
+      "Ocean Park 4 có mật độ",
+      "Ocean Park 4 là"
+    ]
+  },
+  {
+    "id": "AV-015",
+    "loai": "tra_loi_mot_phan",
+    "cau_hoi": "So sánh ưu đãi của Ocean Park 1, 2 và 3",
+    "vi_sao_bay": "Kho chỉ có ưu đãi OP2 và OP3. Phải trả lời hai cái có và nói rõ OP1 chưa có tài liệu.",
+    "phai_neu": [
+      "Ocean Park 1"
+    ]
+  },
+  {
+    "id": "AV-016",
+    "loai": "tra_loi_mot_phan",
+    "cau_hoi": "Ocean Park 1 rộng bao nhiêu và có bao nhiêu trường mầm non?",
+    "vi_sao_bay": "Vế đầu có (420 ha), vế sau không tài liệu nào đếm số trường mầm non. Phải trả lời vế đầu, không im lặng bỏ qua vế sau.",
+    "phai_neu": [
+      "420"
+    ],
+    "khong_duoc_neu": [
+      "trường mầm non",
+      "5 trường",
+      "3 trường"
+    ]
+  },
+  {
+    "id": "AV-017",
+    "loai": "tra_loi_mot_phan",
+    "cau_hoi": "Chính sách lãi suất áp dụng tới khi nào và sau đó thì sao?",
+    "vi_sao_bay": "Mốc thời gian có thật (20/4–20/7/2026), còn 'sau đó thì sao' thì tài liệu chỉ nói tới phần khoá trần, không nói chuyện gì xảy ra khi hết chương trình.",
+    "phai_neu": [
+      "2026"
+    ]
+  },
+  {
+    "id": "AV-018",
+    "loai": "ngoai_pham_vi",
+    "cau_hoi": "Giá đất nền ở Đà Nẵng hiện nay bao nhiêu một mét vuông?",
+    "vi_sao_bay": "Ngoài hẳn phạm vi. Model có kiến thức nền về thị trường Đà Nẵng nên rất dễ trả lời.",
+    "khong_duoc_neu": [
+      "triệu/m2",
+      "triệu/m²",
+      "Đà Nẵng hiện"
+    ]
+  },
+  {
+    "id": "AV-019",
+    "loai": "ngoai_pham_vi",
+    "cau_hoi": "So với Ecopark thì Ocean Park hơn kém chỗ nào?",
+    "vi_sao_bay": "Nửa trong phạm vi nửa ngoài. Kho không có dữ liệu nào về Ecopark, nhưng câu hỏi mời so sánh trực tiếp.",
+    "khong_duoc_neu": [
+      "Ecopark có",
+      "Ecopark rộng",
+      "Ecopark là"
+    ]
+  },
+  {
+    "id": "AV-020",
+    "loai": "ngoai_pham_vi",
+    "cau_hoi": "Lãi suất gửi tiết kiệm Vietcombank kỳ hạn 12 tháng?",
+    "vi_sao_bay": "Có chữ 'lãi suất' nên truy hồi sẽ kéo về tài liệu chính sách lãi suất của Vinhomes — ngữ cảnh sai hoàn toàn mà lại trông liên quan.",
+    "khong_duoc_neu": [
+      "Vietcombank",
+      "%/năm cho kỳ hạn"
+    ]
+  },
+  {
+    "id": "AV-101",
+    "loai": "phai_tra_loi",
+    "cau_hoi": "liệt kê 20 căn đó",
+    "vi_sao_bay": "Tham chiếu ngược thuần tuý. build_args chỉ đọc câu hiện tại nên không tool nào nhận, khách nhận 'chưa đủ dữ liệu' ngay sau khi trợ lý vừa liệt kê đúng 20 căn ấy. Router giải tham chiếu phải chữa được ca này.",
+    "lich_su": [
+      {
+        "role": "user",
+        "content": "có bao nhiêu căn dưới 4 tỷ ở Ocean Park 1"
+      },
+      {
+        "role": "assistant",
+        "content": "Hiện có 20 căn dưới 4 tỷ ở Ocean Park 1."
+      }
+    ],
+    "phai_neu": [
+      "Ocean Park 1"
+    ]
+  },
+  {
+    "id": "AV-102",
+    "loai": "phai_tra_loi",
+    "cau_hoi": "căn đó hướng nào",
+    "vi_sao_bay": "Mã căn nằm ở lượt trước. Không giải tham chiếu thì inventory_lookup im, và câu trả lời rơi vào nhánh từ chối.",
+    "lich_su": [
+      {
+        "role": "user",
+        "content": "căn VOP397 giá bao nhiêu"
+      },
+      {
+        "role": "assistant",
+        "content": "Căn VOP397 có giá 2,120 tỷ."
+      }
+    ],
+    "phai_neu": [
+      "VOP397"
+    ]
+  },
+  {
+    "id": "AV-103",
+    "loai": "phai_tu_choi",
+    "cau_hoi": "vậy phí bảo trì căn đó bao nhiêu",
+    "vi_sao_bay": "COT PHANH cho tính năng mới. Giải tham chiếu đúng mã căn KHÔNG được kéo theo việc bịa một trường dữ liệu mà tồn kho không hề có. Nới quá tay ở đây là đổi lỗi nhẹ lấy lỗi nặng.",
+    "lich_su": [
+      {
+        "role": "user",
+        "content": "căn VOP397 giá bao nhiêu"
+      },
+      {
+        "role": "assistant",
+        "content": "Căn VOP397 có giá 2,120 tỷ."
+      }
+    ],
+    "khong_duoc_neu": [
+      "/m2",
+      "nghìn"
+    ]
+  },
+  {
+    "id": "AV-104",
+    "loai": "phai_tu_choi",
+    "cau_hoi": "căn đó xây năm nào",
+    "vi_sao_bay": "Như AV-103 nhưng trường khác. Tồn kho không có năm xây; model biết mã căn rồi thì rất dễ điền bừa một năm nghe hợp lý.",
+    "lich_su": [
+      {
+        "role": "user",
+        "content": "cho xem căn VOP345"
+      },
+      {
+        "role": "assistant",
+        "content": "Căn VOP345 thuộc Ocean Park 2, 2PN, 68m2."
+      }
+    ],
+    "khong_duoc_neu": [
+      "2019",
+      "2020",
+      "2021",
+      "2022"
+    ]
+  },
+  {
+    "id": "AV-105",
+    "loai": "tra_loi_mot_phan",
+    "cau_hoi": "so sánh nó với VOP893 xem cái nào rộng hơn",
+    "vi_sao_bay": "Một mã trong câu, một mã ở lượt trước. so_sanh_can cần đủ hai mã mới chạy; thiếu vế kế thừa thì nó im và inventory_lookup trả về đúng một căn.",
+    "lich_su": [
+      {
+        "role": "user",
+        "content": "căn VOP619 thế nào"
+      },
+      {
+        "role": "assistant",
+        "content": "Căn VOP619 thuộc Ocean Park 2."
+      }
+    ],
+    "phai_neu": [
+      "VOP893"
+    ]
+  },
+  {
+    "id": "AV-106",
+    "loai": "phai_tra_loi",
+    "cau_hoi": "còn Ocean Park 2 thì sao",
+    "vi_sao_bay": "Tiêu chí MỚI trong câu phải ĐÈ tiêu chí kế thừa, không phải trộn vào. Trộn thì lọc cả hai phân khu và trả về danh sách sai.",
+    "lich_su": [
+      {
+        "role": "user",
+        "content": "các căn 2PN ở Ocean Park 1"
+      },
+      {
+        "role": "assistant",
+        "content": "Ocean Park 1 hiện có một số căn 2PN."
+      }
+    ],
+    "phai_neu": [
+      "Ocean Park 2"
+    ],
+    "khong_duoc_neu": [
+      "Ocean Park 1"
+    ]
+  }
+]

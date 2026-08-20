@@ -89,3 +89,18 @@ def require_sale(current_user: CurrentUser = Depends(get_current_user)) -> Curre
             detail="Chức năng này chỉ dành cho nhân viên sale.",
         )
     return current_user
+
+
+def require_sale_hoac_admin(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+    """Sale làm việc với lead, admin giám sát — cả hai đều vào được.
+
+    Không dùng `require_sale` cho lead đặt cọc: nó chặn cả admin, mà admin là
+    người duy nhất nhìn được toàn cảnh trạng thái căn. Cũng không dùng
+    `require_admin`: sale mới là người nhận cọc.
+    """
+    if current_user.role not in ("sale", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Chức năng này dành cho nhân viên sale và quản trị viên.",
+        )
+    return current_user

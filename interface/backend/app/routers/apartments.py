@@ -70,8 +70,19 @@ def apartment_columns() -> str:
     {gia_tri},
     a.{COL_NOI_THAT}     AS noi_that,
     a.{COL_TINH_TRANG}   AS tinh_trang,
+    iu.status            AS tinh_trang_chi_tiet,
     a.{COL_PHAN_KHU}     AS phan_khu
 """
+
+
+# `tinh_trang` thô chỉ có Còn/Hết và vẫn là thứ điều khiển luồng BÁN — đừng đổi
+# nghĩa của nó. `tinh_trang_chi_tiet` là ba mức suy ra trong VIEW
+# `inventory_units` (migration 010), dùng để HIỂN THỊ.
+#
+# Đọc từ chính view mà chatbot đọc, không tự tính lại ở đây: hai nơi cùng suy ra
+# một trạng thái là hai nơi để lệch, và lệch kiểu này thì portal nói "Còn" trong
+# khi trợ lý nói "Đã đặt cọc" cho cùng một căn.
+JOIN_TINH_TRANG = "LEFT JOIN inventory_units iu ON iu.unit_code = a.ma_can"
 
 
 def _format_price(gia_tri: Decimal) -> str:
@@ -154,6 +165,7 @@ def search_apartments(
         SELECT {apartment_columns()},
                img.image_url AS thumbnail
         FROM salemate_v1 a
+        {JOIN_TINH_TRANG}
         LEFT JOIN LATERAL (
             SELECT i.image_url
             FROM apartment_images i
@@ -171,7 +183,7 @@ def search_apartments(
 
 def _load_detail(ma_can: str) -> ApartmentDetail:
     row = fetch_one(
-        f"SELECT {apartment_columns()} FROM salemate_v1 a WHERE a.ma_can = %s",
+        f"SELECT {apartment_columns()} FROM salemate_v1 a {JOIN_TINH_TRANG} WHERE a.ma_can = %s",
         (ma_can,),
     )
     if row is None:

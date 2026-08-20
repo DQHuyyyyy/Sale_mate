@@ -46,10 +46,17 @@ graph TB
 - **Authentication:** [JWT/None]
 
 ### 3. AI Agent (LangGraph)
-- **Agent Type:** [ReAct / Plan-and-Execute / Custom]
-- **State:** [mô tả state schema]
-- **Nodes:** [danh sách nodes]
-- **Tools:** [danh sách tools]
+
+> ⚠️ Phần còn lại của file này vẫn là **khung mẫu chưa điền**. Tài liệu kiến
+> trúc THẬT, bám code đang chạy:
+>
+> - Toàn cảnh 3 service — [`docs/architecture_diagram.md`](docs/architecture_diagram.md)
+> - Lõi AI (`src/`) — [`docs/kien-truc-loi-ai.md`](docs/kien-truc-loi-ai.md)
+> - Quy ước làm việc — [`CLAUDE.md`](CLAUDE.md)
+
+- **Agent Type:** state machine LangGraph, có cổng leo thang sang vòng lặp tool calling
+- **Nodes:** `router` · `tools` · `retrieve` · `orchestrate` · `generate` · `guardrail`
+- **Tools:** `inventory_lookup` · `inventory_search` · `inventory_summary` · `so_sanh_can` · `tinh_khoan_vay` · `dat_coc`
 - **Flow:**
 
 ```mermaid

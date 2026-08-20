@@ -26,6 +26,7 @@ VOP345 còn không" cùng nhãn LISTING, nhưng chỉ câu sau rút được mã
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
@@ -36,8 +37,29 @@ from src.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Nhận câu hỏi, trả tham số cho tool — hoặc None khi câu hỏi không đủ dữ kiện.
-ArgBuilder = Callable[[str], dict[str, Any] | None]
+# Nhận câu hỏi (+ thực thể đã giải tham chiếu), trả tham số cho tool — hoặc None
+# khi không đủ dữ kiện. Tham số thứ hai là TUỲ CHỌN: tool chỉ cần câu hiện tại
+# vẫn khai `build_args(query)` như cũ, registry tự thích ứng.
+ArgBuilder = Callable[..., dict[str, Any] | None]
+
+
+def _thich_ung(build_args: ArgBuilder) -> Callable[[str, dict[str, Any]], dict[str, Any] | None]:
+    """Bọc builder để gọi được bằng một chữ ký duy nhất.
+
+    Vì sao không bắt cả 6 tool đổi chữ ký cùng lúc: tài liệu dự án hứa "thêm
+    tool mới chỉ là thêm một file". Ép mọi builder nhận tham số nó không dùng là
+    phá lời hứa đó, và tạo một hàng tham số `_` vô nghĩa trong mỗi file tool.
+
+    Đọc chữ ký MỘT lần lúc đăng ký, không phải mỗi lượt hỏi.
+    """
+    try:
+        nhan_hai_tham_so = len(inspect.signature(build_args).parameters) >= 2
+    except (TypeError, ValueError):  # pragma: no cover - builder kỳ lạ
+        nhan_hai_tham_so = False
+
+    if nhan_hai_tham_so:
+        return lambda query, entities: build_args(query, entities)
+    return lambda query, entities: build_args(query)
 
 
 @dataclass(frozen=True)
@@ -46,6 +68,10 @@ class ToolBinding:
 
     intents: frozenset[Intent]
     build_args: ArgBuilder
+
+    def dung_args(self, query: str, entities: dict[str, Any] | None = None) -> dict[str, Any] | None:
+        """Cổng DUY NHẤT để gọi builder — chỗ gọi không cần biết builder nhận mấy tham số."""
+        return _thich_ung(self.build_args)(query, entities or {})
 
 
 class ToolRegistry:

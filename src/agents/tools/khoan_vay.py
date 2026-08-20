@@ -29,6 +29,7 @@ from pydantic import BaseModel, Field
 
 from src.agents.contracts import AgentTool, ToolResult
 from src.agents.state import Intent
+from src.agents.thuc_the import ma_can as ma_can_tu_thuc_the
 from src.agents.tools.args import doc_tham_so
 from src.agents.tools.chinh_sach_vay import (
     ChinhSachVay,
@@ -56,26 +57,51 @@ _Y_DINH_VAY = re.compile(
 )
 
 
-def _rut_tham_so(query: str) -> dict[str, Any] | None:
+def _rut_tham_so(query: str, entities: dict[str, Any] | None = None) -> dict[str, Any] | None:
     """Rút mã căn + vốn tự có. Thiếu một trong hai thì tool không chạy.
 
     Cần CẢ HAI mới đủ để tính: biết vốn mà không biết mua căn nào thì không có
     giá để trừ, biết căn mà không biết vốn thì không biết vay bao nhiêu.
-    """
-    von = _VON_TU_CO.search(query)
-    ma = _UNIT_CODE.search(query)
-    if von is None or ma is None:
-        return None
 
-    # Có vốn và có mã căn nhưng không hỏi vay thì để tool khác trả lời.
+    Cả hai đều lấy được từ lịch sử — "có 1 tỷ thì vay căn đó thế nào" nêu vốn
+    mà không nêu mã. Riêng Ý ĐỊNH VAY luôn đọc câu hiện tại: kế thừa ý định là
+    chạy một tool người dùng không hề yêu cầu ở lượt này.
+    """
+    # Xét ý định TRƯỚC: không hỏi vay thì để tool khác trả lời, khỏi mất công rút.
     if not _Y_DINH_VAY.search(query):
         return None
 
-    so_tien = _doc_tien(von.group(1), von.group(2))
+    khop_ma = _UNIT_CODE.search(query)
+    ma = khop_ma.group(1).upper() if khop_ma else next(iter(ma_can_tu_thuc_the(entities)), None)
+    if ma is None:
+        return None
+
+    von = _VON_TU_CO.search(query)
+    so_tien = _doc_tien(von.group(1), von.group(2)) if von else (entities or {}).get("von_tu_co")
     if so_tien is None or so_tien <= 0:
         return None
 
-    return {"unit_code": ma.group(1).upper(), "von_tu_co": so_tien}
+    return {"unit_code": ma, "von_tu_co": float(so_tien)}
+
+
+def _nguon_chinh_sach() -> str:
+    """`doc_id` của tài liệu chính sách đã dùng để tính — để trích ngược về được.
+
+    Mọi con số định lượng của tool này (trần lãi suất, các gói 18/24/30/36/60
+    tháng, phụ phí theo tỷ lệ vay) đến từ `chinh_sach_vay.json`, mà file đó khai
+    sẵn `doc_id` trỏ về tài liệu văn bản gốc — chính là để câu trả lời trích
+    ngược. Trước đây tool trả `source="tool:tinh_khoan_vay"` nên dòng "Nguồn"
+    hiện một cái tên máy, bấm vào không ra gì.
+
+    Lấy cả chính sách ĐÃ HẾT HẠN: khi hết hiệu lực, tool vẫn nói "chính sách
+    6%/năm đã hết hạn từ 20/07/2026" — đó cũng là một khẳng định lấy từ tài
+    liệu, và người đọc có quyền kiểm.
+
+    Không có chính sách nào trong file thì rơi về tên tool, còn hơn không nguồn.
+    """
+    hom_nay = date.today()
+    cs = chinh_sach_dang_ap_dung(hom_nay) or chinh_sach_gan_nhat_da_het(hom_nay)
+    return (cs.doc_id if cs and cs.doc_id else "") or "tool:tinh_khoan_vay"
 
 
 class KhoanVayArgs(BaseModel):
@@ -163,7 +189,7 @@ class TinhKhoanVayTool(AgentTool):
                 source="tool:tinh_khoan_vay",
             )
 
-        return ToolResult(ok=True, data=self._tinh(args, gia), source="tool:tinh_khoan_vay")
+        return ToolResult(ok=True, data=self._tinh(args, gia), source=_nguon_chinh_sach())
 
     async def _lay_gia(self, args: KhoanVayArgs) -> tuple[float | None, str]:
         """Giá căn: ưu tiên tồn kho thật, chỉ dùng `gia_can` khi không có mã căn."""
@@ -186,7 +212,7 @@ class TinhKhoanVayTool(AgentTool):
 
         return None, "Cần mã căn hoặc giá căn để tính khoản vay."
 
-    def _tinh(self, args: KhoanVayArgs, gia: float) -> dict[str, Any]:
+    def _tinh(self, args: KhoanVayArgs, gia: float) -> dict[str, Any]:  # noqa: D102
         can_vay = gia - args.von_tu_co
         ty_le_vay = can_vay / gia * 100
 
