@@ -190,3 +190,15 @@ export function getTaiLieuAI() {
 export function getTaiLieuAIChiTiet(docId) {
   return request(`/api/tai-lieu/${encodeURIComponent(docId)}`);
 }
+
+// ---- Tin tức bất động sản ----
+/** Lấy tin tức bất động sản mới nhất từ RSS các trang báo. Không cần đăng nhập. */
+export function getNews({ limit = 10, refresh = false } = {}) {
+  return request('/api/news', {
+    params: {
+      limit,
+      refresh: refresh ? true : undefined,
+    },
+  });
+}
+

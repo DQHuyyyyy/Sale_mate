@@ -6,6 +6,7 @@ import ApartmentDetail from './pages/ApartmentDetail';
 import Documents from './pages/Documents';
 import Home from './pages/Home';
 import Login from './pages/Login';
+import News from './pages/News';
 import Profile from './pages/Profile';
 import Search from './pages/Search';
 import Zones from './pages/Zones';
@@ -26,7 +27,9 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/tim-kiem" element={<Search />} />
           <Route path="/zones" element={<Zones />} />
+          <Route path="/tin-tuc" element={<News />} />
           <Route path="/apartments/:maCan" element={<ApartmentDetail />} />
+
 
           {/* Nội bộ — phải đăng nhập. Route admin chặn thêm theo role.
               Đây chỉ là lớp trải nghiệm; backend mới là nơi thực thi. */}

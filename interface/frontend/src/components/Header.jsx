@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import AvatarMenu from './AvatarMenu';
 import LoginModal from './LoginModal';
-import { BurgerIcon, FileIcon, HouseIcon, LogoMark, MapIcon, SearchIcon } from './Icons';
+import { BurgerIcon, FileIcon, HouseIcon, LogoMark, MapIcon, NewspaperIcon, SearchIcon } from './Icons';
 
 export default function Header() {
   const [navOpen, setNavOpen] = useState(false);
@@ -52,6 +52,15 @@ export default function Header() {
               <MapIcon />
               Sơ đồ phân khu
             </NavLink>
+            <NavLink
+              to="/tin-tuc"
+              className={({ isActive }) => (isActive ? 'on' : '')}
+              onClick={closeNav}
+            >
+              <NewspaperIcon />
+              Tin tức
+            </NavLink>
+
 
             {/* Tài liệu là kho nội bộ của đội sale — khách không thấy mục này,
                 và backend cũng chặn nếu gọi thẳng API.
