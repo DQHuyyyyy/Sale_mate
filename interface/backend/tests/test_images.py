@@ -12,6 +12,9 @@ import os
 os.environ.setdefault("JWT_SECRET", "test-secret-chi-dung-trong-test-0123456789abcdef")
 os.environ.setdefault("DATABASE_URL", "postgresql://user:pass@localhost:5432/test")
 
+import asyncio  # noqa: E402
+import base64  # noqa: E402
+
 import httpx  # noqa: E402
 import pytest  # noqa: E402
 from app.main import app  # noqa: E402
@@ -221,3 +224,75 @@ async def test_goi_dung_nha_cung_cap_theo_cau_hinh(monkeypatch: pytest.MonkeyPat
         assert anh == b"abc"
 
     assert da_goi == ["openai", "gemini"]
+
+
+class TestSeedream:
+    """Seedream 4.0 qua BytePlus ModelArk — nhà cung cấp thứ ba.
+
+    Đổi nhà cung cấp KHÔNG được đổi hành vi: vẫn sửa ảnh có sẵn của căn, vẫn
+    trả bytes, vẫn không lưu ở đâu.
+    """
+
+    @pytest.fixture
+    def _seedream(self, monkeypatch: pytest.MonkeyPatch):
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "image_provider", "seedream")
+        monkeypatch.setattr(settings, "ark_api_key", "ark-test")
+
+    def test_gui_anh_goc_de_SUA_khong_phai_ve_tu_chu(self, _seedream) -> None:
+        """Chốt chặn quan trọng nhất. Endpoint tên là `images/generations`, và
+        thiếu trường `image` thì nó vẽ một căn hộ tưởng tượng thay vì sửa ảnh
+        của căn — không lỗi nào báo, chỉ khách nhận nhầm ảnh."""
+        from app.services import image_edit
+
+        thu = {}
+
+        class _Client:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            async def post(self, url, headers=None, json=None, **k):
+                thu.update(url=url, headers=headers or {}, body=json or {})
+                return httpx.Response(200, json={"data": [{"b64_json": ""}]})
+
+        monkey = pytest.MonkeyPatch()
+        monkey.setattr(image_edit.httpx, "AsyncClient", lambda **_: _Client())
+        asyncio.run(image_edit._goi_seedream(b"\xff\xd8\xff", "image/jpeg", "đổi sofa thành nâu"))
+        monkey.undo()
+
+        assert "image" in thu["body"], "thiếu `image` là tính năng đổi nghĩa hoàn toàn"
+        assert thu["body"]["image"].startswith("data:image/jpeg;base64,")
+        # Trả bytes cho phiên chat, không đi qua CDN có hạn 7 ngày.
+        assert thu["body"]["response_format"] == "b64_json"
+        assert thu["body"]["sequential_image_generation"] == "disabled"
+        assert thu["headers"]["Authorization"] == "Bearer ark-test"
+
+    def test_doc_anh_tra_ve_jpeg(self) -> None:
+        """Đo thật: Seedream trả JPEG, không phải PNG như OpenAI."""
+        from app.services.image_edit import _doc_anh_seedream
+
+        raw, mime = _doc_anh_seedream({"data": [{"b64_json": base64.b64encode(b"\xff\xd8\xff\xe0").decode()}]})
+
+        assert raw == b"\xff\xd8\xff\xe0"
+        assert mime == "image/jpeg"
+
+    def test_khong_co_anh_thi_bao_ro(self) -> None:
+        from app.services.image_edit import ImageEditError, _doc_anh_seedream
+
+        with pytest.raises(ImageEditError):
+            _doc_anh_seedream({"data": [{}]})
+
+    def test_thieu_key_thi_bao_dung_ten_bien(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Báo `OPENAI_API_KEY` trong khi đang chạy seedream là chỉ sai chỗ."""
+        from app.core.config import settings
+        from app.services.image_edit import ImageEditError, sua_anh_can
+
+        monkeypatch.setattr(settings, "image_provider", "seedream")
+        monkeypatch.setattr(settings, "ark_api_key", "")
+
+        with pytest.raises(ImageEditError, match="ARK_API_KEY"):
+            asyncio.run(sua_anh_can("VOP001", 1, "đổi sofa"))

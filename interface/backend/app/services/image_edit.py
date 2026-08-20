@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 _API_GEMINI = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 _API_OPENAI = "https://api.openai.com/v1/images/edits"
+_API_SEEDREAM = "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations"
 
 # Ảnh gốc nằm ở Google Drive (link thumbnail công khai). Drive từ chối request
 # không có User-Agent trình duyệt.
@@ -108,9 +109,13 @@ def _doc_anh_tra_ve(data: dict[str, Any]) -> tuple[bytes, str]:
     raise ImageEditError(f"Gemini không trả về ảnh (finishReason={ly_do}). Bạn thử mô tả lại yêu cầu nhé.")
 
 
+_TEN_KEY = {"openai": "OPENAI_API_KEY", "gemini": "GOOGLE_API_KEY", "seedream": "ARK_API_KEY"}
+_TEN_MODEL = {"openai": "OPENAI_IMAGE_MODEL", "gemini": "GEMINI_IMAGE_MODEL", "seedream": "SEEDREAM_MODEL"}
+
+
 def _loi_tu_status(status: int, than: str) -> str:
-    ten_key = "OPENAI_API_KEY" if settings.image_provider == "openai" else "GOOGLE_API_KEY"
-    ten_model = "OPENAI_IMAGE_MODEL" if settings.image_provider == "openai" else "GEMINI_IMAGE_MODEL"
+    ten_key = _TEN_KEY.get(settings.image_provider, "API key")
+    ten_model = _TEN_MODEL.get(settings.image_provider, "model sinh ảnh")
 
     if status == 429:
         # Ca đã gặp thật với Google: key hợp lệ, model văn bản gọi được, nhưng
@@ -123,6 +128,11 @@ def _loi_tu_status(status: int, than: str) -> str:
     if status == 404:
         return f"Không tìm thấy model sinh ảnh. Kiểm tra lại {ten_model}."
     if status == 400:
+        # Ark trả 400 kèm lý do khi nó không xử lý nổi ảnh gốc. Đó là lỗi phía
+        # DỮ LIỆU, không phải lỗi cách người dùng mô tả — bảo họ "mô tả ngắn gọn
+        # hơn" là chỉ sai chỗ, họ sửa mãi không hết.
+        if "downloading" in than or "InvalidParameter" in than:
+            return "Không xử lý được ảnh gốc của căn. Bạn thử chọn ảnh khác giúp mình nhé."
         return "Yêu cầu sửa ảnh không hợp lệ. Bạn thử mô tả ngắn gọn và cụ thể hơn nhé."
     return "Dịch vụ sinh ảnh đang gặp sự cố. Thử lại sau ít phút."
 
@@ -141,6 +151,51 @@ async def _goi_gemini(goc: bytes, mime: str, yeu_cau: str) -> httpx.Response:
     url = _API_GEMINI.format(model=settings.gemini_image_model)
     async with httpx.AsyncClient(timeout=settings.image_timeout_s) as client:
         return await client.post(url, params={"key": settings.google_api_key}, json=payload)
+
+
+async def _goi_seedream(goc: bytes, mime: str, yeu_cau: str) -> httpx.Response:
+    """Gọi Seedream 4.0 qua BytePlus ModelArk.
+
+    Endpoint tên là `images/generations` nhưng nhận CẢ ảnh gốc: có trường `image`
+    thì nó sửa ảnh đó thay vì vẽ từ chữ (Ark gọi là I2I). Thiếu trường này thì
+    tính năng đổi nghĩa hoàn toàn — từ "sửa nội thất của căn" thành "vẽ một căn
+    hộ tưởng tượng" — mà không lỗi nào báo.
+
+    Gửi ảnh bằng DATA URI chứ không phải link, dù Ark tải link được (đã thử với
+    chính link Drive của dự án, 200 OK). Lý do: `_tai_anh()` phía trên đã tải
+    bytes rồi để kiểm trần 8 MB và kiểm đúng là ảnh — truyền link là bỏ qua hai
+    chốt đó và giao việc tải cho một máy chủ mình không kiểm soát.
+
+    Nhận `b64_json` chứ không `url` vì hàm này phải trả bytes, và ảnh sinh ra
+    KHÔNG được lưu ở đâu (xem docstring đầu file). Lấy URL thì phải tải vòng hai
+    từ CDN ByteDance — thêm 1,3s, thêm một điểm hỏng, và link đó tự xoá sau 7
+    ngày (header `expiry-date`), một cái bẫy cho người sửa code sau.
+    """
+    async with httpx.AsyncClient(timeout=settings.image_timeout_s) as client:
+        return await client.post(
+            _API_SEEDREAM,
+            headers={"Authorization": f"Bearer {settings.ark_api_key}"},
+            json={
+                "model": settings.seedream_model,
+                "prompt": _HUONG_DAN.format(yeu_cau=yeu_cau),
+                "image": f"data:{mime};base64,{base64.b64encode(goc).decode()}",
+                # Người dùng đang chờ MỘT ảnh thay cho ảnh họ vừa xem. Để "auto"
+                # thì model tự quyết sinh cả loạt.
+                "sequential_image_generation": "disabled",
+                "response_format": "b64_json",
+                "size": settings.seedream_size,
+                "stream": False,
+                "watermark": settings.seedream_watermark,
+            },
+        )
+
+
+def _doc_anh_seedream(data: dict[str, Any]) -> tuple[bytes, str]:
+    muc = (data.get("data") or [{}])[0]
+    if not muc.get("b64_json"):
+        raise ImageEditError("Dịch vụ không trả về ảnh nào. Bạn thử mô tả lại yêu cầu cụ thể hơn nhé.")
+    # Đo thật: Seedream trả JPEG (đầu file FF D8 FF), không phải PNG như OpenAI.
+    return base64.b64decode(muc["b64_json"]), "image/jpeg"
 
 
 async def _goi_openai(goc: bytes, mime: str, yeu_cau: str) -> httpx.Response:
@@ -177,16 +232,14 @@ async def sua_anh_can(ma_can: str, image_id: int, yeu_cau: str) -> tuple[bytes, 
     """
     nha_cung_cap = settings.image_provider
     if not settings.image_edit_enabled:
-        ten_key = "OPENAI_API_KEY" if nha_cung_cap == "openai" else "GOOGLE_API_KEY"
+        ten_key = _TEN_KEY.get(nha_cung_cap, "API key")
         raise ImageEditError(f"Tính năng sửa ảnh chưa được cấu hình. Điền {ten_key} trong .env ở gốc repo.")
 
     goc, mime = await _tai_anh(_anh_cua_can(ma_can, image_id))
 
     try:
-        if nha_cung_cap == "openai":
-            response = await _goi_openai(goc, mime, yeu_cau)
-        else:
-            response = await _goi_gemini(goc, mime, yeu_cau)
+        goi = {"openai": _goi_openai, "seedream": _goi_seedream}.get(nha_cung_cap, _goi_gemini)
+        response = await goi(goc, mime, yeu_cau)
     except httpx.HTTPError as exc:
         logger.exception("Không gọi được dịch vụ sinh ảnh (%s)", nha_cung_cap)
         raise ImageEditError("Không kết nối được dịch vụ sinh ảnh. Thử lại sau ít phút.") from exc
@@ -198,4 +251,5 @@ async def sua_anh_can(ma_can: str, image_id: int, yeu_cau: str) -> tuple[bytes, 
         raise ImageEditError(_loi_tu_status(response.status_code, than))
 
     data = response.json()
-    return _doc_anh_openai(data) if nha_cung_cap == "openai" else _doc_anh_tra_ve(data)
+    doc = {"openai": _doc_anh_openai, "seedream": _doc_anh_seedream}.get(nha_cung_cap, _doc_anh_tra_ve)
+    return doc(data)

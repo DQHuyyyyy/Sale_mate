@@ -117,6 +117,20 @@ async def config_dang_chay() -> dict[str, object]:
             "so_lan_lap_toi_da": settings.agent_max_iterations,
             "prompt": SYSTEM_PROMPT_VERSION,
         },
+        "leo_thang": {
+            # Cổng leo thang chạy hay không phụ thuộc BA thứ, thiếu một là nó
+            # im lặng không chạy và dấu hiệu duy nhất là hoá đơn Anthropic bằng
+            # 0. Trả cả ba ra đây để không phải đoán.
+            "bat": settings.enable_orchestrator,
+            "che_do": settings.che_do_leo_thang,
+            "model": settings.orchestrator_model,
+            "co_anthropic_key": settings.has_anthropic_key,
+            "ngan_sach_ngay_usd": settings.orchestrator_daily_budget_usd,
+            # `build_graph` ưu tiên vòng lặp cũ, nên bật cả hai cờ thì node
+            # orchestrate dựng ra mà không có cạnh nào dẫn tới. True ở đây =
+            # đang trả tiền cho một tính năng không lượt nào chạy qua.
+            "bi_vong_lap_che": settings.enable_orchestrator and settings.enable_agent_loop,
+        },
         "rag": {
             "bat": settings.enable_rag,
             "reranker": settings.reranker,
