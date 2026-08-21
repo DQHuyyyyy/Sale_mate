@@ -109,8 +109,17 @@ services:
       # hạn mức. Muốn kéo về sớm hơn thì đổi biến này thành "false", có hiệu
       # lực sau một lần restart, không cần deploy lại.
       #
-      # Service này còn cần một cron NGOÀI ping /api/health mỗi 10 phút — nó tự
-      # giữ lõi AI thức nhưng không tự giữ chính mình thức được.
+      # ⚠️ CỜ NÀY MỘT MÌNH KHÔNG ĐỦ. Render tính giờ ngủ theo lưu lượng VÀO, mà
+      # vòng lặp chỉ tạo request đi RA — service này vẫn ngủ sau 15 phút không
+      # ai truy cập, và vòng lặp chết theo.
+      #
+      # Phải có cron NGOÀI (cron-job.org) ping mỗi 5 phút, HAI job riêng:
+      #   https://salesmate-api-dev.onrender.com/api/health
+      #   https://salesmate-ai-core.onrender.com/health
+      #
+      # Hai job chứ không phải một: cron ngoài HỒI SINH được service đã ngủ,
+      # vòng lặp bên trong thì không. Chỉ ping api-dev là biến vòng lặp của nó
+      # thành điểm hỏng duy nhất của lõi AI. Vòng lặp giờ là lớp dự phòng.
       - key: GIU_LOI_AI_THUC
         value: "true"
 

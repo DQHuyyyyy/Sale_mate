@@ -175,12 +175,17 @@ class TestGiuLoiAiThuc:
 
         assert Settings(jwt_secret="x" * 40, database_url="postgresql://a/b").giu_loi_ai_thuc is False
 
-    def test_chu_ky_phai_duoi_nguong_ngu_15_phut(self) -> None:
-        """Render cho ngủ sau 15 phút. Ping thưa hơn thế là vòng lặp vô nghĩa."""
+    def test_chu_ky_cho_it_nhat_hai_luot_truoc_khi_ngu(self) -> None:
+        """Render cho ngủ sau 15 phút.
+
+        Chu kỳ phải đủ ngắn để có HAI lượt ping trong cửa sổ đó — một lượt hỏng
+        vì Render trả 502 lúc bận vẫn còn lượt dự phòng. Vừa đúng 15 phút thì
+        không có biên nào cả.
+        """
         from app.core.config import Settings
 
         chu_ky = Settings(jwt_secret="x" * 40, database_url="postgresql://a/b").chu_ky_giu_thuc_giay
-        assert chu_ky < 15 * 60
+        assert chu_ky * 2 <= 15 * 60
 
     @pytest.mark.asyncio
     async def test_danh_thuc_nuot_loi_mang(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -190,11 +195,49 @@ class TestGiuLoiAiThuc:
         được, tức mất cả danh sách căn và đăng nhập vì một tính năng phụ.
         """
 
+        so_lan = {"goi": 0}
+
         def no(*_args: object, **_kwargs: object) -> None:
+            so_lan["goi"] += 1
             raise httpx.ConnectError("khong noi duoc")
 
+        async def ngu_gia(_giay: float) -> None:
+            return None
+
         monkeypatch.setattr(chat_service.httpx, "AsyncClient", no)
+        monkeypatch.setattr(chat_service.asyncio, "sleep", ngu_gia)
         await chat_service.danh_thuc_loi_ai()  # không được raise
+        assert so_lan["goi"] == 3, "phải thử lại, không bỏ cuộc sau lượt đầu"
+
+    @pytest.mark.asyncio
+    async def test_thu_lai_khi_render_tra_502(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Ca có thật trong log: 429 rồi 502 lúc Render đang dựng container.
+
+        Lượt sau đó thành công. Bỏ cuộc ở lượt đầu là ngồi chờ trọn một chu kỳ
+        nữa trong khi lõi AI vẫn ngủ.
+        """
+        ma: list[int] = [429, 502, 200]
+
+        class Resp:
+            def __init__(self, code: int) -> None:
+                self.status_code = code
+
+        class FakeClient:
+            def __init__(self, **_kwargs: object) -> None: ...
+            async def __aenter__(self) -> FakeClient:
+                return self
+
+            async def __aexit__(self, *_args: object) -> None: ...
+            async def get(self, _url: str) -> Resp:
+                return Resp(ma.pop(0))
+
+        async def ngu_gia(_giay: float) -> None:
+            return None
+
+        monkeypatch.setattr(chat_service.httpx, "AsyncClient", FakeClient)
+        monkeypatch.setattr(chat_service.asyncio, "sleep", ngu_gia)
+        await chat_service.danh_thuc_loi_ai()
+        assert ma == [], "phải thử tới khi được, không dừng ở 429"
 
     @pytest.mark.asyncio
     async def test_vong_lap_ngu_truoc_khi_ping_lan_dau(self, monkeypatch: pytest.MonkeyPatch) -> None:

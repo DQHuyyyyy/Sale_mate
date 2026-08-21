@@ -61,9 +61,12 @@ class Settings(BaseSettings):
     # Tắt bằng biến môi trường chứ không phải sửa code: hết hạn mức là chuyện
     # cần xử lý trong vài phút, không kịp chờ một vòng deploy.
     giu_loi_ai_thuc: bool = False
-    # 10 phút, dưới ngưỡng ngủ 15 phút của Render với biên 5 phút cho một lượt
-    # ping trượt. Thưa hơn 15 phút thì vòng lặp này vô nghĩa.
-    chu_ky_giu_thuc_giay: int = 600
+    # 5 phút chứ không phải 10: Render cho ngủ sau 15 phút, nên chu kỳ này cho
+    # ĐÚNG HAI lượt ping trước khi hết giờ — một lượt hỏng vẫn còn lượt dự
+    # phòng. Để 10 phút thì chỉ có một lượt, và một lần Render trả 502 lúc đang
+    # bận là lõi AI ngủ mất. Ping thêm không tốn giờ instance: service đang
+    # thức sẵn rồi.
+    chu_ky_giu_thuc_giay: int = 300
 
     # ---- Sinh ảnh (Modify Object) ----
     # Sửa ảnh nội thất theo yêu cầu người dùng. Ảnh KHÔNG được lưu — chỉ trả về

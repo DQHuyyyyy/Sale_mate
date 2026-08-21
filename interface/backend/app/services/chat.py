@@ -37,13 +37,26 @@ async def danh_thuc_loi_ai() -> None:
 
     Timeout 90s chứ không phải `ai_core_timeout`: đang chờ một tiến trình KHỞI
     ĐỘNG, không phải chờ một câu trả lời. Không ai ngồi đợi lời gọi này.
+
+    Thử lại tối đa 3 lượt vì Render trả 429/502 khá thường xuyên ĐÚNG LÚC đang
+    dựng container — đã bắt được trong log thật: 429 rồi 502 cách nhau 5 giây,
+    và chỉ vài chục giây sau thì service lên bình thường. Thử một lần rồi bỏ
+    cuộc nghĩa là chờ trọn một chu kỳ nữa trong khi lõi AI vẫn ngủ.
     """
-    try:
-        async with httpx.AsyncClient(timeout=90.0) as client:
-            resp = await client.get(f"{settings.ai_core_url.rstrip('/')}/health")
-        logger.info("Đã đánh thức lõi AI — HTTP %s", resp.status_code)
-    except Exception as exc:  # noqa: BLE001 — xem docstring
-        logger.warning("Không đánh thức được lõi AI (%s). Bỏ qua, không ảnh hưởng web.", exc)
+    url = f"{settings.ai_core_url.rstrip('/')}/health"
+    for lan, cho in enumerate((5, 15, 0), start=1):
+        try:
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                resp = await client.get(url)
+            if resp.status_code < 400:
+                logger.info("Đã đánh thức lõi AI — HTTP %s (lượt %d)", resp.status_code, lan)
+                return
+            logger.warning("Đánh thức lõi AI trả HTTP %s (lượt %d/3)", resp.status_code, lan)
+        except Exception as exc:  # noqa: BLE001 — xem docstring
+            logger.warning("Đánh thức lõi AI lỗi %s (lượt %d/3)", exc, lan)
+        if cho:
+            await asyncio.sleep(cho)
+    logger.warning("Không đánh thức được lõi AI sau 3 lượt. Bỏ qua, không ảnh hưởng web.")
 
 
 async def vong_lap_giu_thuc() -> None:
