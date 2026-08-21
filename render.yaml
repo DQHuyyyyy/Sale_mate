@@ -61,6 +61,41 @@ services:
       - key: AI_CORE_TIMEOUT
         value: "60"
 
+      # ⚠️ TẮT TẠM ĐỂ LẤY FEEDBACK — NHỚ BẬT LẠI.
+      #
+      # Bật lại bằng cách đổi thành "true" ở đây rồi deploy, hoặc sửa thẳng
+      # trong Render dashboard nếu cần hiệu lực ngay.
+      #
+      # Một cờ này gác CẢ HAI endpoint tốn tiền, không chỉ chat:
+      #   /api/chat          khách 10 lượt · đã đăng nhập 60 lượt
+      #   /api/images/modify khách  5 lượt · đã đăng nhập 20 lượt
+      # Cửa sổ 10 phút. Sinh ảnh đắt hơn hỏi đáp nhiều lần, và giờ nó cũng không
+      # còn hạn mức nào.
+      #
+      # Cả hai endpoint đều CÔNG KHAI, không cần đăng nhập, và mỗi lượt đều gọi
+      # model thật. Trong lúc cờ này là false, bất kỳ ai có đường link đều gọi
+      # được không giới hạn — quota OpenAI cạn là hết cả bản demo.
+      - key: CHAT_RATE_LIMIT_ENABLED
+        value: "false"
+
+      # ---- Sinh ảnh (Modify Object) ----
+      # Ba nhà cung cấp, chọn bằng một biến. Đo thật trên cùng ảnh và cùng yêu
+      # cầu: Seedream 4.0 trả ảnh trong ~12s ở 2304x1728, gpt-image-1-mini mất
+      # 38-48s ở 1536x1024. Trên gói free của Render, chênh 30 giây là chênh
+      # giữa "khách chờ được" và "khách bỏ đi".
+      #
+      # Đánh đổi đã biết: Seedream giữ nguyên đồ vật không bị đụng tới tốt hơn
+      # hẳn (giữ cả laptop, sách, hoạ tiết gối), nhưng thỉnh thoảng THÊM đồ
+      # không ai yêu cầu — đo được 1/2 lượt ở câu "thay giá sách bằng tivi".
+      # GPT thì đếm đúng nhưng vẽ lại cả phòng và làm rơi vài món.
+      #
+      # Quay về GPT chỉ cần đổi biến này thành `openai`, không sửa code, không
+      # cần khoá mới — OPENAI_API_KEY đã có sẵn ở trên.
+      - key: IMAGE_PROVIDER
+        value: seedream
+      - key: ARK_API_KEY
+        sync: false
+
   # ---- Lõi AI ----
   # Cũng theo develop. Để branch main thì nó chạy src/ của bản 05/08, lệch 13
   # file so với develop — API mới nói chuyện với lõi AI cũ, sai lệch rất khó lần.
@@ -85,12 +120,83 @@ services:
       # bằng model thật, nên truy hồi luôn rỗng mà KHÔNG báo lỗi.
       - key: OPENAI_API_KEY
         sync: false
+      # gpt-5.6-luna: $0.20/$1.20 mỗi triệu token — RẺ HƠN gpt-4o-mini nó thay
+      # thế, nên đổi sang đây không có mặt trái về chi phí. Chạy router (phân
+      # nhãn + giải tham chiếu từ lịch sử) và sinh gợi ý câu hỏi tiếp theo.
       - key: LLM_MODEL_FAST
-        value: gpt-4o-mini
+        value: gpt-5.6-luna
+      # Model TRẢ LỜI. Từng để gpt-4o-mini cho rẻ, và đó là nguyên nhân chính
+      # khiến prod trả lời tệ hơn hẳn local: cùng câu hỏi, bản mini bỏ mất toà,
+      # tầng, phòng, loại căn, và bỏ luôn luật trích nguồn nên dòng "Nguồn"
+      # biến mất. Model rẻ vẫn dùng cho router/plan/gợi ý qua LLM_MODEL_FAST —
+      # ba việc đó chỉ cần phân loại, không cần viết hay.
       - key: LLM_MODEL_ANSWER
-        value: gpt-4o-mini
+        value: gpt-4o
       - key: LOG_LEVEL
         value: INFO
+      # Rỗng = TẮT ghi log ra file. Mặc định của code là "logs", nhưng đĩa của
+      # Render là tạm: file mất sạch mỗi lần deploy hoặc mỗi lần service ngủ
+      # dậy, và không có cách nào đọc nó. Log của prod xem ở tab Logs.
+      - key: LOG_DIR
+        value: ""
+      # Khai tường minh vì đây là biến hỏng CÂM khi sai: chạm trần thì câu trả
+      # lời đứt giữa chừng, không lỗi nào báo ra. Câu "liệt kê các căn dưới 3
+      # tỷ" trả 21 căn đã ngốn ~950 token.
+      - key: LLM_MAX_TOKENS
+        value: "2048"
+
+      # ---- Hành vi agent ----
+      # PHẢI khai tường minh, kể cả khi trùng mặc định. Biến không khai thì
+      # Render không có gì để hiện, người đọc repo tưởng prod chạy như .env của
+      # mình. Đã mất một buổi vì đúng chuyện này: local bật vòng lặp, prod im
+      # lặng chạy False, không ai thấy cho tới khi so hai ảnh chụp màn hình.
+      #
+      # Kiểm chứng bất cứ lúc nào: GET /health/config trên service này.
+      #
+      # ⚠️ PHẢI là "false" khi ENABLE_ORCHESTRATOR bật. `build_graph` ưu tiên
+      # vòng lặp cũ, nên node `orchestrate` dựng ra rồi KHÔNG CÓ CẠNH NÀO dẫn
+      # tới — trả tiền cho ANTHROPIC_API_KEY mà không lượt nào chạy qua nó, và
+      # không lỗi nào báo ra. Hai cờ này loại trừ nhau.
+      - key: ENABLE_AGENT_LOOP
+        value: "false"
+      - key: AGENT_MAX_ITERATIONS
+        value: "2"
+      - key: ENABLE_RAG
+        value: "true"
+      - key: RERANKER
+        value: keyword
+      - key: COVERAGE_THRESHOLD
+        value: "0.35"
+      - key: LLM_TEMPERATURE
+        value: "0.3"
+      - key: RETRIEVAL_TOP_K
+        value: "20"
+      - key: EMBEDDING_MODEL
+        value: text-embedding-3-small
+
+      # ---- Cổng leo thang (nhà cung cấp thứ hai) ----
+      # Thiếu ANTHROPIC_API_KEY thì app VẪN CHẠY ĐỦ, chỉ tắt nhánh leo thang —
+      # khác hẳn OPENAI_API_KEY nằm trên đường đi chung. Đó là lý do biến này
+      # `sync: false` mà không có gì chặn khởi động.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ENABLE_ORCHESTRATOR
+        value: "true"
+      - key: ORCHESTRATOR_MODEL
+        value: claude-sonnet-5
+      # Sonnet 5 bật adaptive thinking mặc định và token suy nghĩ tính theo GIÁ
+      # ĐẦU RA, nên đây là cần ga chi phí chính. Đừng tắt hẳn thinking để tiết
+      # kiệm — tắt xong model gọi tool ít hẳn, đúng thứ orchestrator cần.
+      - key: ORCHESTRATOR_EFFORT
+        value: low
+      - key: CHE_DO_LEO_THANG
+        value: moi_luot
+      # ⚠️ BẮT BUỘC khai. Mặc định của code là 0 = KHÔNG GIỚI HẠN, và ở đây
+      # `moi_luot` nghĩa là mọi câu cần tra cứu đều gọi Sonnet 5. Đo thật:
+      # $0,0027-$0,0049 mỗi lượt khi cache ấm. Chạm trần thì cổng tự đóng và
+      # khách VẪN nhận câu trả lời từ đường tất định, không phải thông báo lỗi.
+      - key: ORCHESTRATOR_DAILY_BUDGET_USD
+        value: "1.0"
 
       # ---- Vector store cho RAG ----
       # Thiếu ba biến này thì qdrant_url rơi về http://localhost:6333, trong

@@ -1,22 +1,18 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 
 from app.core.columns import (
     COL_DIEN_TICH,
     COL_GIA,
     COL_LOAI_CAN,
     COL_TANG,
-    COL_TINH_TRANG,
     COL_TOA,
-    TINH_TRANG_CON,
-    TINH_TRANG_HET,
 )
-from app.core.db import fetch_all, get_conn
+from app.core.db import fetch_all
 from app.core.deps import get_current_user, require_admin
-from app.core.schema import numeric_columns_ready
 from app.schemas.auth import CurrentUser
-from app.schemas.sale import SaleCreate, SaleRecord, SaleRecordWithSale
+from app.schemas.sale import SaleRecord, SaleRecordWithSale
 
 router = APIRouter(prefix="/api/sales", tags=["sales"])
 
@@ -67,72 +63,17 @@ def all_sales(_: CurrentUser = Depends(require_admin)) -> list[SaleRecordWithSal
     return [SaleRecordWithSale(**row) for row in rows]
 
 
-@router.post("", response_model=SaleRecord, status_code=status.HTTP_201_CREATED)
-def record_sale(
-    payload: SaleCreate,
-    current_user: CurrentUser = Depends(get_current_user),
-) -> SaleRecord:
-    """Ghi nhận lượt bán: INSERT sales_history + UPDATE "Tình trạng" = 'Đã bán'.
-
-    Hai thao tác nằm trong một transaction, và căn bị khoá bằng FOR UPDATE nên
-    hai sale bấm bán cùng lúc thì chỉ một người thành công.
-    """
-    # Chưa chạy 001 thì chưa có cột gia_tri để lấy giá niêm yết mặc định.
-    gia_tri_select = "gia_tri" if numeric_columns_ready() else "NULL::numeric AS gia_tri"
-
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            f"SELECT ma_can, {COL_TINH_TRANG} AS tinh_trang, {gia_tri_select} "
-            "FROM salemate_v1 WHERE ma_can = %s FOR UPDATE",
-            (payload.ma_can,),
-        )
-        apartment = cur.fetchone()
-
-        if apartment is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Không tìm thấy căn {payload.ma_can}.",
-            )
-        if apartment["tinh_trang"] != TINH_TRANG_CON:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Căn {payload.ma_can} đã bán rồi. Tải lại danh sách để xem căn còn.",
-            )
-
-        sold_price = payload.sold_price if payload.sold_price is not None else apartment["gia_tri"]
-
-        cur.execute(
-            """
-            INSERT INTO sales_history
-                (ma_can, sale_id, customer_name, customer_phone, sold_price)
-            VALUES (%s, %s, %s, %s, %s)
-            RETURNING id, ma_can, sale_id, customer_name, customer_phone,
-                      sold_price, sold_at
-            """,
-            (
-                payload.ma_can,
-                current_user.id,  # LẤY TỪ TOKEN, không nhận từ client
-                payload.customer_name,
-                payload.customer_phone,
-                sold_price,
-            ),
-        )
-        record = cur.fetchone()
-
-        cur.execute(
-            f"UPDATE salemate_v1 SET {COL_TINH_TRANG} = %s WHERE ma_can = %s",
-            (TINH_TRANG_HET, payload.ma_can),
-        )
-
-        cur.execute(
-            f"""
-            SELECT {COL_TOA} AS toa, {COL_TANG} AS tang,
-                   {COL_LOAI_CAN} AS loai_can,
-                   {COL_DIEN_TICH} AS dien_tich, {COL_GIA} AS gia
-            FROM salemate_v1 WHERE ma_can = %s
-            """,
-            (payload.ma_can,),
-        )
-        info = cur.fetchone() or {}
-
-    return SaleRecord(**record, **info)
+# ⚠️ KHÔNG có route POST ở đây nữa.
+#
+# Ghi nhận đã bán CHỈ diễn ra ở màn Giao dịch, bằng cách chốt một lead —
+# `_chot_ban` trong `routers/dat_coc.py`. Lý do là dữ liệu khách: lead đã giữ
+# sẵn tên và số điện thoại người mua, còn form cũ ở trang căn hộ bắt sale gõ
+# lại, và gõ sai thì `sales_history` mang tên một người khác với người thật sự
+# mua mà không gì đối chiếu được.
+#
+# Để lại một endpoint bán hàng không còn giao diện nào gọi thì luật "chỉ chốt
+# bán trong Giao dịch" chỉ đúng trên màn hình, không đúng trên API.
+#
+# Cần bán một căn chưa có lead: sale bấm "Đặt cọc căn này" ở trang căn hộ để
+# tạo lead trước, rồi chốt ở màn Giao dịch. Hai bước, đổi lại mọi giao dịch đều
+# có thông tin liên hệ của người mua.

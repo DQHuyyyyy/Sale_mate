@@ -11,7 +11,7 @@ from pathlib import Path
 
 _PROMPT_DIR = Path(__file__).parent
 
-SYSTEM_PROMPT_VERSION = "v3"
+SYSTEM_PROMPT_VERSION = "v6"
 
 
 @lru_cache

@@ -1,100 +1,44 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { createSale, getApartment } from '../api';
+import { getApartment } from '../api';
 import { BackIcon, HouseIcon } from '../components/Icons';
-import { useAuth } from '../context/AuthContext';
 import { formatArea, formatPrice, orDash } from '../utils/format';
-
-function SellModal({ apartment, onClose, onSold }) {
-  const [form, setForm] = useState({ customerName: '', customerPhone: '', soldPrice: '' });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  const update = (key) => (event) => setForm({ ...form, [key]: event.target.value });
-
-  const submit = async (event) => {
-    event.preventDefault();
-    setError('');
-    setSaving(true);
-    try {
-      await createSale({ maCan: apartment.ma_can, ...form });
-      onSold();
-    } catch (submitError) {
-      setError(submitError.message);
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="modal-bg" onClick={(event) => event.target === event.currentTarget && onClose()}>
-      <form className="modal" onSubmit={submit}>
-        <h3>Ghi nhận đã bán căn {apartment.ma_can}</h3>
-        <p className="sub">
-          Căn sẽ chuyển sang trạng thái “Đã bán” và không còn hiện trong kết quả tìm kiếm.
-        </p>
-
-        {error && <div className="alert alert-error">{error}</div>}
-
-        <div className="field">
-          <label htmlFor="customerName">Tên khách hàng</label>
-          <input id="customerName" value={form.customerName} onChange={update('customerName')} />
-        </div>
-        <div className="field">
-          <label htmlFor="customerPhone">Điện thoại khách</label>
-          <input id="customerPhone" value={form.customerPhone} onChange={update('customerPhone')} />
-        </div>
-        <div className="field">
-          <label htmlFor="soldPrice">Giá bán thực tế (tỷ VND)</label>
-          <input
-            id="soldPrice"
-            type="number"
-            step="0.001"
-            min="0"
-            max="20"
-            placeholder={apartment.gia_tri ?? ''}
-            value={form.soldPrice}
-            onChange={update('soldPrice')}
-          />
-          <div className="hint">Bỏ trống thì lấy đúng giá niêm yết.</div>
-        </div>
-
-        <div className="form-actions">
-          <button className="btn btn-primary" type="submit" disabled={saving}>
-            {saving ? 'Đang lưu…' : 'Xác nhận đã bán'}
-          </button>
-          <button className="btn btn-ghost" type="button" onClick={onClose} disabled={saving}>
-            Huỷ
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
+import DatCocModal from '../components/DatCocModal';
+import QuanLyAnh from '../components/QuanLyAnh';
+import { useAuth } from '../context/AuthContext';
+import { conBanDuoc, lopTrangThai, nhanTrangThai } from '../utils/trangThai';
 
 export default function ApartmentDetail() {
   const { maCan } = useParams();
-  const { isSale } = useAuth();
+  const { isAdmin } = useAuth();
   const [apartment, setApartment] = useState(null);
-  // Ảnh đang xem nằm ở URL (`?anh=2`) chứ không phải state nội bộ, vì widget trợ
-  // lý cũng cần biết — nó lấy đúng tấm này làm ngữ cảnh sửa ảnh. Sidebar và
-  // trang nội dung là hai nhánh anh em dưới Layout, không truyền prop cho nhau
-  // được; URL là kênh sẵn có mà cả hai cùng đọc, lại chia sẻ link được.
-  const [thamSo, datThamSo] = useSearchParams();
-  const activeImage = Math.max(0, Number(thamSo.get('anh')) || 0);
-  const setActiveImage = (chiSo) =>
-    datThamSo(chiSo > 0 ? { anh: String(chiSo) } : {}, { replace: true });
+
+  // Ảnh đang xem nằm trên URL (?anh=2), KHÔNG phải state cục bộ. Trợ lý S là
+  // component anh em ở sidebar, nó cần biết người dùng đang dừng ở ảnh nào để
+  // tính năng "Modify Object" sửa đúng ảnh đó — state cục bộ thì nó không thấy.
+  // Cùng lý do bộ lọc tìm kiếm nằm trên URL, xem đầu Search.jsx. Tiện thể link
+  // chia sẻ và F5 cũng giữ đúng ảnh.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeImage = Math.max(0, Number(searchParams.get('anh') ?? 0) || 0);
+  const setActiveImage = (index) => {
+    const params = new URLSearchParams(searchParams);
+    if (index > 0) params.set('anh', String(index));
+    else params.delete('anh');
+    // `replace` để nút Back của trình duyệt không phải lùi qua từng ảnh đã xem.
+    setSearchParams(params, { replace: true });
+  };
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [sellOpen, setSellOpen] = useState(false);
-  const [sold, setSold] = useState('');
+  const [datCocOpen, setDatCocOpen] = useState(false);
+  const [thongBao, setThongBao] = useState('');
 
   const load = () => {
     setLoading(true);
     getApartment(maCan)
-      // KHÔNG đặt lại về ảnh 0 ở đây: mở thẳng link `/apartments/X?anh=2` thì
-      // phải giữ đúng tấm người ta gửi cho nhau. Sang căn khác là URL đổi và
-      // tham số tự mất, nên không cần tự dọn.
-      .then(setApartment)
+      .then((data) => {
+        setApartment(data);
+        setActiveImage(0);
+      })
       .catch((loadError) => setError(loadError.message))
       .finally(() => setLoading(false));
   };
@@ -108,7 +52,7 @@ export default function ApartmentDetail() {
         <div className="alert alert-error" style={{ marginTop: 26 }}>
           {error}
         </div>
-        <Link className="back-link" to="/">
+        <Link className="back-link" to="/tim-kiem">
           <BackIcon style={{ width: 15, height: 15 }} />
           Về trang tìm kiếm
         </Link>
@@ -117,9 +61,17 @@ export default function ApartmentDetail() {
   }
 
   const images = apartment.images ?? [];
-  // Kẹp về khoảng hợp lệ: `?anh=99` là URL người dùng gõ tay, không được nổ.
-  const current = images[Math.min(activeImage, images.length - 1)];
-  const canSell = isSale && apartment.tinh_trang === 'Còn';
+  // Kẹp chỉ số: URL do người dùng sửa được, `?anh=99` không được làm mất
+  // ảnh chính thành khung trống.
+  const chiSoAnh = images.length ? Math.min(activeImage, images.length - 1) : 0;
+  const current = images[chiSoAnh];
+  // Nút đặt cọc hiện cho MỌI người xem, kể cả khách chưa đăng nhập — đó là cả
+  // mục đích của nó. Chỉ ẩn khi căn không còn nhận giữ chỗ được nữa.
+  //
+  // KHÔNG có nút "Ghi nhận đã bán" ở đây nữa: chốt bán chỉ diễn ra ở màn Giao
+  // dịch, bằng cách chốt một lead — chỗ đó đã có sẵn tên và số điện thoại người
+  // mua, không bắt gõ lại.
+  const coTheDatCoc = conBanDuoc(apartment.tinh_trang_chi_tiet, apartment.tinh_trang);
 
   return (
     <div className="wrap">
@@ -128,13 +80,16 @@ export default function ApartmentDetail() {
           Căn <span className="mono">{apartment.ma_can}</span>
         </h1>
         <p>
+          {/* Phân khu đứng ĐẦU: đó là thứ định vị căn trong đại đô thị, tòa/tầng
+              chỉ có nghĩa khi đã biết phân khu nào. */}
+          {apartment.phan_khu ? `${apartment.phan_khu} · ` : ''}
           Tòa {orDash(apartment.toa)}
           {apartment.tang !== null && apartment.tang !== undefined ? ` · Tầng ${apartment.tang}` : ''}
           {apartment.so_phong ? ` · Phòng ${apartment.so_phong}` : ''}
         </p>
       </div>
 
-      {sold && <div className="alert alert-ok">{sold}</div>}
+      {thongBao && <div className="alert alert-ok">{thongBao}</div>}
 
       <div className="detail-grid">
         <div>
@@ -151,7 +106,7 @@ export default function ApartmentDetail() {
               {images.map((image, index) => (
                 <button
                   key={image.id}
-                  className={index === activeImage ? 'on' : ''}
+                  className={index === chiSoAnh ? 'on' : ''}
                   onClick={() => setActiveImage(index)}
                   aria-label={`Ảnh ${index + 1}`}
                 >
@@ -159,6 +114,20 @@ export default function ApartmentDetail() {
                 </button>
               ))}
             </div>
+          )}
+
+          {isAdmin && (
+            <QuanLyAnh
+              maCan={apartment.ma_can}
+              images={images}
+              chiSoAnh={chiSoAnh}
+              onCapNhat={(daCapNhat, chiSoMuonXem = 0) => {
+                setApartment(daCapNhat);
+                // Mặc định về ảnh đầu — đó là ảnh sắp hiện trên thẻ tìm kiếm, và
+                // admin cần nhìn thấy ngay kết quả vừa bấm.
+                setActiveImage(chiSoMuonXem);
+              }}
+            />
           )}
         </div>
 
@@ -169,11 +138,15 @@ export default function ApartmentDetail() {
           <div className="ltype" style={{ fontSize: 15 }}>
             {orDash(apartment.loai_can)}
           </div>
-          <span className={apartment.tinh_trang === 'Còn' ? 'ltag' : 'ltag'}>
-            {apartment.tinh_trang}
+          <span className={`ttag ${lopTrangThai(apartment.tinh_trang_chi_tiet, apartment.tinh_trang)}`}>
+            {nhanTrangThai(apartment.tinh_trang_chi_tiet, apartment.tinh_trang)}
           </span>
 
           <dl className="spec-list">
+            <div>
+              <dt>Phân khu</dt>
+              <dd>{orDash(apartment.phan_khu)}</dd>
+            </div>
             <div>
               <dt>Diện tích</dt>
               <dd>{formatArea(apartment.dien_tich, apartment.dien_tich_so)}</dd>
@@ -196,32 +169,36 @@ export default function ApartmentDetail() {
             </div>
           </dl>
 
-          {canSell && (
+          {coTheDatCoc && (
             <div className="form-actions">
-              <button className="btn btn-primary" onClick={() => setSellOpen(true)}>
-                Ghi nhận đã bán
+              <button className="btn btn-primary" onClick={() => setDatCocOpen(true)}>
+                Đặt cọc căn này
               </button>
             </div>
           )}
         </div>
       </div>
 
-      <Link className="back-link" to="/">
+      <Link className="back-link" to="/tim-kiem">
         <BackIcon style={{ width: 15, height: 15 }} />
         Về trang tìm kiếm
       </Link>
 
-      {sellOpen && (
-        <SellModal
+      {datCocOpen && (
+        <DatCocModal
           apartment={apartment}
-          onClose={() => setSellOpen(false)}
-          onSold={() => {
-            setSellOpen(false);
-            setSold(`Đã ghi nhận bán căn ${apartment.ma_can}. Xem lại ở “Lịch sử bán của tôi”.`);
+          onClose={() => setDatCocOpen(false)}
+          onDone={(loiNhan) => {
+            setDatCocOpen(false);
+            setThongBao(loiNhan);
+            // Tải lại để tình trạng căn đổi sang "Đã đặt cọc" ngay trước mắt
+            // khách — không có bước này thì họ vừa gửi xong vẫn thấy "Còn" và
+            // tưởng yêu cầu chưa vào.
             load();
           }}
         />
       )}
+
     </div>
   );
 }

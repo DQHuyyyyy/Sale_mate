@@ -14,20 +14,20 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from src.agents.contracts import AgentTool, ToolResult
 from src.agents.nodes.base import BaseNode
+
+# Dùng lại `_format` và `_nguon_cua_tool` của ToolsNode thay vì giữ bản chép thứ
+# hai: cả hai đường đều dựng ngữ cảnh và nguồn cho CÙNG một câu trả lời, lệch
+# nhau là cùng một câu hỏi cho ra hai kiểu kết quả tuỳ vào việc đi đường tất
+# định hay đường vòng lặp. Bản chép ở đây từng giữ `[{tool.name}]` sau khi bản
+# kia đã bỏ ngoặc vuông, và từng lấy câu đầu trong description làm nhãn nguồn.
+from src.agents.nodes.tools import _format, _nguon_cua_tool
 from src.agents.state import AgentState
 from src.agents.tools.registry import ToolRegistry
 from src.agents.tools.registry import registry as default_registry
 from src.core.logging import get_logger
-from src.models.chat import Citation
 
 logger = get_logger(__name__)
-
-
-def _format(tool: AgentTool, result: ToolResult) -> str:
-    body = json.dumps(result.data, ensure_ascii=False, default=str)
-    return f"[{tool.name}] {tool.description}\nKết quả:\n{body}"
 
 
 def _lam_sach(args: dict[str, Any]) -> dict[str, Any]:
@@ -89,12 +89,5 @@ class ActNode(BaseNode):
         cu = state.get("tool_context", "")
         moi = _format(tool, result)
         ket_qua["tool_context"] = f"{cu}\n\n{moi}" if cu else moi
-        ket_qua["tool_citations"] = [
-            *state.get("tool_citations", []),
-            Citation(
-                doc_id=result.source or tool.name,
-                title=tool.description.split(".")[0] or tool.name,
-                kind="db",
-            ),
-        ]
+        ket_qua["tool_citations"] = [*state.get("tool_citations", []), *_nguon_cua_tool(tool, result)]
         return ket_qua

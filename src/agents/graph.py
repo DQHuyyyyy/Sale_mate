@@ -19,11 +19,12 @@ from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
 
-from src.agents.contracts import LLMProvider
+from src.agents.contracts import LLMProvider, ToolCallingProvider
 from src.agents.nodes.act import ActNode
 from src.agents.nodes.generate import GenerateNode
 from src.agents.nodes.guardrail import GuardrailNode
-from src.agents.nodes.plan import ACT, PlanNode
+from src.agents.nodes.orchestrate import OrchestratorNode
+from src.agents.nodes.plan import ACT, RETRIEVE, PlanNode
 from src.agents.nodes.retrieve import RetrieveNode
 from src.agents.nodes.router import RouterNode
 from src.agents.nodes.tools import ToolsNode
@@ -34,7 +35,10 @@ from src.rag.contracts import Retriever
 # Các node chạy TRƯỚC khi sinh chữ, theo đúng thứ tự. Khai một chỗ duy nhất vì
 # đường stream (agents/service.py) phải chạy lại đúng dãy này để lấy context —
 # trước đây nó tự liệt kê router+retrieve và âm thầm bỏ sót node tools mới thêm.
-CONTEXT_NODES: tuple[str, ...] = ("router", "tools", "retrieve")
+# `orchestrate` nằm trong dãy này dù nó chỉ tồn tại khi bật cờ: mọi chỗ chạy
+# dãy đều bỏ qua node không có. Nhờ vậy graph, đường stream và bộ đo chạy
+# ĐÚNG một chuỗi, không thể cho ra hành vi khác nhau.
+CONTEXT_NODES: tuple[str, ...] = ("router", "tools", "retrieve", "orchestrate")
 
 
 def route_after_tools(state: AgentState) -> str:
@@ -47,18 +51,26 @@ def route_after_tools(state: AgentState) -> str:
 def route_after_plan(state: AgentState) -> str:
     """Kế hoạch nói gì thì đi đó. Lỗi hoặc nhãn lạ đều về generate.
 
-    Không có nhánh nào quay lại `plan` từ đây — vòng lặp đóng ở `act`, và trần
-    lần lặp nằm trong chính `plan`. Một chỗ chặn duy nhất, không thể quên.
+    Vòng lặp đóng ở `act` và ở `retrieve` — cả hai đều có cạnh quay về `plan`.
+    Trần lần lặp nằm trong chính `plan`, một chỗ chặn duy nhất không thể quên.
+    Riêng `retrieve` không cần trần: `plan` chỉ chọn nó khi chưa truy hồi lần
+    nào, mà node retrieve bật `da_truy_hoi` ngay lần chạy đầu.
     """
     if state.get("error"):
         return "generate"
-    return "act" if state.get("plan_action") == ACT else "generate"
+    action = state.get("plan_action")
+    if action == ACT:
+        return "act"
+    if action == RETRIEVE:
+        return "retrieve"
+    return "generate"
 
 
 def build_nodes(
     llm: LLMProvider,
     retriever: Retriever,
     settings: Settings,
+    tool_provider: ToolCallingProvider | None = None,
 ) -> dict[str, object]:
     """Tạo các node dùng chung cho cả graph lẫn đường streaming."""
     nodes: dict[str, object] = {
@@ -82,6 +94,21 @@ def build_nodes(
         )
         nodes["act"] = ActNode()
 
+    if settings.enable_orchestrator and tool_provider is not None:
+        nodes["orchestrate"] = OrchestratorNode(
+            tool_provider,
+            max_iterations=settings.orchestrator_max_iterations,
+            model=settings.orchestrator_model,
+            che_do=settings.che_do_leo_thang,
+            bat_r1=settings.leo_thang_r1,
+            bat_r2=settings.leo_thang_r2,
+            bat_r3=settings.leo_thang_r3,
+            ngan_sach_ngay_usd=settings.orchestrator_daily_budget_usd,
+            # Cùng ngưỡng với GuardrailNode: cổng phải bắn đúng nhánh
+            # mà guardrail sắp từ chối, không phải một nhánh khác.
+            nguong_do_phu=settings.coverage_threshold,
+        )
+
     return nodes
 
 
@@ -96,38 +123,53 @@ def build_graph(nodes: dict[str, object]):
                               └──────────→ generate → ...
 
         bật:  router → tools ─┬→ retrieve ─┐
-                              └────────────┴→ plan ─┬→ act ──┐
-                                              ↑             │
-                                              └─────────────┘
+                              └────────────┴→ plan ─┬→ act ──────┐
+                                              ↑     ├→ retrieve ─┤
+                                              └─────┴────────────┘
                                                     └→ generate → guardrail → END
     """
     graph = StateGraph(AgentState)
     co_vong_lap = "plan" in nodes and "act" in nodes
+    co_orchestrator = "orchestrate" in nodes
 
     ten_node = ["router", "tools", "retrieve", "generate", "guardrail"]
     if co_vong_lap:
         ten_node += ["plan", "act"]
+    if co_orchestrator:
+        ten_node.append("orchestrate")
     for name in ten_node:
         graph.add_node(name, nodes[name])
 
     graph.add_edge(START, "router")
     graph.add_edge("router", "tools")
 
-    # Đích sau khi gom xong context: có vòng lặp thì để plan quyết, không thì
-    # sinh chữ luôn.
-    sau_context = "plan" if co_vong_lap else "generate"
+    # Đích sau khi gom xong context. Ba khả năng, xét theo thứ tự ưu tiên:
+    # vòng lặp cũ (nếu bật) → cổng leo thang (nếu bật) → sinh chữ luôn.
+    #
+    # Nhánh "không cần tra cứu" cũng phải đi qua cổng: luật R2/R3 đọc thực thể
+    # chứ không đọc kết quả truy hồi, nên chúng khớp được cả ở nhánh này.
+    sau_context = "plan" if co_vong_lap else ("orchestrate" if co_orchestrator else "generate")
     graph.add_conditional_edges(
         "tools",
         route_after_tools,
         {"retrieve": "retrieve", "generate": sau_context},
     )
-    graph.add_edge("retrieve", sau_context)
+
+    if co_orchestrator and not co_vong_lap:
+        # Cạnh THẲNG, không phải cạnh điều kiện: cổng leo thang nằm trong chính
+        # `OrchestratorNode` — không khớp luật nào thì nó trả về ngay lập tức mà
+        # không gọi model. Để cổng ở đây thì `build_graph` phải nhận `Settings`
+        # chỉ để đọc ba cờ, và đường stream lại phải chép lại cùng logic đó.
+        graph.add_edge("retrieve", "orchestrate")
+        graph.add_edge("orchestrate", "generate")
+    else:
+        graph.add_edge("retrieve", sau_context)
 
     if co_vong_lap:
         graph.add_conditional_edges(
             "plan",
             route_after_plan,
-            {"act": "act", "generate": "generate"},
+            {"act": "act", "retrieve": "retrieve", "generate": "generate"},
         )
         # Chạy xong quay lại plan để nó nhìn bằng chứng mới rồi quyết tiếp.
         graph.add_edge("act", "plan")

@@ -21,43 +21,17 @@ export function logout() {
   setToken(null);
 }
 
-// ---- Sửa ảnh bằng trợ lý ----
-/**
- * Nhờ trợ lý sửa một chi tiết trong ảnh căn hộ.
- *
- * Đi đường riêng chứ không qua /api/chat: nó trả về một tấm ảnh chứ không phải
- * luồng token, và có hạn mức riêng vì mỗi lượt tốn tiền hơn hẳn một lượt chat.
- *
- * Trả về `{status: 'ok', image_base64, object_edited}` khi sửa được, hoặc
- * `{status: 'clarify', question}` khi trợ lý cần hỏi thêm cho rõ.
- */
-/**
- * `nguon` là URL ảnh gốc của căn, HOẶC data URL của ảnh vừa chỉnh xong.
- *
- * Ảnh vừa chỉnh chưa lưu ở đâu nên không có URL, mà data URL của ảnh 1024px dài
- * cả MB — vượt xa giới hạn 2000 ký tự của `image_url`. Nên nó đi bằng trường
- * riêng, và server chỉ nhận đúng một trong hai.
- */
-export function editImage(nguon, instruction, sessionId) {
-  const laDataUrl = nguon.startsWith('data:');
-  return request('/api/image/edit', {
-    method: 'POST',
-    body: {
-      image_url: laDataUrl ? '' : nguon,
-      image_base64: laDataUrl ? nguon.slice(nguon.indexOf(',') + 1) : '',
-      instruction,
-      session_id: sessionId ?? null,
-    },
-  });
-}
-
 // ---- Căn hộ ----
-export function searchApartments({ tower, priceMin, priceMax, type } = {}) {
+export function searchApartments({ tower, priceMin, priceMax, priceMaxExclusive, subdivision, type } = {}) {
   return request('/api/apartments', {
     params: {
       tower,
       price_min: priceMin,
       price_max: priceMax,
+      // Trợ lý S bật cờ này cho câu "dưới 3 tỷ" — loại luôn căn giá đúng 3 tỷ,
+      // để lưới bên trái đếm ra cùng con số với câu trả lời trong chat.
+      price_max_exclusive: priceMaxExclusive || undefined,
+      subdivision,
       type,
     },
   });
@@ -80,6 +54,25 @@ export function uploadApartmentImages(maCan, files) {
   });
 }
 
+/**
+ * Đặt một ảnh làm ảnh đại diện (admin).
+ *
+ * Ảnh đại diện là dòng có `sort_order` nhỏ nhất — chính thứ mà thẻ ở trang tìm
+ * kiếm và ảnh đầu trong gallery cùng đọc, nên đổi một lần là cả hai đổi theo.
+ */
+export function datAnhDaiDien(maCan, imageId) {
+  return request(`/api/apartments/${encodeURIComponent(maCan)}/images/${imageId}/dai-dien`, {
+    method: 'PATCH',
+  });
+}
+
+/** Xoá một ảnh khỏi căn (admin). Trả về căn đã cập nhật. */
+export function xoaAnhCanHo(maCan, imageId) {
+  return request(`/api/apartments/${encodeURIComponent(maCan)}/images/${imageId}`, {
+    method: 'DELETE',
+  });
+}
+
 // ---- Phân khu ----
 export function getZones() {
   return request('/api/zones');
@@ -98,18 +91,6 @@ export function getAllSales() {
   return request('/api/sales/all');
 }
 
-/** Ghi nhận lượt bán. Không gửi sale_id — backend lấy từ token. */
-export function createSale({ maCan, customerName, customerPhone, soldPrice }) {
-  return request('/api/sales', {
-    method: 'POST',
-    body: {
-      ma_can: maCan,
-      customer_name: customerName || null,
-      customer_phone: customerPhone || null,
-      sold_price: soldPrice === '' || soldPrice === undefined ? null : Number(soldPrice),
-    },
-  });
-}
 
 // ---- Quản lý sale ----
 export function getSales() {
@@ -162,3 +143,69 @@ export function sendChatMessage(message, history) {
 }
 
 export { streamChat as streamChatMessage } from './client';
+
+/**
+ * Sửa một ảnh của căn theo yêu cầu bằng lời — tính năng "Modify Object".
+ *
+ * Trả về data URI, KHÔNG lưu ở server: đây là ảnh minh hoạ do AI tạo cho một
+ * tài sản có thật, để lẫn vào ảnh thật là quảng cáo sai sự thật.
+ */
+export function modifyApartmentImage({ maCan, imageId, yeuCau }) {
+  return request('/api/images/modify', {
+    method: 'POST',
+    body: { ma_can: maCan, image_id: imageId, yeu_cau: yeuCau },
+  });
+}
+
+// ---- Lead đặt cọc ----
+// Trạng thái CĂN suy ra từ chính bảng lead (migration 010), nên đổi trạng thái
+// lead ở đây là căn đổi theo ngay ở cả portal lẫn widget chat.
+
+/** Danh sách lead, mới nhất trước. Chỉ sale và admin gọi được. */
+export function getDatCocLeads({ trangThai, maCan } = {}) {
+  return request('/api/dat-coc', {
+    params: { trang_thai: trangThai, ma_can: maCan },
+  });
+}
+
+/**
+ * Đổi trạng thái một lead.
+ *
+ * `bo` là VAN XẢ duy nhất: giữ chỗ không tự hết hạn, nên không huỷ ở đây thì
+ * căn bị khoá vĩnh viễn và tồn kho khả dụng teo dần mà không ai để ý.
+ */
+export function doiTrangThaiLead(id, trangThai) {
+  return request(`/api/dat-coc/${id}`, {
+    method: 'PATCH',
+    body: { trang_thai: trangThai },
+  });
+}
+
+/**
+ * Khách bấm "Đặt cọc" trên trang căn hộ. KHÔNG cần đăng nhập.
+ *
+ * Bắt đăng nhập trước khi để lại số là chặn đúng người đang muốn mua. Widget
+ * chat vốn đã ghi lead mà không cần tài khoản, nên nút này không mở thêm bề mặt
+ * nào mới.
+ */
+export function datCoc({ maCan, hoTen, soDienThoai, ghiChu }) {
+  return request('/api/dat-coc', {
+    method: 'POST',
+    body: { ma_can: maCan, ho_ten: hoTen, so_dien_thoai: soDienThoai, ghi_chu: ghiChu },
+  });
+}
+
+// ---- Tài liệu trợ lý trích dẫn ----
+// Khác `getDocuments()` phía trên: cái đó đọc bảng `documents` (tài liệu admin
+// tự đăng), còn đây là kho lõi AI thật sự đọc để trả lời. Trích nguồn trỏ vào
+// đây, nên nó phải là một bản duy nhất — không sao chép sang Postgres.
+
+/** Danh sách tài liệu trợ lý có thể trích. Phải đăng nhập. */
+export function getTaiLieuAI() {
+  return request('/api/tai-lieu');
+}
+
+/** Toàn văn một tài liệu — đích của nút trích nguồn. */
+export function getTaiLieuAIChiTiet(docId) {
+  return request(`/api/tai-lieu/${encodeURIComponent(docId)}`);
+}

@@ -21,6 +21,10 @@ langchain-core==1.5.3
 langchain-openai==1.4.1
 openai==2.52.0
 langsmith==0.10.15
+# Nhà cung cấp thứ hai, CHỈ dùng cho orchestrator ở nhánh leo thang. Thiếu gói
+# này thì app vẫn chạy đủ chức năng — `src/services/anthropic_llm.py` import
+# SDK bên trong hàm chứ không ở đầu file, đúng cho mục đích đó.
+anthropic==0.116.0
 
 # ---- Vector store ----
 qdrant-client==1.18.0
@@ -34,11 +38,6 @@ psycopg2-binary==2.9.12
 httpx==0.28.1
 tenacity==9.1.4
 
-# ---- Xử lý ảnh (tool sửa ảnh) ----
-# Dựng mask, ghép ảnh model trả về đè lên ảnh gốc, chuẩn hoá kích thước. Toàn bộ
-# chạy tại máy nên không tốn tiền model — xem src/images/pipeline.py.
-Pillow==11.3.0
-
 # ---- Crawling (nạp dữ liệu ngoài cho RAG) ----
 beautifulsoup4==4.15.0
 soupsieve==2.9.1
@@ -50,6 +49,9 @@ soupsieve==2.9.1
 
 # ---- Nạp dữ liệu (script một lần, không dùng lúc chạy app) ----
 openpyxl==3.1.5
+# Xuất bản crawl ra .docx để người dùng duyệt nội dung trước khi nạp,
+# và đọc lại chính file đó ở bước parse.
+python-docx==1.2.0
 supabase==2.31.0
 google-api-python-client==2.198.0
 google-auth==2.56.2

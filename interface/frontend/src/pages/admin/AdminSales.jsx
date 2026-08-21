@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getAllSales, getSales, setSaleAccountActive } from '../../api';
+import { getSales, setSaleAccountActive } from '../../api';
 import AddSaleForm from '../../components/AddSaleForm';
 import SaleTable from '../../components/SaleTable';
-import SoldTable from '../../components/SoldTable';
 
 /** Trang admin: quản lý tài khoản sale + toàn bộ căn đã bán. */
 export default function AdminSales() {
   const [sales, setSales] = useState([]);
-  const [sold, setSold] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -17,9 +15,7 @@ export default function AdminSales() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [salesData, soldData] = await Promise.all([getSales(), getAllSales()]);
-      setSales(salesData);
-      setSold(soldData);
+      setSales(await getSales());
       setError('');
     } catch (loadError) {
       setError(loadError.message);
@@ -110,13 +106,9 @@ export default function AdminSales() {
         />
       </div>
 
-      <div className="panel" id="sold">
-        <h2>Căn đã bán toàn hệ thống</h2>
-        <p className="sub">
-          Sắp xếp theo thời điểm bán, mới nhất lên trước. Tài khoản bị tắt vẫn hiện đầy đủ ở đây.
-        </p>
-        <SoldTable records={sold} loading={loading} showSale />
-      </div>
+      {/* Bảng "Căn đã bán toàn hệ thống" đã chuyển sang màn Giao dịch, nằm
+          cạnh lead đặt cọc — hai nửa của cùng một phễu thì để cạnh nhau. Trang
+          này giờ chỉ còn đúng một việc: quản lý TÀI KHOẢN sale. */}
     </div>
   );
 }

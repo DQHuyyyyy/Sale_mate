@@ -115,3 +115,8 @@ def test_chuyen_unit_thanh_document_khong_lo_gia_va_tinh_trang():
     # Tồn kho là dữ liệu nội bộ của team — chỉ Admin/Sale thấy qua RAG, portal
     # công khai không được lộ ra (đúng nguyên tắc lọc tại tầng truy hồi).
     assert doc.metadata["visibility"] == "internal"
+    # Markdown có heading rõ ràng, đúng luồng Parsing -> Markdown -> Chunking.
+    assert doc.text.startswith("# Căn VOP398 (R103)")
+    assert "## Tầm nhìn" in doc.text
+    assert "## Pháp lý" in doc.text
+    assert "## Nội thất" in doc.text

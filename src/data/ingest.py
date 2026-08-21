@@ -108,7 +108,7 @@ async def ingest_documents(
     return result
 
 
-RAW_DIR = Path(__file__).resolve().parents[3] / "data" / "raw"
+RAW_DIR = Path(__file__).resolve().parents[2] / "data" / "raw"
 
 
 async def ingest_inventory(pipeline: IngestPipeline, store: VectorStore) -> IngestResult:
@@ -128,25 +128,54 @@ async def ingest_batdongsan(pipeline: IngestPipeline, store: VectorStore) -> Ing
     """Tin đăng batdongsan.com.vn lưu tay.
 
     Site chặn bot nên không crawl tự động được — dữ liệu là file .html người
-    dùng tự lưu bằng trình duyệt, đặt trong data/raw/.
+    dùng tự lưu bằng trình duyệt (Ctrl+S → "Chỉ HTML"). "Khu nào ra khu đấy":
+    mỗi dự án một thư mục riêng, đọc KHÔNG đệ quy (`load_saved_detail_pages`
+    dùng `glob` chứ không `rglob`) nên không lẫn dự án dù cùng nằm dưới
+    `data/raw/`:
+        data/raw/                → OCP1 (Gia Lâm) — thư mục gốc, chỗ cũ
+        data/raw/batdongsan_ocp2/ → OCP2 (The Empire, Văn Giang)
+        data/raw/batdongsan_ocp3/ → OCP3 (The Crown, Văn Lâm)
+    Thư mục OCP2/OCP3 chưa có file nào cho tới khi người dùng tự lưu — không
+    có file thì đọc ra danh sách rỗng, không phải lỗi.
     """
-    from src.data.crawling.batdongsan import load_saved_detail_pages
+    from src.data.crawling.batdongsan import DEFAULT_PROJECT, load_saved_detail_pages
 
-    documents = load_saved_detail_pages(RAW_DIR)
-    logger.info("Đọc %d tin batdongsan.com.vn đã lưu", len(documents))
+    documents = load_saved_detail_pages(RAW_DIR, DEFAULT_PROJECT)
+    documents += load_saved_detail_pages(RAW_DIR / "batdongsan_ocp2", "Vinhomes Ocean Park 2 (The Empire)")
+    documents += load_saved_detail_pages(RAW_DIR / "batdongsan_ocp3", "Vinhomes Ocean Park 3 (The Crown)")
+    logger.info("Đọc %d tin batdongsan.com.vn đã lưu (cả 3 dự án)", len(documents))
     return await ingest_documents("batdongsan", documents, pipeline, store)
 
 
 async def ingest_meeyland(pipeline: IngestPipeline, store: VectorStore) -> IngestResult:
     """Tin đăng meeyland.com — crawl trực tiếp, site không chặn bot.
 
+    Crawl CẢ 3 dự án (OCP1 Gia Lâm, OCP2 The Empire, OCP3 The Crown) — mỗi dự
+    án qua đúng category/`ProjectConfig` riêng của nó ("khu nào ra khu đấy",
+    xem docstring `src/data/crawling/meeyland.py`), gộp kết quả rồi nạp chung
+    một lượt. Gộp thành 1 batch — không tách 3 hàm ingest riêng — vì
+    `_mark_removed_listings` so sánh với TOÀN BỘ tin `source_site=meeyland.com`
+    đang active trên Qdrant: nếu chạy riêng từng dự án, dự án không được crawl
+    trong lượt đó sẽ bị hiểu nhầm là "đã gỡ khỏi site" và bị đánh inactive oan.
+
     Sau khi nạp, tin nào không còn trên site sẽ bị đánh dấu `is_active=False`
     thay vì xoá — giữ làm lịch sử, và truy hồi chỉ lấy bản còn hiệu lực.
     """
     from src.data.crawling import meeyland
 
-    documents = await meeyland.crawl_vinhomes_ocean_park(meeyland.CrawlLimits(max_search_pages=20, max_listings=None))
-    logger.info("Crawl được %d tin meeyland.com", len(documents))
+    documents: list[LoadedDocument] = []
+    for project, limits in (
+        (meeyland.PROJECT_OCP1, meeyland.CrawlLimits(max_search_pages=20, max_listings=None)),
+        (meeyland.PROJECT_OCP2, meeyland.CrawlLimits(max_search_pages=20, max_listings=None)),
+        # OCP3 chưa có category riêng cho căn hộ (0 tin, xem docstring
+        # meeyland.py) — category dùng tạm là cấp huyện, phải lọc must_mention
+        # nên giới hạn số trang thấp hơn để không quét quá nhiều tin không liên quan.
+        (meeyland.PROJECT_OCP3, meeyland.CrawlLimits(max_search_pages=10, max_listings=None)),
+    ):
+        project_documents = await meeyland.crawl_vinhomes_ocean_park(limits, project)
+        logger.info("Crawl được %d tin meeyland.com cho %s", len(project_documents), project.project_name)
+        documents.extend(project_documents)
+
     result = await ingest_documents("meeyland", documents, pipeline, store)
 
     await _mark_removed_listings(store, documents, source_site="meeyland.com")
@@ -185,9 +214,22 @@ async def _mark_removed_listings(store: VectorStore, documents: list, source_sit
         logger.info("Đánh dấu %d tin %s đã gỡ khỏi site là hết hiệu lực", len(stale), source_site)
 
 
+# Qdrant CHỈ chứa tài liệu chính sách (`doc_kind="policy"`). Ba nguồn tin rao —
+# `inventory`, `batdongsan`, `meeyland` — đã bị gỡ khỏi bảng này có chủ đích:
+#
+# * `batdongsan` và `meeyland` là tin rao của MÔI GIỚI KHÁC, cùng dự án nhưng
+#   không phải kho của công ty, kèm giá họ tự niêm yết và số điện thoại của họ.
+#   Khi một tool tồn kho lỡ không chạy, truy hồi rơi xuống 864 chunk này và trợ
+#   lý giới thiệu hàng của sàn khác cho khách của mình — đã xảy ra thật với câu
+#   "tìm các căn khoảng giá 3 tỷ", trích ra "Mã tin: 307426397".
+#
+# * `inventory` thì nhân bản 100 căn từ Postgres vào Qdrant, tạo đúng hai nguồn
+#   số liệu mà CLAUDE.md cấm. Giá và tình trạng căn đổi hàng ngày; RAG là bản
+#   chụp. Tồn kho đi qua tool `inventory_lookup` / `inventory_search`, đọc thẳng
+#   `inventory_units`.
+#
+# Muốn tham khảo mặt bằng giá thị trường thì nạp vào COLLECTION RIÊNG, đừng để
+# chung chỗ trợ lý tra tồn kho.
 SOURCES: dict[str, Callable[[IngestPipeline, VectorStore], Awaitable[IngestResult]]] = {
-    "inventory": ingest_inventory,
-    "batdongsan": ingest_batdongsan,
-    "meeyland": ingest_meeyland,
     "knowledge": ingest_knowledge,
 }

@@ -20,15 +20,35 @@ from typing import Any
 
 from src.agents.contracts import LLMProvider
 from src.agents.graph import CONTEXT_NODES
+from src.agents.nguon import loc_nguon_da_dung
 from src.agents.nodes.generate import build_messages
 from src.agents.nodes.guardrail import INSUFFICIENT_MESSAGE
+from src.agents.nodes.plan import RETRIEVE
 from src.agents.state import AgentState, initial_state
+from src.agents.suggest import goi_y_bang_model, goi_y_khi_thieu_du_lieu
 from src.core.config import Settings
 from src.core.exceptions import SalesMateError, UpstreamError
 from src.core.logging import get_logger, trace
 from src.models.chat import ChatEvent, ChatEventType, ChatRequest, ChatResponse, Citation
 
 logger = get_logger(__name__)
+
+
+def _ghi_cau_hoi(request: ChatRequest) -> None:
+    """Dòng ĐẦU TIÊN của mỗi phiên: người dùng hỏi gì.
+
+    Thiếu nó thì file nhật ký chỉ còn một chuỗi bước không rõ đang giải quyết
+    việc gì — xem lại sau vài giờ là vô dụng.
+
+    Câu hỏi là dữ liệu người dùng gõ, nên chỗ này chỉ chấp nhận được vì nhật ký
+    nằm ở máy local và đã bị .gitignore chặn. Đừng chuyển thư mục này lên nơi
+    dùng chung mà không xem lại quyết định đó.
+    """
+    logger.info(
+        "%s",
+        request.message,
+        extra={"context": {"buoc": "CÂU HỎI", "so_luot_truoc": len(request.history or [])}},
+    )
 
 
 class LangGraphAgentService:
@@ -56,6 +76,7 @@ class LangGraphAgentService:
         session_id = request.session_id or new_session_id()
 
         with trace(session_id=session_id, mode="answer"):
+            _ghi_cau_hoi(request)
             state = initial_state(request.message, session_id, request.history)
             result = await self._graph.ainvoke(state)
 
@@ -88,6 +109,7 @@ class LangGraphAgentService:
         """Phát ChatEvent: start → route* → token* → sources → done."""
         session_id = request.session_id or new_session_id()
         with trace(session_id=session_id, mode="stream"):
+            _ghi_cau_hoi(request)
             async for event in self._stream(request, session_id):
                 yield event
 
@@ -113,7 +135,20 @@ class LangGraphAgentService:
                         content=state.get("plan_reason", ""),
                         session_id=session_id,
                     )
-                    yield ChatEvent(type=ChatEventType.DONE, session_id=session_id)
+                    # Phương án chọn sẵn đi kèm event DONE, trong `data` — khoá
+                    # mở rộng tự do, không phải đụng vào hợp đồng ChatEvent.
+                    # Gắn vào DONE chứ không phải TOKEN vì FE cần biết câu hỏi
+                    # ngược đã hết chữ rồi mới dựng nút bấm.
+                    yield ChatEvent(
+                        type=ChatEventType.DONE,
+                        session_id=session_id,
+                        data={
+                            "options": state.get("plan_options", []),
+                            # Hỏi ngược thì chưa khẳng định gì — không có gì để
+                            # chứng minh, nên không nguồn.
+                            "cho_trich_nguon": False,
+                        },
+                    )
                     return
 
                 # Có dữ liệu từ tool thì KHÔNG từ chối, dù truy hồi tài liệu
@@ -124,30 +159,73 @@ class LangGraphAgentService:
                         content=INSUFFICIENT_MESSAGE,
                         session_id=session_id,
                     )
-                    yield ChatEvent(type=ChatEventType.DONE, session_id=session_id)
+                    # Không để khách ở ngõ cụt: nhặt lại tiêu chí của lượt trước
+                    # rồi trải ra ba phân khu thành nút bấm được.
+                    yield ChatEvent(
+                        type=ChatEventType.DONE,
+                        session_id=session_id,
+                        data={
+                            "options": goi_y_khi_thieu_du_lieu(state),
+                            # Từ chối mà vẫn trưng nguồn là tự phủ định trước
+                            # mặt khách — cùng luật với `loc_nguon_da_dung`.
+                            "cho_trich_nguon": False,
+                        },
+                    )
                     return
 
-            produced = False
+            # Gom lại chữ đã stream: gợi ý cần ĐỌC ĐƯỢC câu trả lời thì mới bám
+            # đúng mạch câu chuyện. Chỉ giữ trong biến cục bộ của một lượt.
+            da_tra_loi: list[str] = []
             async for token in self._llm.stream(
                 build_messages(state),
                 model=self._settings.llm_model_answer,
                 temperature=self._settings.llm_temperature,
                 max_tokens=self._settings.llm_max_tokens,
             ):
-                produced = True
+                da_tra_loi.append(token)
                 yield ChatEvent(type=ChatEventType.TOKEN, content=token, session_id=session_id)
 
-            if not produced:
+            if not da_tra_loi:
                 yield ChatEvent(
                     type=ChatEventType.TOKEN,
                     content="Mình chưa tạo được câu trả lời. Bạn thử hỏi lại nhé.",
                     session_id=session_id,
                 )
 
-            if citations:
-                yield ChatEvent(type=ChatEventType.SOURCES, session_id=session_id, citations=citations)
+            # Lọc SAU khi có đủ chữ: nguồn phải là thứ câu trả lời thật sự dùng,
+            # không phải mọi thứ đã tra. Đây là lý do SOURCES bị giữ lại từ
+            # `_prepare_context` rồi mới phát ở đây.
+            cau_tra_loi = "".join(da_tra_loi)
+            da_dung = loc_nguon_da_dung(
+                citations,
+                cau_tra_loi,
+                co_du_lieu_tool=bool(state.get("tool_context")),
+            )
+            if da_dung:
+                yield ChatEvent(type=ChatEventType.SOURCES, session_id=session_id, citations=da_dung)
 
-            yield ChatEvent(type=ChatEventType.DONE, session_id=session_id)
+            # Gợi ý sinh SAU khi chữ đã chảy hết: khách đang đọc câu trả lời nên
+            # không cảm thấy nhịp chờ này. Dùng model rẻ, và mọi lỗi bên trong
+            # đều rơi về khuôn tất định. Gắn vào DONE để FE dựng nút khi câu trả
+            # lời đã hết chữ.
+            yield ChatEvent(
+                type=ChatEventType.DONE,
+                session_id=session_id,
+                data={
+                    "options": await goi_y_bang_model(
+                        state,
+                        self._llm,
+                        cau_tra_loi,
+                        model=self._settings.llm_model_fast,
+                    ),
+                    # Backend là nơi DUY NHẤT quyết định lượt này có nguồn hay
+                    # không. FE còn một đường sinh nguồn thứ hai — dấu [Mã căn]
+                    # model tự viết trong bài — và đường đó không đi qua bộ lọc
+                    # nào, nên nó dựng nguồn cả ở lượt vừa bị loại sạch. Xem
+                    # `cho_trich_nguon` ở ChatSidebar.jsx.
+                    "cho_trich_nguon": bool(da_dung),
+                },
+            )
 
         except SalesMateError as exc:
             logger.warning("Stream dừng do lỗi nghiệp vụ: %s", exc.code)
@@ -219,6 +297,21 @@ class LangGraphAgentService:
                     data={"step": "plan", "action": state.get("plan_action", "")},
                 )
 
+            # Plan đòi tra tài liệu trước khi kết luận. Chạy chính node retrieve
+            # của graph rồi quay lại plan — cùng một node object, nên stream và
+            # graph không thể lệch hành vi.
+            if state.get("plan_action") == RETRIEVE:
+                retrieve = self._nodes.get("retrieve")
+                if retrieve is None:
+                    return
+                state.update(await retrieve(state))
+                yield ChatEvent(
+                    type=ChatEventType.ROUTE,
+                    session_id=session_id,
+                    data={"step": "retrieve", "found": len(state.get("chunks", []))},
+                )
+                continue
+
             if state.get("plan_action") != "act":
                 return
 
@@ -271,6 +364,30 @@ class LangGraphAgentService:
                         "tools": ran,
                         # Phân biệt "đã tra nhưng không thấy" với "chưa tra gì".
                         "found": bool(state.get("tool_context")),
+                        # Tiêu chí đã lọc, để giao diện đồng bộ danh sách bên
+                        # ngoài với câu trả lời trong chat.
+                        "filters": state.get("tool_filters", {}),
+                    },
+                )
+            ]
+
+        if node == "orchestrate":
+            # Chỉ báo khi THẬT SỰ leo thang. Node vẫn chạy ở mọi lượt (nó tự gác
+            # cổng), nên báo vô điều kiện sẽ hiện một dòng trạng thái vô nghĩa
+            # cho cả câu chào hỏi.
+            luat = state.get("leo_thang") or ""
+            if not luat:
+                return []
+            return [
+                ChatEvent(
+                    type=ChatEventType.ROUTE,
+                    content=", ".join(state.get("tools_ran", [])) or "đang lập kế hoạch",
+                    session_id=session_id,
+                    data={
+                        "step": "orchestrate",
+                        "luat": luat,
+                        "tools": list(state.get("tools_ran", [])),
+                        "loi": state.get("orchestrator_loi", ""),
                     },
                 )
             ]

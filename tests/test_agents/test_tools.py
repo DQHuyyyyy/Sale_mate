@@ -90,7 +90,7 @@ async def test_tra_dung_1_can_theo_ma_can():
 
     assert result.ok
     assert len(result.data) == 1
-    assert result.data[0]["status_label"] == "Còn trống"
+    assert result.data[0]["status_label"] == "Còn"
     # Gia/tinh trang la du lieu dong that, khong duoc bia
     assert result.data[0]["price_label"] == "3,5 tỷ"
 

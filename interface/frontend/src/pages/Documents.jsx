@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { getDocuments } from '../api';
 import DocumentList from '../components/DocumentList';
 
@@ -27,8 +28,16 @@ export default function Documents() {
   return (
     <div className="wrap">
       <div className="page-head">
-        <h1>Tài liệu</h1>
-        <p>Hồ sơ pháp lý, bảng giá và chính sách bán hàng do quản trị viên đăng.</p>
+        {/* KHÔNG đặt tên là "Tài liệu": trang `/tai-lieu` cũng tên vậy, và khi
+            hai trang trùng tên thì menu trỏ nhầm mà không ai nhận ra. Tên phải
+            nói rõ khác biệt — kho này là file đính kèm, không phải nguồn trợ
+            lý đọc. */}
+        <h1>Kho file đính kèm</h1>
+        <p>
+          Hồ sơ pháp lý, bảng giá và chính sách bán hàng do quản trị viên tải lên. Trợ lý{' '}
+          <strong>không đọc</strong> các file này — nguồn nó dùng để trả lời nằm ở{' '}
+          <Link to="/tai-lieu">Tài liệu trợ lý</Link>.
+        </p>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}

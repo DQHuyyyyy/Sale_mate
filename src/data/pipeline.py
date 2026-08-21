@@ -11,7 +11,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from src.core.logging import get_logger
-from src.data.contracts import Chunker, DocumentLoader, Embedder, LoadedDocument, VectorStore
+from src.data.contracts import Chunk, Chunker, DocumentLoader, Embedder, LoadedDocument, VectorStore
 
 logger = get_logger(__name__)
 
@@ -57,7 +57,12 @@ class IngestPipeline:
             logger.warning("Tài liệu %s không sinh ra chunk nào", document.doc_id)
             return IngestReport(doc_id=document.doc_id, title=document.title, chunks=0)
 
-        vectors = await self._embedder.embed_texts([chunk.text for chunk in chunks])
+        # Nhúng KÈM tiêu đề và mục: chunk chứa bảng chiết khấu, tự nó không
+        # mang dấu vết nào cho biết thuộc tài liệu "Chính sách bán hàng". Đo
+        # được: hỏi đúng tên tài liệu mà nó không lọt nổi top 10.
+        # Chỉ ghép vào VĂN BẢN ĐEM NHÚNG, `chunk.text` giữ nguyên để trích dẫn
+        # và hiển thị không lẫn phần tiêu đề lặp lại.
+        vectors = await self._embedder.embed_texts([_van_ban_nhung(document, c) for c in chunks])
         await self._store.upsert(chunks, vectors)
 
         return IngestReport(
@@ -74,3 +79,10 @@ class IngestPipeline:
                 document = await loader.load(path)
                 return await self.ingest_document(document)
         raise ValueError(f"Chưa có loader nào xử lý được định dạng: {path.suffix}")
+
+
+def _van_ban_nhung(document: LoadedDocument, chunk: Chunk) -> str:
+    """Văn bản dùng để sinh vector — nội dung chunk cộng ngữ cảnh tài liệu."""
+    dau = [document.title, str(chunk.metadata.get("section") or "")]
+    dau = [d for d in dict.fromkeys(dau) if d]
+    return "\n".join([*dau, chunk.text]) if dau else chunk.text

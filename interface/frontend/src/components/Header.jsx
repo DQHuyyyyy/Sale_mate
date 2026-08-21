@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import AvatarMenu from './AvatarMenu';
 import LoginModal from './LoginModal';
-import { BurgerIcon, FileIcon, LogoMark, MapIcon, SearchIcon } from './Icons';
+import { BurgerIcon, FileIcon, HouseIcon, LogoMark, MapIcon, SearchIcon } from './Icons';
 
 export default function Header() {
   const [navOpen, setNavOpen] = useState(false);
@@ -33,6 +33,14 @@ export default function Header() {
               className={({ isActive }) => (isActive ? 'on' : '')}
               onClick={closeNav}
             >
+              <HouseIcon />
+              Trang chủ
+            </NavLink>
+            <NavLink
+              to="/tim-kiem"
+              className={({ isActive }) => (isActive ? 'on' : '')}
+              onClick={closeNav}
+            >
               <SearchIcon />
               Tìm kiếm căn hộ
             </NavLink>
@@ -46,10 +54,17 @@ export default function Header() {
             </NavLink>
 
             {/* Tài liệu là kho nội bộ của đội sale — khách không thấy mục này,
-                và backend cũng chặn nếu gọi thẳng API. */}
+                và backend cũng chặn nếu gọi thẳng API.
+
+                Trỏ `/tai-lieu` chứ KHÔNG phải `/documents`: đây là 11 tài liệu
+                trợ lý thật sự đọc và trích nguồn, tức thứ người dùng bấm vào
+                menu để tìm. `/documents` là kho file admin tải lên — việc khác,
+                vào từ chính trang này. Hai trang từng cùng tên "Tài liệu" và
+                menu trỏ nhầm sang kho file, nên 11 tài liệu không có lối vào
+                nào ngoài nút trích nguồn trong khung chat. */}
             {user && (
               <NavLink
-                to="/documents"
+                to="/tai-lieu"
                 className={({ isActive }) => (isActive ? 'on' : '')}
                 onClick={closeNav}
               >

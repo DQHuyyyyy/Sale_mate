@@ -25,19 +25,30 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from src.data.contracts import LoadedDocument
+from src.data.ingestion.parsers import sanitize_text
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CSV_PATH = REPO_ROOT / "data" / "raw" / "inventory.csv"
 DEFAULT_PHOTOS_DIR = REPO_ROOT / "data" / "raw" / "photos"
 
-# Sheet hiện chỉ có "Còn"/"Hết"; thêm "giữ chỗ" phòng khi sau này có cột đó.
+# Sheet chỉ có "Còn"/"Hết". Hai trạng thái giữ chỗ KHÔNG đến từ đây mà suy ra
+# từ `dat_coc_lead` trong VIEW `inventory_units` (migration 010) — giữ ở đây để
+# nguồn nào có sẵn cột đó thì đọc được, và để tên khớp `tools/trang_thai.py`.
 _STATUS_MAP = {
     "còn": "available",
     "hết": "sold",
     "giữ chỗ": "reserved",
+    "đã đặt cọc": "reserved",
+    "đặt cọc": "reserved",
 }
 
 _IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
+
+# Toàn bộ tồn kho là căn hộ VOP (mã unit_code luôn bắt đầu "VOP") — tức dự án
+# Vinhomes Ocean Park Gia Lâm (OCP1). Chuỗi phải khớp CHÍNH XÁC với
+# meeyland.PROJECT_OCP1.project_name / batdongsan.DEFAULT_PROJECT /
+# knowledge_docs._DEFAULT_PROJECT để RetrievalFilter.project lọc đúng khu.
+_PROJECT_NAME = "Vinhomes Ocean Park Gia Lâm"
 
 # Số cột dữ liệu thật; Excel/Sheet hay export dư cột trắng phía sau.
 _DATA_COLUMNS = 13
@@ -126,11 +137,24 @@ def unit_to_document(unit: InventoryUnit) -> LoadedDocument:
     nhưng vector cũ chưa re-index), đúng thứ nguyên tắc "không bịa số" của dự
     án muốn tránh. Xem Context Product/Kientruc.md mục 6.
     """
+    # view/legal_status/furniture/direction do sale gõ tay vào Sheet — làm
+    # sạch (unicode ẩn, dấu câu lặp...) trước khi đưa vào RAG. sanitize_text()
+    # giữ nguyên xuống dòng nên không ảnh hưởng cấu trúc heading bên dưới.
+    direction = sanitize_text(unit.direction)
+    view = sanitize_text(unit.view)
+    legal_status = sanitize_text(unit.legal_status)
+    furniture = sanitize_text(unit.furniture)
+
     text = (
-        f"Căn {unit.unit_code}, toà {unit.building}, tầng {unit.floor}, loại {unit.unit_type}.\n"
-        f"Hướng {unit.direction}. {unit.view}.\n"
-        f"Pháp lý: {unit.legal_status}.\n"
-        f"Nội thất: {unit.furniture}."
+        f"# Căn {unit.unit_code} ({unit.building})\n\n"
+        f"## Thông tin cơ bản\n"
+        f"- Toà: {unit.building}\n"
+        f"- Tầng: {unit.floor}\n"
+        f"- Loại căn: {unit.unit_type}\n"
+        f"- Hướng: {direction}\n\n"
+        f"## Tầm nhìn\n{view}\n\n"
+        f"## Pháp lý\n{legal_status}\n\n"
+        f"## Nội thất\n{furniture}"
     )
     return LoadedDocument(
         doc_id=f"inventory:{unit.unit_code}",
@@ -139,14 +163,21 @@ def unit_to_document(unit: InventoryUnit) -> LoadedDocument:
         metadata={
             "visibility": "internal",
             "section": unit.building,
-            "project": unit.building,
+            "project": _PROJECT_NAME,
             "source_site": "noi-bo",
+            # Tin rao — tách khỏi tài liệu chính sách để truy hồi lọc được.
+            "doc_kind": "listing",
             # Ảnh nằm local (data/raw/photos/), chưa có static server public nên
             # để rỗng thay vì bịa URL — không được hiển thị trên widget cho tới
             # khi có hạ tầng phục vụ ảnh (ngoài phạm vi "data" solo).
             "image_urls": [],
             "local_photo_files": unit.photos,
             "version": datetime.now(UTC).date().isoformat(),
+            # Toà lấy thẳng từ CSV (chính xác tuyệt đối, khác building suy
+            # đoán bằng regex ở meeyland/batdongsan). Toàn bộ tồn kho đều là
+            # căn hộ chung cư — sự thật đã biết, không phải suy đoán per-record.
+            "building": unit.building,
+            "property_type": "Chung cư",
         },
     )
 

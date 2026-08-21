@@ -80,13 +80,13 @@ export default function AvatarMenu() {
             </span>
           </div>
 
-          {/* Chỉ Sale mới có lịch sử bán của mình */}
-          {!isAdmin && (
-            <Link to="/my-sales" onClick={close}>
-              <ClockIcon />
-              Lịch sử bán của tôi
-            </Link>
-          )}
+          {/* Một mục cho cả hai vai. Trước đây là ba mục ("Lịch sử bán của
+              tôi", "Lead đặt cọc", "Căn đã bán toàn hệ thống") trỏ tới ba chỗ
+              nói về cùng một phễu bán hàng. */}
+          <Link to="/giao-dich" onClick={close}>
+            <ClockIcon />
+            Giao dịch
+          </Link>
 
           {isAdmin && (
             <>
@@ -94,10 +94,6 @@ export default function AvatarMenu() {
               <Link to="/admin/sales" onClick={close}>
                 <UsersIcon />
                 Quản lý Sale
-              </Link>
-              <Link to="/admin/sales#sold" onClick={close}>
-                <ChartIcon />
-                Căn đã bán toàn hệ thống
               </Link>
               <Link to="/admin/apartments/new" onClick={close}>
                 <HouseIcon />

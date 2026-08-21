@@ -4,14 +4,16 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './context/AuthContext';
 import ApartmentDetail from './pages/ApartmentDetail';
 import Documents from './pages/Documents';
+import Home from './pages/Home';
 import Login from './pages/Login';
-import MySales from './pages/MySales';
 import Profile from './pages/Profile';
 import Search from './pages/Search';
 import Zones from './pages/Zones';
 import AddApartment from './pages/admin/AddApartment';
 import AddDocument from './pages/admin/AddDocument';
 import AdminSales from './pages/admin/AdminSales';
+import GiaoDich from './pages/GiaoDich';
+import { TaiLieuAIChiTiet, TaiLieuAIDanhSach } from './pages/TaiLieuAI';
 
 export default function App() {
   return (
@@ -21,7 +23,8 @@ export default function App() {
 
         <Route element={<Layout />}>
           {/* Công khai — khách vãng lai xem được, backend cũng mở các endpoint này. */}
-          <Route path="/" element={<Search />} />
+          <Route path="/" element={<Home />} />
+          <Route path="/tim-kiem" element={<Search />} />
           <Route path="/zones" element={<Zones />} />
           <Route path="/apartments/:maCan" element={<ApartmentDetail />} />
 
@@ -35,6 +38,24 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          {/* Kho tài liệu trợ lý dùng để trả lời — đích của nút trích nguồn.
+              Phải đăng nhập: nội dung là tài liệu nội bộ của đội bán hàng. */}
+          <Route
+            path="/tai-lieu"
+            element={
+              <ProtectedRoute>
+                <TaiLieuAIDanhSach />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tai-lieu/:docId"
+            element={
+              <ProtectedRoute>
+                <TaiLieuAIChiTiet />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/profile"
             element={
@@ -43,11 +64,14 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          {/* Một màn cho cả hai vai: lead đặt cọc + căn đã bán là hai nửa của
+              cùng một phễu. Admin thấy toàn hệ thống, sale thấy phần của mình —
+              phân quyền thật nằm ở backend, đây chỉ cần đăng nhập. */}
           <Route
-            path="/my-sales"
+            path="/giao-dich"
             element={
-              <ProtectedRoute saleOnly>
-                <MySales />
+              <ProtectedRoute>
+                <GiaoDich />
               </ProtectedRoute>
             }
           />

@@ -13,9 +13,10 @@ import pytest
 from src.agents.contracts import AgentTool, ToolResult
 from src.agents.graph import build_graph, build_nodes, route_after_plan
 from src.agents.nodes.act import ActNode
-from src.agents.nodes.plan import ACT, ANSWER, CLARIFY, PlanNode
+from src.agents.nodes.plan import ACT, ANSWER, CLARIFY, RETRIEVE, PlanNode
 from src.agents.state import Intent, initial_state
 from src.agents.tools.registry import ToolBinding, ToolRegistry
+from src.data.contracts import Chunk
 from src.rag.retriever import EmptyRetriever
 
 
@@ -48,6 +49,11 @@ class _ToolGia(AgentTool):
         if not self._ok:
             return ToolResult.failure("hỏng có chủ đích")
         return ToolResult(ok=True, data=self._data, source="test:db")
+
+
+def _chunk(doc_title: str) -> Chunk:
+    """Chunk tối giản — chỉ `doc_title` có ý nghĩa với test phương án."""
+    return Chunk(id=f"{doc_title}::0", text="…", doc_id=doc_title, doc_title=doc_title)
 
 
 def _registry(tool: AgentTool) -> ToolRegistry:
@@ -224,7 +230,13 @@ async def test_json_boc_trong_markdown_van_doc_duoc():
     raw = '```json\n{"action": "clarify", "reason": "Bạn muốn tìm ở toà nào?"}\n```'
     plan = PlanNode(_KichBanLLM(raw), max_iterations=2, registry=_registry(_ToolGia()))
 
-    ket_qua = await plan(initial_state("tìm căn", "s1"))
+    # Đã truy hồi rồi thì `clarify` mới được đi tiếp — nếu không, chốt "không
+    # bỏ cuộc khi chưa tra cứu" sẽ đổi hướng sang `retrieve` và test này không
+    # còn kiểm được việc đọc JSON nữa.
+    state = initial_state("tìm căn", "s1")
+    state["da_truy_hoi"] = True
+
+    ket_qua = await plan(state)
 
     assert ket_qua["plan_action"] == CLARIFY
     assert "toà nào" in ket_qua["plan_reason"]
@@ -362,3 +374,145 @@ async def test_clarify_tra_ve_cau_hoi_nguoc_khong_bi_guardrail_chan(settings):
     result = await build_graph(nodes).ainvoke(state)
 
     assert result["answer"] == cau_hoi
+
+
+# ---------- Chốt: không bỏ cuộc khi chưa tra cứu ----------
+
+
+@pytest.mark.asyncio
+async def test_doi_hoi_nguoc_khi_chua_tra_cuu_thi_bi_ep_di_truy_hoi():
+    """Ca thật: "Ocean park có ưu đãi gì" bị router xếp `general`.
+
+    Node retrieve không chạy, plan nhìn state rỗng nên chọn `clarify` — rồi bịa
+    trục mơ hồ, hỏi "loại ưu đãi nào?" trong khi trục thật là Ocean Park 2 hay
+    3. Truy hồi cho độ phủ 0.919 với đúng hai tài liệu đó.
+    """
+    raw = '{"action": "clarify", "reason": "Bạn quan tâm loại ưu đãi nào?"}'
+    plan = PlanNode(_KichBanLLM(raw), max_iterations=3, registry=_registry(_ToolGia()))
+
+    ket_qua = await plan(initial_state("Ocean park có ưu đãi gì", "s1"))
+
+    assert ket_qua["plan_action"] == RETRIEVE
+    # Phải tự bật cờ, nếu không RetrieveNode thoát ngay và vòng lặp quay lại y cũ.
+    assert ket_qua["needs_retrieval"] is True
+
+
+@pytest.mark.asyncio
+async def test_tra_cuu_xong_van_khong_ra_gi_thi_duoc_hoi_nguoc():
+    """Chốt chỉ ép ĐÚNG MỘT LẦN — tra rồi mà rỗng thì hỏi lại là hợp lý.
+
+    Nếu điều kiện chỉ nhìn `chunks` rỗng thì plan sẽ đòi truy hồi mãi.
+    """
+    raw = '{"action": "clarify", "reason": "Bạn muốn xem dự án nào?"}'
+    plan = PlanNode(_KichBanLLM(raw), max_iterations=3, registry=_registry(_ToolGia()))
+
+    state = initial_state("có ưu đãi gì", "s1")
+    state["da_truy_hoi"] = True  # đã tìm, không thấy gì
+
+    ket_qua = await plan(state)
+
+    assert ket_qua["plan_action"] == CLARIFY
+
+
+@pytest.mark.asyncio
+async def test_co_ket_qua_tool_thi_khong_bi_ep_truy_hoi():
+    """Đã có bằng chứng từ tool thì hỏi ngược là quyết định có cơ sở."""
+    raw = '{"action": "clarify", "reason": "Bạn hỏi căn nào trong hai căn này?"}'
+    plan = PlanNode(_KichBanLLM(raw), max_iterations=3, registry=_registry(_ToolGia()))
+
+    state = initial_state("căn nào rẻ hơn", "s1")
+    state["tool_context"] = "VOP345: 3.2 tỷ"
+
+    ket_qua = await plan(state)
+
+    assert ket_qua["plan_action"] == CLARIFY
+
+
+# ---------- Phương án chọn sẵn kèm câu hỏi ngược ----------
+
+
+@pytest.mark.asyncio
+async def test_phuong_an_duoc_giu_lai_va_lam_sach():
+    """Model trả lẫn rác thì lọc, không để một phần tử hỏng cả dãy nút."""
+    raw = (
+        '{"action": "clarify", "reason": "Bạn hỏi dự án nào?",'
+        ' "options": ["Ưu đãi Ocean Park 2", null, "  ", "Ưu đãi Ocean Park 3",'
+        ' "Ưu đãi Ocean Park 2", 5]}'
+    )
+    plan = PlanNode(_KichBanLLM(raw), max_iterations=3, registry=_registry(_ToolGia()))
+
+    state = initial_state("Ocean park có ưu đãi gì", "s1")
+    state["da_truy_hoi"] = True
+
+    ket_qua = await plan(state)
+
+    assert ket_qua["plan_action"] == CLARIFY
+    assert ket_qua["plan_options"] == ["Ưu đãi Ocean Park 2", "Ưu đãi Ocean Park 3"]
+
+
+@pytest.mark.asyncio
+async def test_khong_co_phuong_an_thi_tra_mang_rong():
+    """Thiếu "options" không được làm hỏng quyết định clarify."""
+    plan = PlanNode(
+        _KichBanLLM('{"action": "clarify", "reason": "Bạn hỏi dự án nào?"}'),
+        max_iterations=3,
+        registry=_registry(_ToolGia()),
+    )
+
+    state = initial_state("có ưu đãi gì", "s1")
+    state["da_truy_hoi"] = True
+
+    ket_qua = await plan(state)
+
+    assert ket_qua["plan_options"] == []
+
+
+def test_route_after_plan_dua_retrieve_ve_dung_node():
+    """Graph phải biết đường đi mới, nếu không quyết định `retrieve` rơi vào generate."""
+    assert route_after_plan({"plan_action": RETRIEVE}) == "retrieve"
+    assert route_after_plan({"plan_action": RETRIEVE, "error": "hỏng"}) == "generate"
+
+
+@pytest.mark.asyncio
+async def test_phuong_an_lay_tu_ten_tai_lieu_khong_de_model_bia():
+    """Ca thật: kho chỉ có ưu đãi OP2 và OP3, model vẫn chào "ưu đãi OP1".
+
+    Người dùng bấm vào, agent tra không ra, lại hỏi ngược tiếp — hai lượt trôi
+    đi mà không tiến thêm bước nào.
+    """
+    raw = (
+        '{"action": "clarify", "reason": "Bạn muốn xem dự án nào?",'
+        ' "options": ["Ưu đãi Ocean Park 1", "Ưu đãi Ocean Park 5"]}'
+    )
+    plan = PlanNode(_KichBanLLM(raw), max_iterations=3, registry=_registry(_ToolGia()))
+
+    state = initial_state("Ocean park có ưu đãi gì", "s1")
+    state["da_truy_hoi"] = True
+    state["chunks"] = [
+        _chunk("Ưu đãi của Vinhomes OceanPark 2"),
+        _chunk("Ưu đãi Vinhomes OceanPark 3"),
+        _chunk("Ưu đãi của Vinhomes OceanPark 2"),  # trùng, phải gộp
+    ]
+
+    ket_qua = await plan(state)
+
+    assert ket_qua["plan_action"] == CLARIFY
+    # Tên tài liệu thắng, đề xuất bịa của model bị bỏ hoàn toàn.
+    assert ket_qua["plan_options"] == [
+        "Ưu đãi của Vinhomes OceanPark 2",
+        "Ưu đãi Vinhomes OceanPark 3",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_khong_co_tai_lieu_thi_van_dung_de_xuat_cua_model():
+    """Clarify sau khi chạy tool: không có tên tài liệu nào để bám."""
+    raw = '{"action": "clarify", "reason": "Căn nào?", "options": ["Căn VOP345", "Căn VOP397"]}'
+    plan = PlanNode(_KichBanLLM(raw), max_iterations=3, registry=_registry(_ToolGia()))
+
+    state = initial_state("căn nào rẻ hơn", "s1")
+    state["tool_context"] = "VOP345 ... VOP397 ..."
+
+    ket_qua = await plan(state)
+
+    assert ket_qua["plan_options"] == ["Căn VOP345", "Căn VOP397"]

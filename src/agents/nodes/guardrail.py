@@ -11,13 +11,19 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from src.agents.nguon import loc_nguon_da_dung
 from src.agents.nodes.base import BaseNode
 from src.agents.state import AgentState, Intent
 from src.models.chat import Citation
 
+# Lời mời nêu thêm thông tin, KHÔNG phải lời từ chối cụt. Bản cũ ("Mình chưa có
+# đủ dữ liệu để trả lời chính xác câu này") đóng luôn cuộc trò chuyện: khách phải
+# tự đoán xem thiếu gì. Ca thật: hỏi "có bao nhiêu căn dưới 4 tỷ ở OP1" thì chạy,
+# hỏi tiếp "liệt kê 20 căn đó" thì câu không còn tiêu chí nào nên không tool nào
+# nhận — và khách nhận đúng câu từ chối đó. Nói rõ mình tra được theo trục nào
+# thì khách biết đường hỏi lại; dãy nút gợi ý đi kèm lo nốt phần còn lại.
 INSUFFICIENT_MESSAGE = (
-    "Mình chưa có đủ dữ liệu để trả lời chính xác câu này. "
-    "Bạn cho mình biết thêm khu vực, dự án hoặc mức ngân sách để tra cứu sát hơn nhé."
+    "Bạn cho mình thêm thông tin chi tiết nhé — mình tra được theo phân khu, khoảng giá hoặc mã căn cụ thể."
 )
 
 # Con số kèm đơn vị tiền/diện tích — dấu hiệu của thông tin có hệ quả.
@@ -72,13 +78,19 @@ class GuardrailNode(BaseNode):
         return bool(state.get("chunks")) and state.get("coverage", 0.0) >= self._threshold
 
     def _all_citations(self, state: AgentState) -> list[Citation]:
-        """Gộp nguồn tài liệu với nguồn tool.
+        """Gộp nguồn tài liệu với nguồn tool, rồi bỏ thứ câu trả lời không dùng.
 
         Gộp ở đây vì guardrail là node cuối: node retrieve chạy sau tools và
         ghi đè `citations`, nên tool phải giữ nguồn của mình ở khoá riêng cho
-        tới bước này.
+        tới bước này. Cũng vì là node cuối nên đây là chỗ đầu tiên có cả nguồn
+        lẫn `answer` để đối chiếu — xem `src/agents/nguon.py`.
         """
-        return [*state.get("citations", []), *state.get("tool_citations", [])]
+        gop = [*state.get("citations", []), *state.get("tool_citations", [])]
+        return loc_nguon_da_dung(
+            gop,
+            state.get("answer", ""),
+            co_du_lieu_tool=bool(state.get("tool_context")),
+        )
 
     def _is_sensitive(self, state: AgentState) -> bool:
         answer = state.get("answer", "")
@@ -87,3 +99,10 @@ class GuardrailNode(BaseNode):
         has_price = bool(_PRICE_PATTERN.search(answer))
         has_commitment = any(word in answer.lower() for word in _COMMITMENT_WORDS)
         return (has_price and has_commitment) or state.get("intent") == Intent.DRAFT
+
+    def tom_tat(self, result: dict[str, Any]) -> str:
+        """Quyết định cuối: giữ câu trả lời hay thay bằng lời mời nêu thêm."""
+        if result.get("answer") == INSUFFICIENT_MESSAGE:
+            return f"TỪ CHỐI — chưa đủ dữ liệu (ngưỡng độ phủ {self._threshold})"
+        co_co = " · CÓ CỜ NHẠY CẢM" if result.get("is_sensitive") else ""
+        return f"giữ câu trả lời · {len(result.get('citations') or [])} nguồn sau khi lọc{co_co}"

@@ -94,3 +94,91 @@ class AgentService(Protocol):
     async def answer(self, request: ChatRequest) -> ChatResponse: ...
 
     def stream(self, request: ChatRequest) -> AsyncIterator[ChatEvent]: ...
+
+
+# ---------------------------------------------------------------------------
+# Tool calling — cổng ra LLM cho orchestrator
+#
+# Vì sao THÊM chứ không sửa `LLMProvider`: hợp đồng đó đang có 4 chỗ gọi và
+# `complete()` trả về `str` trần, không chở nổi tool call lẫn số token. Nhét
+# thêm vào là sửa chữ ký của thứ đang chạy thật. Thêm một Protocol thứ hai thì
+# code cũ không phải đổi một ký tự, và provider nào chỉ biết sinh chữ vẫn hợp lệ.
+#
+# Transcript của orchestrator KHÔNG dùng `models/chat.py`: đó là hợp đồng với
+# frontend, còn mấy lượt gọi tool này là chuyện nội bộ tầng agent, không bao giờ
+# ra tới widget. Trộn hai thứ là buộc FE phải biết về tool call.
+# ---------------------------------------------------------------------------
+
+
+class ToolCall(BaseModel):
+    """Một lần model xin gọi tool."""
+
+    id: str
+    name: str
+    arguments: dict[str, Any] = Field(default_factory=dict)
+
+
+class ToolCallOutput(BaseModel):
+    """Kết quả trả ngược lại cho model sau khi đã chạy tool.
+
+    Khác `ToolResult` ở trên: `ToolResult` là thứ tool trả cho hệ thống (có
+    `data` kiểu tự do, có `source` để trích dẫn), còn cái này là thứ đã ghép
+    thành chữ để nhét lại vào hội thoại. Một cái hướng vào trong, một cái
+    hướng ra ngoài model.
+    """
+
+    call_id: str
+    content: str
+    is_error: bool = False
+
+
+class OrchestratorMessage(BaseModel):
+    """Một lượt trong hội thoại nội bộ giữa orchestrator và model."""
+
+    role: str  # "user" | "assistant" | "tool"
+    content: str = ""
+    tool_calls: list[ToolCall] = Field(default_factory=list)
+    tool_outputs: list[ToolCallOutput] = Field(default_factory=list)
+
+
+class LLMTurn(BaseModel):
+    """Kết quả một lượt gọi model có tool.
+
+    Chở luôn số token: bộ đếm ngân sách cần nó, và đây là hợp đồng viết mới nên
+    không phải chịu cái thiếu của `LLMProvider.complete()` — chỗ đó trả `str`
+    trần nên chi phí phải dò bằng `getattr` vào chi tiết cài đặt.
+    """
+
+    text: str = ""
+    tool_calls: list[ToolCall] = Field(default_factory=list)
+    stop_reason: str = ""
+    token_vao: int = 0
+    token_ra: int = 0
+    token_doc_cache: int = 0
+    # Ghi cache tính 1,25× giá vào. Không đếm là bộ phanh ngân sách báo
+    # THIẾU, và nó nhả phanh muộn hơn mức đã cấu hình.
+    token_ghi_cache: int = 0
+
+    @property
+    def con_goi_tool(self) -> bool:
+        return bool(self.tool_calls)
+
+
+@runtime_checkable
+class ToolCallingProvider(Protocol):
+    """Cổng ra LLM có tool calling gốc. OpenAI và Anthropic cùng cài.
+
+    `system` tách khỏi `history` vì hai lẽ: Anthropic nhận system như tham số
+    riêng chứ không phải một message, và đó là phần đầu ỔN ĐỊNH của prompt —
+    tách ra mới đặt được mốc cache lên đúng chỗ.
+    """
+
+    async def run_turn(
+        self,
+        system: str,
+        history: list[OrchestratorMessage],
+        *,
+        tools: list[dict[str, Any]],
+        model: str | None = None,
+        max_tokens: int | None = None,
+    ) -> LLMTurn: ...

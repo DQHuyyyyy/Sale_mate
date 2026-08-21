@@ -115,7 +115,7 @@ async def test_tim_2pn_view_bien_khop_ca_hai_kieu_ghi():
     result = await InventorySearchTool().run(unit_type="2PN", view_keyword="biển")
 
     assert result.ok
-    codes = [r["unit_code"] for r in result.data["danh_sach"]]
+    codes = [r["unit_code"] for r in result.data["can_hien_thi"]]
     assert codes == ["VOP001", "VOP002"]  # '2 PN, 1WC' lan '2PN, 2WC'
     assert result.source == "inventory:postgres"
 
@@ -125,14 +125,14 @@ async def test_khong_bao_gio_chao_can_da_ban():
     """VOP005 khớp mọi tiêu chí nhưng status='sold' ⇒ phải bị loại."""
     result = await InventorySearchTool().run(unit_type="2PN")
 
-    assert "VOP005" not in [r["unit_code"] for r in result.data["danh_sach"]]
+    assert "VOP005" not in [r["unit_code"] for r in result.data["can_hien_thi"]]
 
 
 @pytest.mark.asyncio
 async def test_loc_theo_huong():
     result = await InventorySearchTool().run(direction="Tây Bắc")
 
-    assert [r["unit_code"] for r in result.data["danh_sach"]] == ["VOP004"]
+    assert [r["unit_code"] for r in result.data["can_hien_thi"]] == ["VOP004"]
 
 
 @pytest.mark.asyncio
@@ -158,7 +158,7 @@ async def test_gioi_han_so_can_dua_vao_prompt(monkeypatch):
     result = await InventorySearchTool().run(unit_type="2PN")
 
     assert result.data["tong_so_khop"] == 2
-    assert len(result.data["danh_sach"]) == 1
+    assert len(result.data["can_hien_thi"]) == 1
 
 
 @pytest.mark.asyncio

@@ -14,7 +14,17 @@ Cấu trúc:
 Tầng API chỉ import src.agents.contracts.AgentService.
 """
 
-from src.agents.contracts import AgentService, AgentTool, LLMProvider, ToolResult
+from src.agents.contracts import (
+    AgentService,
+    AgentTool,
+    LLMProvider,
+    LLMTurn,
+    OrchestratorMessage,
+    ToolCall,
+    ToolCallingProvider,
+    ToolCallOutput,
+    ToolResult,
+)
 from src.agents.state import AgentState, Intent, initial_state
 
 __all__ = [
@@ -23,6 +33,11 @@ __all__ = [
     "AgentTool",
     "Intent",
     "LLMProvider",
+    "LLMTurn",
+    "OrchestratorMessage",
+    "ToolCall",
+    "ToolCallOutput",
+    "ToolCallingProvider",
     "ToolResult",
     "initial_state",
 ]

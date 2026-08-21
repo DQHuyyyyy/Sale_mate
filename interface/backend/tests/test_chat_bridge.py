@@ -9,11 +9,12 @@ import os
 
 import httpx
 import pytest
+from pydantic import ValidationError
 
 os.environ.setdefault("JWT_SECRET", "test-secret-chi-dung-trong-test-0123456789abcdef")
 os.environ.setdefault("DATABASE_URL", "postgresql://user:pass@localhost:5432/test")
 
-from app.schemas.chat import ChatMessage  # noqa: E402
+from app.schemas.chat import ChatMessage, ChatRequest  # noqa: E402
 from app.services import chat as chat_service  # noqa: E402
 
 
@@ -117,3 +118,37 @@ class TestGenerateReply:
             await chat_service.generate_reply("Hỏi gì đó", [])
 
         assert "AI_CORE_URL" in str(loi.value)
+
+
+class TestRangBuocDoDai:
+    """Trần 2000 ký tự áp cho câu người dùng gõ, KHÔNG áp cho lịch sử.
+
+    Lỗi đã xảy ra thật: trợ lý liệt kê 23 căn còn bán, câu trả lời đó dài hơn
+    2000 ký tự. Nó nằm lại trong lịch sử, nên MỌI lượt hỏi sau đều bị chặn ở
+    422 "String should have at most 2000 characters" — người dùng không gõ gì
+    quá dài mà cuộc hội thoại vẫn hỏng vĩnh viễn, không cách nào tự thoát.
+    """
+
+    def test_cau_tra_loi_dai_trong_lich_su_van_gui_duoc(self) -> None:
+        tra_loi_dai = "Căn VOP758: 1PN, 54,5m2, 3,55 tỷ. " * 200
+        assert len(tra_loi_dai) > 2000
+
+        yeu_cau = ChatRequest(
+            message="Phân tích chi tiết căn VOP619",
+            history=[
+                {"role": "user", "content": "Còn căn nào ở Ocean Park 1?"},
+                {"role": "assistant", "content": tra_loi_dai},
+            ],
+        )
+
+        assert yeu_cau.history[1].content == tra_loi_dai
+
+    def test_cau_nguoi_dung_go_van_bi_chan_o_2000(self) -> None:
+        """Trần cho `message` phải còn — nó khớp bộ đếm x/2000 ở widget."""
+        with pytest.raises(ValidationError):
+            ChatRequest(message="a" * 2001, history=[])
+
+    def test_lich_su_rong_van_bi_chan(self) -> None:
+        """Bỏ max_length không được kéo theo bỏ min_length."""
+        with pytest.raises(ValidationError):
+            ChatRequest(message="chào", history=[{"role": "user", "content": ""}])
