@@ -477,9 +477,11 @@ section {
   color: var(--faint);
   display: -webkit-box;
   -webkit-line-clamp: 1;
+  line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
 .ltags {
   display: flex;
   gap: 6px;
@@ -848,6 +850,272 @@ table.data tbody tr:hover {
   height: 100%;
   object-fit: cover;
 }
+/* ---------- Menu thả xuống ba dự án ---------- */
+.menu-so-do {
+  position: relative;
+  display: inline-flex;
+}
+/* Nút trong thanh điều hướng phải trông y hệt các link anh em của nó — nav.main
+   chỉ tạo kiểu cho thẻ `a`, mà đây là `button`. */
+.hd-so-do {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  opacity: 0.95;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--rb);
+  background: transparent;
+  cursor: pointer;
+}
+.hd-so-do:hover,
+.menu-so-do:hover .hd-so-do {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.14);
+}
+.hd-so-do svg {
+  width: 17px;
+  height: 17px;
+}
+.msd-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 45;
+  min-width: 232px;
+  padding: 6px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--rc);
+  box-shadow: var(--shadow);
+}
+/* Phải đủ nặng để thắng `nav.main a` (color: #fff) khi menu nằm trong thanh điều
+   hướng: một selector nhẹ hơn thì chữ trắng trên thẻ trắng, menu nhìn như hộp rỗng.
+   `.menu-so-do .msd-menu a` có hai class nên hơn `nav.main a` chỉ có một. */
+.menu-so-do .msd-menu a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  border-radius: var(--rb);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 1;
+}
+.menu-so-do .msd-menu a:hover {
+  background: var(--page);
+  color: var(--brand);
+}
+.msd-sap {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--faint);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.hm-menu-so-do .msd-menu {
+  left: auto;
+  right: 0;
+}
+
+/* ---------- Trang sơ đồ phân khu ---------- */
+.sdo-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.sdo-tab {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 14px;
+}
+.sdo-tab:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.sdo-tab.on {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+/* Khung xem giữ đúng tỉ lệ ảnh gốc (4096x2501) nên phần phóng to không bao giờ
+   lệch khỏi ranh giới vẽ trên SVG. `overflow: hidden` là thứ biến nó thành ống
+   nhòm — ảnh phóng to tràn ra ngoài bị cắt, không đẩy trang rộng ra. */
+.sdo-khung {
+  position: relative;
+  overflow: hidden;
+  /* Hai biến do trang truyền xuống theo dự án đang xem. Trần 80vh để bản đồ dọc
+     (Ocean Park 3) không cao quá một màn hình — bề ngang co lại theo đúng tỉ lệ
+     thay vì bóp méo ảnh, vì bóp méo thì vùng bấm cũng méo theo. */
+  aspect-ratio: var(--ti-le);
+  width: min(100%, calc(80vh * var(--ti-le-so)));
+  margin-inline: auto;
+  background: var(--page);
+  border: 1px solid var(--line);
+  border-radius: var(--rc);
+  cursor: zoom-out;
+}
+.sdo-canvas {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+  transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: transform;
+}
+.sdo-canvas img,
+.sdo-lop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.sdo-canvas img {
+  /* `fill` chứ không `cover`: khung xem đã giữ đúng tỉ lệ 4096/2501, và ảnh nền
+     phải giãn cùng một luật với lớp SVG phủ lên nó. Một bên cắt, một bên co là
+     hai bên lệch nhau. */
+  object-fit: fill;
+  user-select: none;
+}
+.sdo-vung {
+  fill: transparent;
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 1.5;
+  /* Nét viền tính theo pixel màn hình, không theo hệ toạ độ SVG: thiếu dòng này
+     thì phóng 5 lần là viền dày 5 lần, nuốt mất chính khu nó đang khoanh. */
+  vector-effect: non-scaling-stroke;
+  cursor: zoom-in;
+  transition: fill 0.22s ease, stroke 0.22s ease, stroke-width 0.22s ease;
+}
+.sdo-vung:hover {
+  fill: rgba(21, 112, 239, 0.32);
+  stroke: #fff;
+}
+.sdo-vung.on {
+  fill: rgba(21, 112, 239, 0.18);
+  stroke: #fff;
+  stroke-width: 2;
+  cursor: zoom-out;
+}
+/* Nhãn tên khu. Hai mức: rê chuột là xem trước (nhỏ, trầm), bấm chọn là chốt
+   (to, màu thương hiệu) — nhìn một cái biết ngay mình đang xem hay đã chọn. */
+.sdo-nhan {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: calc(100% - 32px);
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  /* Nền mờ + làm nhoè phía sau: bản đồ bên dưới chỗ đậm chỗ nhạt, chữ trắng đặt
+     thẳng lên đó có chỗ đọc được có chỗ không. */
+  background: rgba(16, 24, 40, 0.72);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  animation: sdo-nhan-hien 0.34s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+.sdo-nhan.on {
+  padding: 11px 20px;
+  font-size: 19px;
+  font-weight: 600;
+  background: rgba(11, 79, 192, 0.92);
+  border-color: rgba(255, 255, 255, 0.24);
+  box-shadow: 0 12px 30px -12px rgba(16, 24, 40, 0.85);
+}
+.sdo-cham {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+}
+.sdo-nhan.on .sdo-cham {
+  width: 9px;
+  height: 9px;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.22);
+}
+@keyframes sdo-nhan-hien {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.sdo-thu-nho {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  animation: sdo-nhan-hien 0.3s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+/* Người tắt hiệu ứng chuyển động trong hệ điều hành thường tắt vì chóng mặt
+   thật, không phải vì sở thích. Bản đồ trượt và phóng là đúng loại gây ra nó. */
+@media (prefers-reduced-motion: reduce) {
+  .sdo-nhan,
+  .sdo-thu-nho {
+    animation-duration: 0.01ms;
+  }
+  .sdo-canvas {
+    transition: none;
+  }
+}
+.sdo-ds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 14px 0 26px;
+}
+.sdo-ds .btn-nho.on {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
+}
+
+/* Bảng quản lý ảnh — chỉ admin thấy, nằm ngay dưới gallery */
+.quan-ly-anh {
+  margin-top: 12px;
+}
+.qla-hang {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.quan-ly-anh label.btn-nho {
+  display: inline-flex;
+  align-items: center;
+}
+.quan-ly-anh .hint {
+  margin-top: 8px;
+}
+.quan-ly-anh .alert {
+  margin-top: 10px;
+}
+
 .spec-list {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1556,6 +1824,19 @@ table.data tbody tr:hover {
   .app.nav-open nav.main {
     transform: none;
   }
+  .menu-so-do {
+    display: block;
+    width: 100%;
+  }
+  .hd-so-do {
+    width: 100%;
+  }
+  /* Trong ngăn kéo hẹp thì menu trải thẳng xuống dưới nút, không nổi lên trên. */
+  .msd-menu {
+    position: static;
+    min-width: 0;
+    margin: 4px 0 2px;
+  }
   .burger {
     display: block;
   }
@@ -2042,3 +2323,370 @@ table.data tbody tr:hover {
 .tl-ds li {
   margin-bottom: 5px;
 }
+
+/* ---------- Tin tức thị trường bất động sản ---------- */
+.news-page {
+  padding-top: 32px;
+  padding-bottom: 60px;
+}
+
+.news-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+
+.news-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.news-eyebrow svg,
+.news-eyebrow-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.news-page-header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 8px;
+  line-height: 1.25;
+}
+
+.news-page-desc {
+  font-size: 15px;
+  color: var(--muted);
+  max-width: 680px;
+  margin: 0;
+  line-height: 1.55;
+}
+
+.news-btn-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  font-size: 13.5px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.news-btn-refresh svg {
+  width: 16px;
+  height: 16px;
+}
+
+.news-btn-refresh.is-spinning svg {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Bộ lọc nguồn tin */
+.news-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.news-filter-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--faint);
+}
+
+.news-filter-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.news-chip {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.news-chip:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.news-chip.active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(27, 89, 248, 0.25);
+}
+
+/* Lưới tin tức */
+.news-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 22px;
+}
+
+@media (min-width: 1024px) {
+  .news-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Thẻ tin tức */
+.news-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--rc);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.news-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow);
+  border-color: #cbd5e1;
+}
+
+.news-card-media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: #f1f5f9;
+  overflow: hidden;
+  display: block;
+}
+
+.news-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.35s ease;
+}
+
+.news-card:hover .news-card-media img {
+  transform: scale(1.04);
+}
+
+.news-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(15, 23, 42, 0.85);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  backdrop-filter: blur(4px);
+  z-index: 2;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.news-badge-vne {
+  background: rgba(156, 16, 26, 0.9);
+}
+
+.news-badge-cafef {
+  background: rgba(15, 76, 129, 0.9);
+}
+
+.news-badge-dantri {
+  background: rgba(0, 114, 80, 0.9);
+}
+
+.news-badge-vnn {
+  background: rgba(0, 85, 170, 0.9);
+}
+
+.news-badge-vtc {
+  background: rgba(194, 65, 12, 0.9);
+}
+
+.news-badge-tuoitre {
+  background: rgba(185, 28, 28, 0.9);
+}
+
+.news-card-body {
+  padding: 16px 18px 18px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.news-card-date {
+  font-size: 12px;
+  color: var(--faint);
+  margin-bottom: 8px;
+}
+
+.news-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.4;
+  margin: 0 0 10px;
+}
+
+.news-card-title a {
+  color: var(--text);
+  text-decoration: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  transition: color 0.15s ease;
+}
+
+.news-card-title a:hover {
+  color: var(--brand);
+}
+
+.news-card-summary {
+  font-size: 13.5px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0 0 16px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  flex: 1;
+}
+
+.news-card-footer {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.news-card-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand);
+  text-decoration: none;
+  transition: gap 0.2s ease;
+}
+
+.news-card-link:hover {
+  text-decoration: underline;
+  gap: 8px;
+}
+
+.news-link-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* Skeleton & trạng thái rỗng */
+.news-grid-skeleton {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 22px;
+}
+
+@media (min-width: 1024px) {
+  .news-grid-skeleton {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.news-skeleton-card {
+  height: 320px;
+  border-radius: var(--rc);
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.news-error,
+.news-empty {
+  text-align: center;
+  padding: 48px 20px;
+  background: var(--page);
+  border-radius: var(--rc);
+  color: var(--muted);
+  font-size: 14.5px;
+}
+
+.news-error p,
+.news-empty p {
+  margin-bottom: 14px;
+}
+
+/* Khối Tin tức trên Trang chủ */
+.hm-news-section {
+  margin-top: 56px;
+  padding-top: 36px;
+  border-top: 1px solid var(--line);
+}
+
+.hm-news-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.hm-news-header h2 {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 4px 0 0;
+}
+
+@media (min-width: 1024px) {
+  .hm-news-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+

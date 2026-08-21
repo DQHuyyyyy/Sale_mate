@@ -203,3 +203,24 @@ export const WandIcon = (props) => (
     <path d="M14.5 12.5 4 23" />
   </svg>
 );
+
+export const NewspaperIcon = (props) => (
+  <svg viewBox="0 0 24 24" {...stroke} strokeWidth="1.7" {...props}>
+    <path d="M4 22h16a2 2 0 002-2V4a2 2 0 00-2-2H8a2 2 0 00-2 2v16a2 2 0 01-2 2zm0 0a2 2 0 01-2-2v-9c0-1.1.9-2 2-2h2" />
+    <path d="M18 14h-8M15 18h-5M10 6h8v4h-8z" />
+  </svg>
+);
+
+export const ExternalLinkIcon = (props) => (
+  <svg viewBox="0 0 24 24" {...stroke} strokeWidth="2" {...props}>
+    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
+  </svg>
+);
+
+export const RefreshIcon = (props) => (
+  <svg viewBox="0 0 24 24" {...stroke} strokeWidth="2" {...props}>
+    <path d="M23 4v6h-6M1 20v-6h6" />
+    <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+  </svg>
+);
+

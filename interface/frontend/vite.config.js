@@ -8,9 +8,10 @@ export default defineConfig({
     // Gọi /api/... trong lúc dev là đi thẳng sang backend, khỏi lo CORS.
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
       },
     },
+
   },
 });

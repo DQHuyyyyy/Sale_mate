@@ -54,6 +54,25 @@ export function uploadApartmentImages(maCan, files) {
   });
 }
 
+/**
+ * Đặt một ảnh làm ảnh đại diện (admin).
+ *
+ * Ảnh đại diện là dòng có `sort_order` nhỏ nhất — chính thứ mà thẻ ở trang tìm
+ * kiếm và ảnh đầu trong gallery cùng đọc, nên đổi một lần là cả hai đổi theo.
+ */
+export function datAnhDaiDien(maCan, imageId) {
+  return request(`/api/apartments/${encodeURIComponent(maCan)}/images/${imageId}/dai-dien`, {
+    method: 'PATCH',
+  });
+}
+
+/** Xoá một ảnh khỏi căn (admin). Trả về căn đã cập nhật. */
+export function xoaAnhCanHo(maCan, imageId) {
+  return request(`/api/apartments/${encodeURIComponent(maCan)}/images/${imageId}`, {
+    method: 'DELETE',
+  });
+}
+
 // ---- Phân khu ----
 export function getZones() {
   return request('/api/zones');
@@ -203,3 +222,15 @@ export function getTaiLieuAI() {
 export function getTaiLieuAIChiTiet(docId) {
   return request(`/api/tai-lieu/${encodeURIComponent(docId)}`);
 }
+
+// ---- Tin tức bất động sản ----
+/** Lấy tin tức bất động sản mới nhất từ RSS các trang báo. Không cần đăng nhập. */
+export function getNews({ limit = 10, refresh = false } = {}) {
+  return request('/api/news', {
+    params: {
+      limit,
+      refresh: refresh ? true : undefined,
+    },
+  });
+}
+

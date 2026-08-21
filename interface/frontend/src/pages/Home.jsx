@@ -1,6 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MapIcon, SearchIcon } from '../components/Icons';
+import { MapIcon, NewspaperIcon, SearchIcon } from '../components/Icons';
+import MenuSoDo from '../components/MenuSoDo';
+import NewsCard from '../components/NewsCard';
+import { getNews } from '../api';
 
 /**
  * Trang chủ — giới thiệu đại đô thị Ocean City và ba dự án thành phần.
@@ -10,6 +13,7 @@ import { MapIcon, SearchIcon } from '../components/Icons';
  * Không tự chế thêm số: khách đọc trang này rồi hỏi trợ lý phải nghe một
  * con số duy nhất, không phải hai.
  */
+
 
 const TONG_QUAN = [
   { so: '1.200 ha', nhan: 'Quy mô Ocean City' },
@@ -181,6 +185,16 @@ function KhoiDuAn({ duAn, dao }) {
 }
 
 export default function Home() {
+  const [topNews, setTopNews] = useState([]);
+  const [loadingNews, setLoadingNews] = useState(true);
+
+  useEffect(() => {
+    getNews({ limit: 4 })
+      .then((res) => setTopNews(res.items || []))
+      .catch((err) => console.error('Lỗi tải tin trang chủ:', err))
+      .finally(() => setLoadingNews(false));
+  }, []);
+
   return (
     <>
       {/* Ảnh key visual đã có sẵn chữ trong thiết kế — không phủ thêm tiêu đề
@@ -222,10 +236,12 @@ export default function Home() {
               <SearchIcon />
               Tìm căn hộ đang mở bán
             </Link>
-            <Link className="btn btn-ghost" to="/zones">
+            {/* Cùng một menu với thanh điều hướng — người dùng gặp ba dự án
+                ở cả hai chỗ, không phải hai cách chọn khác nhau cho cùng việc. */}
+            <MenuSoDo lopBoc="hm-menu-so-do" lopNut="btn btn-ghost">
               <MapIcon />
               Xem sơ đồ phân khu
-            </Link>
+            </MenuSoDo>
           </div>
         </section>
 
@@ -234,7 +250,37 @@ export default function Home() {
         {DU_AN.map((duAn, chiSo) => (
           <KhoiDuAn key={duAn.ma} duAn={duAn} dao={chiSo % 2 === 1} />
         ))}
+
+        {/* Khối tin tức bất động sản mới nhất trên trang chủ */}
+        <section className="hm-news-section">
+          <div className="hm-news-header">
+            <div>
+              <span className="hm-eyebrow">
+                <NewspaperIcon /> Thị trường bất động sản
+              </span>
+              <h2>Tin tức thị trường mới nhất</h2>
+            </div>
+            <Link to="/tin-tuc" className="btn btn-ghost">
+              Xem tất cả tin tức →
+            </Link>
+          </div>
+
+          {loadingNews ? (
+            <div className="news-grid-skeleton">
+              {[1, 2, 3, 4].map((n) => (
+                <div key={n} className="news-skeleton-card" />
+              ))}
+            </div>
+          ) : topNews.length > 0 ? (
+            <div className="news-grid hm-news-grid">
+              {topNews.map((item) => (
+                <NewsCard key={item.id || item.link} item={item} />
+              ))}
+            </div>
+          ) : null}
+        </section>
       </div>
     </>
   );
 }
+

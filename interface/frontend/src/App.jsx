@@ -6,8 +6,10 @@ import ApartmentDetail from './pages/ApartmentDetail';
 import Documents from './pages/Documents';
 import Home from './pages/Home';
 import Login from './pages/Login';
+import News from './pages/News';
 import Profile from './pages/Profile';
 import Search from './pages/Search';
+import SoDoPhanKhu from './pages/SoDoPhanKhu';
 import Zones from './pages/Zones';
 import AddApartment from './pages/admin/AddApartment';
 import AddDocument from './pages/admin/AddDocument';
@@ -26,7 +28,12 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/tim-kiem" element={<Search />} />
           <Route path="/zones" element={<Zones />} />
+          {/* Sơ đồ tương tác từng dự án. Công khai như trang chủ — đây là
+              thứ khách xem trước khi quyết định hỏi căn nào. */}
+          <Route path="/so-do-phan-khu/:duAn" element={<SoDoPhanKhu />} />
+          <Route path="/tin-tuc" element={<News />} />
           <Route path="/apartments/:maCan" element={<ApartmentDetail />} />
+
 
           {/* Nội bộ — phải đăng nhập. Route admin chặn thêm theo role.
               Đây chỉ là lớp trải nghiệm; backend mới là nơi thực thi. */}

@@ -33,7 +33,7 @@ from app.schemas.apartment import (
     ApartmentListItem,
 )
 from app.schemas.auth import CurrentUser
-from app.services.storage import StorageError, safe_file_name, upload_bytes
+from app.services.storage import StorageError, delete_object, safe_file_name, upload_bytes
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/apartments", tags=["apartments"])
@@ -331,5 +331,110 @@ async def upload_apartment_images(
                 (ma_can, url, storage_path, upload.filename, order),
             )
         order += 1
+
+    return _load_detail(ma_can)
+
+
+def _lay_anh(ma_can: str, image_id: int) -> dict:
+    """Đọc một dòng ảnh, ràng buộc đúng căn.
+
+    Ràng cả `ma_can` chứ không chỉ `id`: thiếu vế đó thì URL
+    /api/apartments/VOP103/images/9999 sửa được ảnh của căn bất kỳ.
+    """
+    row = fetch_one(
+        "SELECT id, storage_path FROM apartment_images WHERE id = %s AND ma_can = %s",
+        (image_id, ma_can),
+    )
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Không tìm thấy ảnh #{image_id} của căn {ma_can}.",
+        )
+    return row
+
+
+def _danh_lai_thu_tu(cur, ma_can: str, anh_bia: int | None = None) -> None:
+    """Đánh lại `sort_order` thành 0,1,2… cho mọi ảnh của một căn.
+
+    `anh_bia` được kéo lên đầu, các ảnh còn lại giữ nguyên thứ tự tương đối.
+
+    Một câu UPDATE duy nhất chứ không "swap hai dòng": ảnh nhập từ Google Drive
+    hầu hết có sort_order = 0 nên không có thứ tự nào để swap — thứ tự thật do
+    `id` quyết định, tức thứ tự file nằm trong folder Drive. Đánh lại toàn bộ
+    làm cột này nói đúng những gì nó hứa ở migration 000: "0 = ảnh đại diện".
+    """
+    cur.execute(
+        """
+        WITH thu_tu AS (
+            SELECT id,
+                   ROW_NUMBER() OVER (
+                       ORDER BY (id = %s) DESC, sort_order NULLS LAST, id
+                   ) - 1 AS moi
+            FROM apartment_images
+            WHERE ma_can = %s
+        )
+        UPDATE apartment_images i
+        SET sort_order = t.moi
+        FROM thu_tu t
+        WHERE i.id = t.id AND i.sort_order IS DISTINCT FROM t.moi
+        """,
+        (anh_bia, ma_can),
+    )
+
+
+@router.patch("/{ma_can}/images/{image_id}/dai-dien", response_model=ApartmentDetail)
+def set_cover_image(
+    ma_can: str,
+    image_id: int,
+    _: CurrentUser = Depends(require_admin),
+) -> ApartmentDetail:
+    """Đặt một ảnh làm ảnh đại diện (admin).
+
+    Ảnh đại diện KHÔNG phải một cột riêng — nó là dòng có `sort_order` nhỏ nhất,
+    đúng thứ mà cả lưới tìm kiếm lẫn trang chi tiết đang đọc. Giữ một nguồn sự
+    thật như vậy thì bìa trên thẻ tìm kiếm và ảnh đầu trong gallery không bao giờ
+    lệch nhau; thêm cột `cover_image_id` là dựng ra nơi thứ hai để lệch.
+    """
+    _lay_anh(ma_can, image_id)
+
+    with get_conn() as conn, conn.cursor() as cur:
+        _danh_lai_thu_tu(cur, ma_can, anh_bia=image_id)
+
+    return _load_detail(ma_can)
+
+
+@router.delete("/{ma_can}/images/{image_id}", response_model=ApartmentDetail)
+def delete_apartment_image(
+    ma_can: str,
+    image_id: int,
+    _: CurrentUser = Depends(require_admin),
+) -> ApartmentDetail:
+    """Xoá một ảnh khỏi căn (admin).
+
+    Xoá dòng DB TRƯỚC, xoá object trên Storage sau và không chặn nếu bước đó
+    hỏng: thứ người dùng muốn là ảnh biến mất khỏi trang, mà trang đọc từ DB.
+    Một file mồ côi trong bucket thì không ai nhìn thấy, còn báo lỗi sau khi
+    dòng đã xoá thì người dùng bấm lại một việc đã xong.
+
+    Căn không còn ảnh nào là trạng thái hợp lệ — frontend hiện khung nhà thay thế.
+    """
+    anh = _lay_anh(ma_can, image_id)
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM apartment_images WHERE id = %s AND ma_can = %s", (image_id, ma_can))
+        # Xoá xong còn lỗ trống ở giữa dãy số. Ordering vẫn đúng, nhưng để cột
+        # này luôn là 0,1,2… thì lần đọc sau không phải đoán.
+        _danh_lai_thu_tu(cur, ma_can)
+
+    if anh.get("storage_path"):
+        try:
+            delete_object(str(anh["storage_path"]))
+        except StorageError:
+            logger.warning(
+                "Đã xoá ảnh #%s của căn %s khỏi DB nhưng còn file %s trong bucket",
+                image_id,
+                ma_can,
+                anh["storage_path"],
+            )
 
     return _load_detail(ma_can)

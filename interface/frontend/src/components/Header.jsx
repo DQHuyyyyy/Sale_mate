@@ -3,7 +3,8 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import AvatarMenu from './AvatarMenu';
 import LoginModal from './LoginModal';
-import { BurgerIcon, FileIcon, HouseIcon, LogoMark, MapIcon, SearchIcon } from './Icons';
+import MenuSoDo from './MenuSoDo';
+import { BurgerIcon, FileIcon, HouseIcon, LogoMark, MapIcon, NewspaperIcon, SearchIcon } from './Icons';
 
 export default function Header() {
   const [navOpen, setNavOpen] = useState(false);
@@ -44,14 +45,23 @@ export default function Header() {
               <SearchIcon />
               Tìm kiếm căn hộ
             </NavLink>
+            {/* Mục này KHÔNG còn là một link đơn: Ocean City có ba dự án
+                thành phần, mỗi cái một sơ đồ riêng. Menu thả xuống nói ra điều
+                đó ngay ở thanh điều hướng, thay vì bắt vào một trang trung gian
+                rồi chọn tiếp. */}
+            <MenuSoDo lopNut="hd-so-do" khiChon={closeNav}>
+              <MapIcon />
+              Sơ đồ phân khu
+            </MenuSoDo>
             <NavLink
-              to="/zones"
+              to="/tin-tuc"
               className={({ isActive }) => (isActive ? 'on' : '')}
               onClick={closeNav}
             >
-              <MapIcon />
-              Sơ đồ phân khu
+              <NewspaperIcon />
+              Tin tức
             </NavLink>
+
 
             {/* Tài liệu là kho nội bộ của đội sale — khách không thấy mục này,
                 và backend cũng chặn nếu gọi thẳng API.
