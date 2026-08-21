@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.core.db import close_pool, open_pool
-from app.routers import apartments, auth, chat, dat_coc, documents, images, sales, tai_lieu, users, zones
+from app.routers import apartments, auth, chat, dat_coc, documents, images, news, sales, tai_lieu, users, zones
 from app.services.chat import danh_thuc_loi_ai, vong_lap_giu_thuc
 
 logging.basicConfig(
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     problems = settings.config_problems()
     if problems:
         raise RuntimeError(
@@ -86,6 +86,7 @@ app.include_router(chat.router)
 app.include_router(images.router)
 app.include_router(dat_coc.router)
 app.include_router(tai_lieu.router)
+app.include_router(news.router)
 
 
 @app.exception_handler(Exception)
