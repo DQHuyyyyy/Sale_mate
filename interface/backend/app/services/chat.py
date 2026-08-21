@@ -11,6 +11,7 @@ không phải sửa gì — đúng như thiết kế ban đầu của file này.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 
@@ -20,6 +21,64 @@ from app.core.config import settings
 from app.schemas.chat import ChatMessage
 
 logger = logging.getLogger(__name__)
+
+
+async def danh_thuc_loi_ai() -> None:
+    """Gọi /health của lõi AI cho nó dậy sớm. Không chặn, không ném lỗi.
+
+    Gói free của Render cho service ngủ sau 15 phút không có lưu lượng, và dậy
+    lại mất ~1 phút. Hai service ngủ theo hai đồng hồ riêng, nên khách vào web
+    chỉ đánh thức service này — lõi AI vẫn ngủ tới câu hỏi đầu tiên, và họ phải
+    chờ HAI lần cold start nối tiếp.
+
+    Nuốt mọi lỗi CÓ CHỦ ĐÍCH. Đây là tối ưu trải nghiệm chứ không phải phụ
+    thuộc: lõi AI hỏng thì `/api/chat` báo lỗi của chính nó, còn danh sách căn,
+    đăng nhập và ảnh không liên quan gì và phải chạy được như thường.
+
+    Timeout 90s chứ không phải `ai_core_timeout`: đang chờ một tiến trình KHỞI
+    ĐỘNG, không phải chờ một câu trả lời. Không ai ngồi đợi lời gọi này.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            resp = await client.get(f"{settings.ai_core_url.rstrip('/')}/health")
+        logger.info("Đã đánh thức lõi AI — HTTP %s", resp.status_code)
+    except Exception as exc:  # noqa: BLE001 — xem docstring
+        logger.warning("Không đánh thức được lõi AI (%s). Bỏ qua, không ảnh hưởng web.", exc)
+
+
+async def vong_lap_giu_thuc() -> None:
+    """Ping lõi AI đều đặn để nó không bao giờ ngủ. Chạy nền suốt đời tiến trình.
+
+    Vì sao đặt TRONG service này thay vì tạo job thứ hai trên cron ngoài: hai
+    service ngủ theo hai đồng hồ riêng, nên giữ thức cần hai nguồn ping. Mà
+    service này vốn đã được cron ngoài giữ thức rồi — để nó ping tiếp sang lõi
+    AI thì chỉ còn MỘT thứ bên ngoài phải cấu hình đúng, và tắt cả cụm chỉ cần
+    đổi `GIU_LOI_AI_THUC` chứ không phải nhớ vào xoá job trên trang web nào đó.
+
+    ⚠️ Vòng lặp này TIÊU GIỜ INSTANCE của gói free Render — 750 giờ mỗi tháng
+    cho cả workspace, và giữ thức 24/7 hai service tốn ~48 giờ mỗi ngày. Bật
+    quên tắt là Render treo TOÀN BỘ service free tới đầu tháng sau. Đó là lý do
+    mặc định TẮT và phải bật tường minh bằng biến môi trường.
+
+    Ngủ TRƯỚC rồi mới ping: `lifespan` đã bắn một phát đánh thức ngay lúc khởi
+    động, ping lại ngay lập tức chỉ tổ thừa một lượt.
+    """
+    logger.info(
+        "Giữ lõi AI luôn thức: ping mỗi %d giây. Nhớ TẮT khi hết đợt demo — nó tiêu giờ instance của gói free.",
+        settings.chu_ky_giu_thuc_giay,
+    )
+    while True:
+        try:
+            await asyncio.sleep(settings.chu_ky_giu_thuc_giay)
+            await danh_thuc_loi_ai()
+        except asyncio.CancelledError:
+            # Tiến trình đang tắt. Phải để CancelledError bay tiếp, nuốt nó là
+            # treo luôn quá trình shutdown.
+            raise
+        except Exception as exc:  # noqa: BLE001
+            # Một lượt ping hỏng không được giết vòng lặp: lõi AI có thể đang
+            # deploy lại, vài phút nữa là gọi được.
+            logger.warning("Vòng giữ thức lỗi (%s), vẫn chạy tiếp.", exc)
 
 
 class ChatError(RuntimeError):

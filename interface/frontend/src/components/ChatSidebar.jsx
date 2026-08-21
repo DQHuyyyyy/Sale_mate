@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { getApartment, modifyApartmentImage, streamChatMessage } from '../api';
+import { danhThucTroLy, getApartment, modifyApartmentImage, streamChatMessage } from '../api';
 import CauTraLoi from './CauTraLoi';
 import { CloseIcon, PlusIcon, RobotMascot, SendIcon, WandIcon } from './Icons';
 
@@ -241,6 +241,17 @@ export default function ChatSidebar({ open, onToggle }) {
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
+  }, [open]);
+
+  // Đánh thức lõi AI ngay khi mở widget, trước khi khách kịp gõ xong câu hỏi.
+  // Chỉ bắn một lần mỗi phiên: lõi AI chỉ ngủ sau 15 phút không có lưu lượng,
+  // mà mỗi câu hỏi đã tự làm mới đồng hồ đó. Bắn lại mỗi lần đóng/mở là gọi
+  // thừa, và giữ service thức 24/7 thì tiêu hết 750 giờ instance của tháng.
+  const daDanhThuc = useRef(false);
+  useEffect(() => {
+    if (!open || daDanhThuc.current) return;
+    daDanhThuc.current = true;
+    danhThucTroLy();
   }, [open]);
 
   const ask = async (text) => {

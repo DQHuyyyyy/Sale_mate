@@ -240,7 +240,7 @@ class TestSeedream:
         monkeypatch.setattr(settings, "image_provider", "seedream")
         monkeypatch.setattr(settings, "ark_api_key", "ark-test")
 
-    def test_gui_anh_goc_de_SUA_khong_phai_ve_tu_chu(self, _seedream) -> None:
+    def test_gui_anh_goc_de_sua_chu_khong_phai_ve_tu_chu(self, _seedream) -> None:
         """Chốt chặn quan trọng nhất. Endpoint tên là `images/generations`, và
         thiếu trường `image` thì nó vẽ một căn hộ tưởng tượng thay vì sửa ảnh
         của căn — không lỗi nào báo, chỉ khách nhận nhầm ảnh."""

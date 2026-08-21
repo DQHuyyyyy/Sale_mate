@@ -6,6 +6,7 @@ Docs:  http://localhost:8000/docs
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -17,6 +18,7 @@ from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.core.db import close_pool, open_pool
 from app.routers import apartments, auth, chat, dat_coc, documents, images, sales, tai_lieu, users, zones
+from app.services.chat import danh_thuc_loi_ai, vong_lap_giu_thuc
 
 logging.basicConfig(
     level=logging.INFO,
@@ -42,9 +44,20 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         logger.warning("Chưa có AI_CORE_URL — /api/chat sẽ báo lỗi.")
     else:
         logger.info("Chat sẽ đi qua lõi AI tại %s", settings.ai_core_url)
+
+    # create_task chứ không await: chờ ở đây là hoãn luôn việc nhận request,
+    # tức biến một tối ưu thành thêm một phút cold start cho chính service này.
+    nhiem_vu: list[asyncio.Task[None]] = []
+    if settings.chat_enabled:
+        nhiem_vu.append(asyncio.create_task(danh_thuc_loi_ai()))
+        if settings.giu_loi_ai_thuc:
+            nhiem_vu.append(asyncio.create_task(vong_lap_giu_thuc()))
+
     try:
         yield
     finally:
+        for task in nhiem_vu:
+            task.cancel()
         close_pool()
 
 

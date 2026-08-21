@@ -5,6 +5,7 @@ Không gọi mạng thật: thay `httpx.AsyncClient` bằng transport giả củ
 
 from __future__ import annotations
 
+import asyncio
 import os
 
 import httpx
@@ -152,3 +153,88 @@ class TestRangBuocDoDai:
         """Bỏ max_length không được kéo theo bỏ min_length."""
         with pytest.raises(ValidationError):
             ChatRequest(message="chào", history=[{"role": "user", "content": ""}])
+
+
+class TestGiuLoiAiThuc:
+    """Giữ lõi AI khỏi ngủ trên gói free Render.
+
+    Đây là tính năng TIÊU TIỀN gián tiếp: 750 giờ instance mỗi tháng cho cả
+    workspace, giữ thức 24/7 hai service tốn ~48 giờ mỗi ngày. Bật quên tắt là
+    Render treo toàn bộ service free tới đầu tháng sau. Nên phần lớn test ở đây
+    canh chuyện "không tự bật", chứ không phải chuyện nó ping được.
+    """
+
+    def test_mac_dinh_phai_tat(self) -> None:
+        """Chốt chặn quan trọng nhất của cả nhóm test này.
+
+        Mặc định phải TẮT: ai clone repo về chạy local mà vô tình giữ thức một
+        service trên Render là đốt hạn mức của cả team, và dấu hiệu duy nhất là
+        web chết vào giữa tháng.
+        """
+        from app.core.config import Settings
+
+        assert Settings(jwt_secret="x" * 40, database_url="postgresql://a/b").giu_loi_ai_thuc is False
+
+    def test_chu_ky_phai_duoi_nguong_ngu_15_phut(self) -> None:
+        """Render cho ngủ sau 15 phút. Ping thưa hơn thế là vòng lặp vô nghĩa."""
+        from app.core.config import Settings
+
+        chu_ky = Settings(jwt_secret="x" * 40, database_url="postgresql://a/b").chu_ky_giu_thuc_giay
+        assert chu_ky < 15 * 60
+
+    @pytest.mark.asyncio
+    async def test_danh_thuc_nuot_loi_mang(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Lõi AI hỏng KHÔNG được làm hỏng phần còn lại của web.
+
+        Hàm này chạy trong `lifespan`; ném lỗi ở đó là backend không khởi động
+        được, tức mất cả danh sách căn và đăng nhập vì một tính năng phụ.
+        """
+
+        def no(*_args: object, **_kwargs: object) -> None:
+            raise httpx.ConnectError("khong noi duoc")
+
+        monkeypatch.setattr(chat_service.httpx, "AsyncClient", no)
+        await chat_service.danh_thuc_loi_ai()  # không được raise
+
+    @pytest.mark.asyncio
+    async def test_vong_lap_ngu_truoc_khi_ping_lan_dau(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """`lifespan` đã ping một phát lúc khởi động rồi — ping lại ngay là thừa."""
+        thu_tu: list[str] = []
+
+        async def ngu_gia(_giay: float) -> None:
+            thu_tu.append("ngu")
+            if len(thu_tu) > 2:
+                raise asyncio.CancelledError
+
+        async def ping_gia() -> None:
+            thu_tu.append("ping")
+
+        monkeypatch.setattr(chat_service.asyncio, "sleep", ngu_gia)
+        monkeypatch.setattr(chat_service, "danh_thuc_loi_ai", ping_gia)
+
+        with pytest.raises(asyncio.CancelledError):
+            await chat_service.vong_lap_giu_thuc()
+
+        assert thu_tu[0] == "ngu"
+        assert thu_tu[1] == "ping"
+
+    @pytest.mark.asyncio
+    async def test_mot_luot_ping_hong_khong_giet_vong_lap(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Lõi AI đang deploy lại thì vài phút nữa gọi được — đừng bỏ cuộc."""
+        so_lan = {"ngu": 0}
+
+        async def ngu_gia(_giay: float) -> None:
+            so_lan["ngu"] += 1
+            if so_lan["ngu"] > 3:
+                raise asyncio.CancelledError
+
+        async def ping_hong() -> None:
+            raise RuntimeError("loi AI dang deploy")
+
+        monkeypatch.setattr(chat_service.asyncio, "sleep", ngu_gia)
+        monkeypatch.setattr(chat_service, "danh_thuc_loi_ai", ping_hong)
+
+        with pytest.raises(asyncio.CancelledError):
+            await chat_service.vong_lap_giu_thuc()
+
+        assert so_lan["ngu"] > 3, "vòng lặp phải chạy tiếp sau lượt ping hỏng"

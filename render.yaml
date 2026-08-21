@@ -96,6 +96,24 @@ services:
       - key: ARK_API_KEY
         sync: false
 
+      # ---- Giữ lõi AI luôn thức ----
+      # ⚠️ CÓ HẠN SỬ DỤNG. Bật cho đợt test người dùng và demo day, TẮT ngày
+      # 16/09/2026.
+      #
+      # Gói free cho 750 giờ instance mỗi tháng tính cho CẢ workspace. Giữ thức
+      # 24/7 hai service tốn ~48 giờ/ngày, tức cạn sau ~15,6 ngày. Cạn thì
+      # Render treo TOÀN BỘ service free tới ngày 1 tháng sau — web chết hẳn,
+      # không phải chậm.
+      #
+      # Kế hoạch đã chốt: 24/7 tới hết 15/09, chấp nhận nửa cuối tháng 9 hết
+      # hạn mức. Muốn kéo về sớm hơn thì đổi biến này thành "false", có hiệu
+      # lực sau một lần restart, không cần deploy lại.
+      #
+      # Service này còn cần một cron NGOÀI ping /api/health mỗi 10 phút — nó tự
+      # giữ lõi AI thức nhưng không tự giữ chính mình thức được.
+      - key: GIU_LOI_AI_THUC
+        value: "true"
+
   # ---- Lõi AI ----
   # Cũng theo develop. Để branch main thì nó chạy src/ của bản 05/08, lệch 13
   # file so với develop — API mới nói chuyện với lõi AI cũ, sai lệch rất khó lần.

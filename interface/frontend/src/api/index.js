@@ -126,6 +126,19 @@ export function sendChatMessage(message, history) {
 export { streamChat as streamChatMessage } from './client';
 
 /**
+ * Báo backend đánh thức lõi AI. Gọi lúc MỞ widget, không chờ kết quả.
+ *
+ * Gói free của Render cho service ngủ sau 15 phút và dậy lại mất khoảng một
+ * phút. Khoảng thời gian khách đọc lời chào rồi soạn câu hỏi vừa đủ để lõi AI
+ * dậy xong, nên câu hỏi đầu tiên không còn lãnh trọn cold start.
+ *
+ * Nuốt lỗi: hỏng lời gọi này thì chat vẫn chạy, chỉ chậm hơn như trước đây.
+ */
+export function danhThucTroLy() {
+  return request('/api/chat/danh-thuc', { method: 'POST' }).catch(() => null);
+}
+
+/**
  * Sửa một ảnh của căn theo yêu cầu bằng lời — tính năng "Modify Object".
  *
  * Trả về data URI, KHÔNG lưu ở server: đây là ảnh minh hoạ do AI tạo cho một

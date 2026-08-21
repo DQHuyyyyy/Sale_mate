@@ -48,6 +48,23 @@ class Settings(BaseSettings):
     # khi tự test.
     chat_rate_limit_enabled: bool = True
 
+    # ---- Giữ lõi AI luôn thức (gói free Render) ----
+    # Render cho service free ngủ sau 15 phút không có lưu lượng, dậy lại mất
+    # 30-60 giây. Bật cờ này thì service NÀY ping lõi AI đều đặn để nó không
+    # bao giờ ngủ — khách hỏi câu đầu tiên là có ngay.
+    #
+    # ⚠️ MẶC ĐỊNH TẮT, và phải tắt lại khi hết đợt demo. Gói free cho 750 giờ
+    # instance mỗi tháng tính cho CẢ workspace; giữ thức 24/7 hai service tốn
+    # ~48 giờ mỗi ngày, tức cạn trong ~15,6 ngày. Cạn thì Render treo TOÀN BỘ
+    # service free tới ngày 1 tháng sau — không phải chậm, mà là chết hẳn.
+    #
+    # Tắt bằng biến môi trường chứ không phải sửa code: hết hạn mức là chuyện
+    # cần xử lý trong vài phút, không kịp chờ một vòng deploy.
+    giu_loi_ai_thuc: bool = False
+    # 10 phút, dưới ngưỡng ngủ 15 phút của Render với biên 5 phút cho một lượt
+    # ping trượt. Thưa hơn 15 phút thì vòng lặp này vô nghĩa.
+    chu_ky_giu_thuc_giay: int = 600
+
     # ---- Sinh ảnh (Modify Object) ----
     # Sửa ảnh nội thất theo yêu cầu người dùng. Ảnh KHÔNG được lưu — chỉ trả về
     # cho phiên chat đang mở, vì đây là ảnh minh hoạ do AI tạo, không phải ảnh
