@@ -848,6 +848,252 @@ table.data tbody tr:hover {
   height: 100%;
   object-fit: cover;
 }
+/* ---------- Menu thả xuống ba dự án ---------- */
+.menu-so-do {
+  position: relative;
+  display: inline-flex;
+}
+/* Nút trong thanh điều hướng phải trông y hệt các link anh em của nó — nav.main
+   chỉ tạo kiểu cho thẻ `a`, mà đây là `button`. */
+.hd-so-do {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  opacity: 0.95;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--rb);
+  background: transparent;
+  cursor: pointer;
+}
+.hd-so-do:hover,
+.menu-so-do:hover .hd-so-do {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.14);
+}
+.hd-so-do svg {
+  width: 17px;
+  height: 17px;
+}
+.msd-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 45;
+  min-width: 232px;
+  padding: 6px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--rc);
+  box-shadow: var(--shadow);
+}
+/* Phải đủ nặng để thắng `nav.main a` (color: #fff) khi menu nằm trong thanh điều
+   hướng: một selector nhẹ hơn thì chữ trắng trên thẻ trắng, menu nhìn như hộp rỗng.
+   `.menu-so-do .msd-menu a` có hai class nên hơn `nav.main a` chỉ có một. */
+.menu-so-do .msd-menu a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  border-radius: var(--rb);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 1;
+}
+.menu-so-do .msd-menu a:hover {
+  background: var(--page);
+  color: var(--brand);
+}
+.msd-sap {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--faint);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.hm-menu-so-do .msd-menu {
+  left: auto;
+  right: 0;
+}
+
+/* ---------- Trang sơ đồ phân khu ---------- */
+.sdo-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.sdo-tab {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 14px;
+}
+.sdo-tab:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.sdo-tab.on {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+/* Khung xem giữ đúng tỉ lệ ảnh gốc (4096x2501) nên phần phóng to không bao giờ
+   lệch khỏi ranh giới vẽ trên SVG. `overflow: hidden` là thứ biến nó thành ống
+   nhòm — ảnh phóng to tràn ra ngoài bị cắt, không đẩy trang rộng ra. */
+.sdo-khung {
+  position: relative;
+  overflow: hidden;
+  /* Hai biến do trang truyền xuống theo dự án đang xem. Trần 80vh để bản đồ dọc
+     (Ocean Park 3) không cao quá một màn hình — bề ngang co lại theo đúng tỉ lệ
+     thay vì bóp méo ảnh, vì bóp méo thì vùng bấm cũng méo theo. */
+  aspect-ratio: var(--ti-le);
+  width: min(100%, calc(80vh * var(--ti-le-so)));
+  margin-inline: auto;
+  background: var(--page);
+  border: 1px solid var(--line);
+  border-radius: var(--rc);
+  cursor: zoom-out;
+}
+.sdo-canvas {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+  transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: transform;
+}
+.sdo-canvas img,
+.sdo-lop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.sdo-canvas img {
+  /* `fill` chứ không `cover`: khung xem đã giữ đúng tỉ lệ 4096/2501, và ảnh nền
+     phải giãn cùng một luật với lớp SVG phủ lên nó. Một bên cắt, một bên co là
+     hai bên lệch nhau. */
+  object-fit: fill;
+  user-select: none;
+}
+.sdo-vung {
+  fill: transparent;
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 1.5;
+  /* Nét viền tính theo pixel màn hình, không theo hệ toạ độ SVG: thiếu dòng này
+     thì phóng 5 lần là viền dày 5 lần, nuốt mất chính khu nó đang khoanh. */
+  vector-effect: non-scaling-stroke;
+  cursor: zoom-in;
+  transition: fill 0.22s ease, stroke 0.22s ease, stroke-width 0.22s ease;
+}
+.sdo-vung:hover {
+  fill: rgba(21, 112, 239, 0.32);
+  stroke: #fff;
+}
+.sdo-vung.on {
+  fill: rgba(21, 112, 239, 0.18);
+  stroke: #fff;
+  stroke-width: 2;
+  cursor: zoom-out;
+}
+/* Nhãn tên khu. Hai mức: rê chuột là xem trước (nhỏ, trầm), bấm chọn là chốt
+   (to, màu thương hiệu) — nhìn một cái biết ngay mình đang xem hay đã chọn. */
+.sdo-nhan {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: calc(100% - 32px);
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  /* Nền mờ + làm nhoè phía sau: bản đồ bên dưới chỗ đậm chỗ nhạt, chữ trắng đặt
+     thẳng lên đó có chỗ đọc được có chỗ không. */
+  background: rgba(16, 24, 40, 0.72);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  animation: sdo-nhan-hien 0.34s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+.sdo-nhan.on {
+  padding: 11px 20px;
+  font-size: 19px;
+  font-weight: 600;
+  background: rgba(11, 79, 192, 0.92);
+  border-color: rgba(255, 255, 255, 0.24);
+  box-shadow: 0 12px 30px -12px rgba(16, 24, 40, 0.85);
+}
+.sdo-cham {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+}
+.sdo-nhan.on .sdo-cham {
+  width: 9px;
+  height: 9px;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.22);
+}
+@keyframes sdo-nhan-hien {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.sdo-thu-nho {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  animation: sdo-nhan-hien 0.3s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+/* Người tắt hiệu ứng chuyển động trong hệ điều hành thường tắt vì chóng mặt
+   thật, không phải vì sở thích. Bản đồ trượt và phóng là đúng loại gây ra nó. */
+@media (prefers-reduced-motion: reduce) {
+  .sdo-nhan,
+  .sdo-thu-nho {
+    animation-duration: 0.01ms;
+  }
+  .sdo-canvas {
+    transition: none;
+  }
+}
+.sdo-ds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 14px 0 26px;
+}
+.sdo-ds .btn-nho.on {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
+}
+
 /* Bảng quản lý ảnh — chỉ admin thấy, nằm ngay dưới gallery */
 .quan-ly-anh {
   margin-top: 12px;
@@ -1575,6 +1821,19 @@ table.data tbody tr:hover {
   }
   .app.nav-open nav.main {
     transform: none;
+  }
+  .menu-so-do {
+    display: block;
+    width: 100%;
+  }
+  .hd-so-do {
+    width: 100%;
+  }
+  /* Trong ngăn kéo hẹp thì menu trải thẳng xuống dưới nút, không nổi lên trên. */
+  .msd-menu {
+    position: static;
+    min-width: 0;
+    margin: 4px 0 2px;
   }
   .burger {
     display: block;
