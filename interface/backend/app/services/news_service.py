@@ -161,16 +161,18 @@ async def _fetch_single_source(source_info: dict[str, str], client: httpx.AsyncC
             image_url = _extract_image(item, desc)
             summary = _clean_summary(desc)
 
-            articles.append({
-                "id": f"{source_info['source'].lower()}-{idx}-{abs(hash(link)) & 0xfffffff}",
-                "title": title,
-                "link": link,
-                "image_url": image_url,
-                "source": source_info["source"],
-                "source_name": source_info["name"],
-                "pub_date": pub_date,
-                "summary": summary,
-            })
+            articles.append(
+                {
+                    "id": f"{source_info['source'].lower()}-{idx}-{abs(hash(link)) & 0xFFFFFFF}",
+                    "title": title,
+                    "link": link,
+                    "image_url": image_url,
+                    "source": source_info["source"],
+                    "source_name": source_info["name"],
+                    "pub_date": pub_date,
+                    "summary": summary,
+                }
+            )
     except Exception as exc:
         logger.warning("Không thể tải tin từ %s: %s", source_info["name"], exc)
 
