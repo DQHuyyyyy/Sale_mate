@@ -548,6 +548,54 @@ File JSON chứ không phải bảng Postgres vì migration ở dự án này ch
 production; để trong repo thì mỗi lần sửa là một PR có review. Đổi sang DB về
 sau chỉ cần thay thân `tai_chinh_sach()`.
 
+## Ảnh căn hộ — ảnh đại diện KHÔNG phải một cột riêng
+
+Ảnh đại diện chỉ là dòng có `sort_order` nhỏ nhất trong `apartment_images`. Cả
+ba nơi đọc cùng một thứ tự đó: thẻ ở trang tìm kiếm (`LEFT JOIN LATERAL … LIMIT
+1`), gallery trang chi tiết, và tính năng "Modify Object" của widget chat. Nên
+đổi bìa một lần là cả ba đổi theo.
+
+**Đừng thêm cột `cover_image_id` hay `is_cover`.** Đó là nơi thứ hai nắm cùng
+một sự thật, đúng kiểu đã làm 4 căn sai giá ở migration 005 — và lệch ở đây thì
+thẻ tìm kiếm hiện một ảnh còn gallery mở ra một ảnh khác.
+
+Đổi bìa = `_danh_lai_thu_tu()` trong [apartments.py](interface/backend/app/routers/apartments.py):
+một câu UPDATE đánh lại `sort_order` thành 0,1,2… với ảnh được chọn kéo lên đầu.
+Không "swap hai dòng" được: ảnh nhập từ Google Drive hầu hết đều `sort_order = 0`
+nên thứ tự thật do `id` quyết định, tức thứ tự file trong folder Drive — không có
+thứ tự nào để mà swap.
+
+| Việc | Đường đi |
+|---|---|
+| Đổi ảnh đại diện | `PATCH /api/apartments/{ma_can}/images/{id}/dai-dien` (admin) |
+| Bỏ ảnh xấu | `DELETE /api/apartments/{ma_can}/images/{id}` (admin) |
+| Thay bằng ảnh khác | upload qua `POST …/images` rồi đặt làm đại diện |
+
+Cả ba nút nằm dưới gallery ở trang căn hộ, chỉ admin thấy
+([`QuanLyAnh.jsx`](interface/frontend/src/components/QuanLyAnh.jsx)) — lúc chọn
+ảnh nào lên bìa thì phải nhìn được cả 4 ảnh ở kích thước thật.
+
+**Bucket `apartment-images` là một bước cài đặt tường minh, không tự sinh.**
+Tạo ngày 21/08/2026: public, trần 8MB, chỉ nhận JPG/PNG/WEBP/GIF — khớp đúng
+`MAX_IMAGE_BYTES` và `ALLOWED_IMAGE_TYPES` mà router đang kiểm, để file lạ không
+lọt vào bằng đường nào khác. Trước đó project Supabase **không có bucket nào**
+và mọi lần upload đều trả 400 "Bucket not found"; không ai biết vì toàn bộ ảnh
+trong DB là link Google Drive, đường Storage chưa từng chạy thật.
+
+Backend cố ý KHÔNG tự tạo bucket lúc upload — đó đúng cái bẫy `ensure_table()`
+đã ghi ở mục đặt cọc: hạ tầng do code lặng lẽ dựng lên là hạ tầng không ai review,
+và ở đây thứ bị bỏ qua sẽ là "bucket này công khai hay riêng tư".
+
+Public là bắt buộc vì `public_url()` dựng link `/object/public/…` và khách chưa
+đăng nhập phải xem được ảnh trên portal. Đổi sang private thì phải đổi sang
+signed URL có hạn, không chỉ đổi một cờ.
+
+Hai chốt của endpoint xoá: `WHERE id = %s AND ma_can = %s` (thiếu vế sau thì URL
+của căn này sửa được ảnh căn kia), và **xoá dòng DB trước, xoá object Storage
+sau, lỗi Storage không làm hỏng request** — trang đọc từ DB, một file mồ côi
+trong bucket thì không ai thấy, còn trả lỗi sau khi dòng đã xoá là bắt admin bấm
+lại một việc đã xong.
+
 ## Streaming và hiện suy luận
 
 Widget đọc SSE để chữ hiện dần, kèm dòng trạng thái "trợ lý đang làm gì".

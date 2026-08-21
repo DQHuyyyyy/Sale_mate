@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { MapIcon, SearchIcon } from '../components/Icons';
+import MenuSoDo from '../components/MenuSoDo';
 
 /**
  * Trang chủ — giới thiệu đại đô thị Ocean City và ba dự án thành phần.
@@ -222,10 +223,12 @@ export default function Home() {
               <SearchIcon />
               Tìm căn hộ đang mở bán
             </Link>
-            <Link className="btn btn-ghost" to="/zones">
+            {/* Cùng một menu với thanh điều hướng — người dùng gặp ba dự án
+                ở cả hai chỗ, không phải hai cách chọn khác nhau cho cùng việc. */}
+            <MenuSoDo lopBoc="hm-menu-so-do" lopNut="btn btn-ghost">
               <MapIcon />
               Xem sơ đồ phân khu
-            </Link>
+            </MenuSoDo>
           </div>
         </section>
 

@@ -4,10 +4,13 @@ import { getApartment } from '../api';
 import { BackIcon, HouseIcon } from '../components/Icons';
 import { formatArea, formatPrice, orDash } from '../utils/format';
 import DatCocModal from '../components/DatCocModal';
+import QuanLyAnh from '../components/QuanLyAnh';
+import { useAuth } from '../context/AuthContext';
 import { conBanDuoc, lopTrangThai, nhanTrangThai } from '../utils/trangThai';
 
 export default function ApartmentDetail() {
   const { maCan } = useParams();
+  const { isAdmin } = useAuth();
   const [apartment, setApartment] = useState(null);
 
   // Ảnh đang xem nằm trên URL (?anh=2), KHÔNG phải state cục bộ. Trợ lý S là
@@ -111,6 +114,20 @@ export default function ApartmentDetail() {
                 </button>
               ))}
             </div>
+          )}
+
+          {isAdmin && (
+            <QuanLyAnh
+              maCan={apartment.ma_can}
+              images={images}
+              chiSoAnh={chiSoAnh}
+              onCapNhat={(daCapNhat, chiSoMuonXem = 0) => {
+                setApartment(daCapNhat);
+                // Mặc định về ảnh đầu — đó là ảnh sắp hiện trên thẻ tìm kiếm, và
+                // admin cần nhìn thấy ngay kết quả vừa bấm.
+                setActiveImage(chiSoMuonXem);
+              }}
+            />
           )}
         </div>
 
