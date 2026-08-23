@@ -6,7 +6,6 @@ Docs:  http://localhost:8000/docs
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -18,7 +17,6 @@ from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.core.db import close_pool, open_pool
 from app.routers import apartments, auth, chat, dat_coc, documents, images, news, sales, tai_lieu, users, zones
-from app.services.chat import danh_thuc_loi_ai, vong_lap_giu_thuc
 
 logging.basicConfig(
     level=logging.INFO,
@@ -45,19 +43,14 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     else:
         logger.info("Chat sẽ đi qua lõi AI tại %s", settings.ai_core_url)
 
-    # create_task chứ không await: chờ ở đây là hoãn luôn việc nhận request,
-    # tức biến một tối ưu thành thêm một phút cold start cho chính service này.
-    nhiem_vu: list[asyncio.Task[None]] = []
-    if settings.chat_enabled:
-        nhiem_vu.append(asyncio.create_task(danh_thuc_loi_ai()))
-        if settings.giu_loi_ai_thuc:
-            nhiem_vu.append(asyncio.create_task(vong_lap_giu_thuc()))
-
+    # KHÔNG đánh thức lõi AI từ đây. Đo được trên Render: request đi từ trong
+    # nền tảng sang URL công khai của một service free đang ngủ trả 502/429
+    # trong dưới 5 giây và KHÔNG kích hoạt spin-up, trong khi cùng URL đó gọi
+    # từ máy ngoài trả 200 sau ~42 giây. Việc đánh thức phải đến từ bên ngoài:
+    # job cron (DEPLOY.md) và trình duyệt của khách khi mở widget.
     try:
         yield
     finally:
-        for task in nhiem_vu:
-            task.cancel()
         close_pool()
 
 
@@ -101,9 +94,19 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 @app.get("/api/health", tags=["health"])
 def health() -> dict[str, object]:
-    """Kiểm tra backend sống và cấu hình đã đủ chưa."""
+    """Kiểm tra backend sống và cấu hình đã đủ chưa.
+
+    Đây cũng là đích của job cron giữ service khỏi ngủ trên gói free Render —
+    xem DEPLOY.md. Endpoint phải nhẹ và KHÔNG chạm database: nó bị gọi mỗi 5
+    phút suốt ngày đêm.
+
+    `ai_core_url` trả ra để widget tự đánh thức lõi AI từ TRÌNH DUYỆT. Đó là
+    URL công khai, không phải bí mật. Không hardcode ở frontend vì nó khác nhau
+    giữa máy mình và Render, và đổi URL mà quên sửa hai chỗ là lỗi câm.
+    """
     return {
         "status": "ok",
         "storage_enabled": settings.storage_enabled,
         "chat_enabled": settings.chat_enabled,
+        "ai_core_url": settings.ai_core_url.rstrip("/"),
     }

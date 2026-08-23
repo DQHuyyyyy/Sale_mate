@@ -145,16 +145,35 @@ export function sendChatMessage(message, history) {
 export { streamChat as streamChatMessage } from './client';
 
 /**
- * Báo backend đánh thức lõi AI. Gọi lúc MỞ widget, không chờ kết quả.
+ * Đánh thức lõi AI. Gọi lúc MỞ widget, không chờ kết quả.
  *
- * Gói free của Render cho service ngủ sau 15 phút và dậy lại mất khoảng một
- * phút. Khoảng thời gian khách đọc lời chào rồi soạn câu hỏi vừa đủ để lõi AI
- * dậy xong, nên câu hỏi đầu tiên không còn lãnh trọn cold start.
+ * Gói free của Render cho service ngủ sau 15 phút và dậy lại mất 30-60 giây.
+ * Khoảng thời gian khách đọc lời chào rồi soạn câu hỏi vừa đủ để lõi AI dậy
+ * xong, nên câu hỏi đầu tiên không lãnh trọn cold start.
  *
- * Nuốt lỗi: hỏng lời gọi này thì chat vẫn chạy, chỉ chậm hơn như trước đây.
+ * ⚠️ Phải gọi TỪ TRÌNH DUYỆT, tuyệt đối không nhờ backend gọi hộ. Đo được trên
+ * Render: request đi từ trong nền tảng sang URL công khai của một service free
+ * đang ngủ trả 502/429 trong dưới 5 giây và KHÔNG đánh thức gì cả, trong khi
+ * cùng URL đó gọi từ máy ngoài trả 200 sau ~42 giây. Bản trước nhờ backend làm
+ * và nó im lặng không có tác dụng suốt hai ngày.
+ *
+ * `mode: 'no-cors'` vì ta không cần ĐỌC kết quả, chỉ cần request chạm tới
+ * Render để nó dựng container. Nhờ vậy lõi AI không phải khai CORS cho tên miền
+ * frontend — request vẫn tới nơi, trình duyệt chỉ giấu phần trả về.
+ *
+ * Đây là lưới an toàn, KHÔNG phải cơ chế chính. Cơ chế chính là job cron ngoài
+ * ping mỗi 5 phút (xem DEPLOY.md); cái này cứu lúc cron chết mà chưa ai biết.
  */
-export function danhThucTroLy() {
-  return request('/api/chat/danh-thuc', { method: 'POST' }).catch(() => null);
+export async function danhThucTroLy() {
+  try {
+    const suc_khoe = await request('/api/health');
+    if (!suc_khoe?.ai_core_url) return null;
+    await fetch(`${suc_khoe.ai_core_url}/health`, { mode: 'no-cors', cache: 'no-store' });
+  } catch {
+    // Hỏng thì chat vẫn chạy, chỉ chờ lâu hơn ở câu đầu.
+    return null;
+  }
+  return null;
 }
 
 /**

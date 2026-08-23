@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
 from app.core.config import settings
@@ -11,7 +11,7 @@ from app.core.deps import get_optional_user
 from app.core.ratelimit import RateLimiter
 from app.schemas.auth import CurrentUser
 from app.schemas.chat import ChatRequest, ChatResponse
-from app.services.chat import ChatError, danh_thuc_loi_ai, generate_reply, stream_reply
+from app.services.chat import ChatError, generate_reply, stream_reply
 
 logger = logging.getLogger(__name__)
 
@@ -52,29 +52,6 @@ def _kiem_tra_han_muc(request: Request, user: CurrentUser | None) -> None:
             ),
             headers={"Retry-After": str(cho_giay)},
         )
-
-
-@router.post("/danh-thuc", status_code=status.HTTP_202_ACCEPTED)
-async def danh_thuc(background: BackgroundTasks) -> dict[str, str]:
-    """Đánh thức lõi AI trước khi khách kịp gõ xong câu hỏi.
-
-    Widget gọi ngay lúc MỞ ra. Lúc đó khách còn đang đọc lời chào và soạn câu
-    hỏi — khoảng 20-40 giây, vừa đủ cho một lần cold start của Render.
-
-    Vì sao không đủ nếu chỉ đánh thức ở `lifespan`: hai service ngủ theo hai
-    đồng hồ riêng. Khách xem căn hộ 20 phút thì service này luôn thức nhờ chính
-    lưu lượng đó, còn lõi AI không ai gọi nên vẫn ngủ — rồi câu hỏi đầu tiên
-    lãnh trọn một phút chờ.
-
-    KHÔNG tính vào hạn mức chat: nó không gọi model, không tốn tiền, và tính
-    vào thì mở widget hai lần đã ăn mất hai lượt hỏi của khách.
-
-    Trả 202 ngay, không chờ lõi AI dậy — client không có việc gì với kết quả.
-    """
-    if not settings.chat_enabled:
-        return {"trang_thai": "bo_qua"}
-    background.add_task(danh_thuc_loi_ai)
-    return {"trang_thai": "dang_danh_thuc"}
 
 
 @router.post("", response_model=ChatResponse)

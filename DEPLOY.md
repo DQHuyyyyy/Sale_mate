@@ -235,31 +235,97 @@ nghịch ở dev thì rủi ro khác hẳn.
 
 ## Sống chung với free tier
 
-**Render ngủ sau 15 phút không ai gọi.** Request đánh thức nó mất khoảng 50
-giây, các request sau thì nhanh bình thường. Với 10 người dùng thử, đây là điều
-duy nhất họ sẽ phàn nàn.
+**Render ngủ sau 15 phút không có lưu lượng.** Đánh thức mất 30–60 giây. Với
+người dùng thử, đây là điều duy nhất họ sẽ phàn nàn.
 
-Cách xử lý thực tế:
+### Chỉ có MỘT cách chữa: lưu lượng từ BÊN NGOÀI Render
 
-- **Trước buổi test, đánh thức thủ công** — mở
-  `https://salesmate-api-dev.onrender.com/api/health` và
-  `https://salesmate-ai-core.onrender.com/health` trước 1 phút. Đơn giản nhất và
-  không tốn gì.
-- **Nói trước với người test** rằng lần vào đầu tiên chờ khoảng một phút. Biết
-  trước thì họ đợi; không biết thì họ tưởng web hỏng và đóng tab.
-- **Ping tự động thì bạn không làm được bằng GitHub Actions** — org đang bị chặn
-  Actions vì billing, cả ba CI phải chạy nhờ self-hosted runner của BTC
-  ([ci-ai-core.yml](.github/workflows/ci-ai-core.yml#L27-L29)). Dịch vụ ping bên
-  ngoài như UptimeRobot thì được, nhưng đó là lách chính sách Render.
-- **Hết chịu nổi thì nâng riêng `salesmate-api-dev` lên Starter (~$7/tháng)** —
-  chỉ cần đổi `plan: free` thành `plan: starter` trong `render.yaml`. Lõi AI vẫn
-  để free, chỉ chat mới phải chờ.
+Đo được ngày 22/08/2026, cùng một URL `ai-core/health`:
 
-**Chuỗi đánh thức cộng dồn.** Người dùng mở chat lần đầu: API dậy (~50s) rồi mới
-gọi lõi AI, lõi AI lại dậy tiếp (~50s). Đánh thức trước cả hai là tránh được.
+| Gọi từ | Kết quả |
+|---|---|
+| máy ngoài | **200** sau 42 giây — Render dựng container thật |
+| `salesmate-api-dev` (trong Render) | **502 / 429** sau chưa tới 5 giây, không đánh thức gì |
 
-**Build đầu tiên trên Render lâu** (5–10 phút) vì phải cài `psycopg`. Các lần
-sau có cache, nhanh hơn nhiều.
+Thời gian là bằng chứng: đánh thức thật thì Render **giữ request lại ~50 giây**.
+Bật ra sau 5 giây nghĩa là nó từ chối ngay, không hề bắt đầu.
+
+**Hệ quả: backend KHÔNG đánh thức hộ lõi AI được.** Đã thử ba cách — ping lúc
+khởi động, endpoint `/api/chat/danh-thuc`, vòng lặp nền mỗi 5 phút — cả ba đều
+chạy trong Render nên đều vô hiệu. Chúng đã bị gỡ; đừng dựng lại.
+
+**Health check của Render cũng không tính.** Log cho thấy `/api/health` bị gọi
+mỗi 5 giây từ IP nội bộ `10.237.x.x`, rồi service vẫn `Shutting down`. Đồng hồ
+15 phút chỉ đếm lưu lượng đi vào từ Internet.
+
+### Cấu hình bắt buộc: hai job cron ngoài
+
+[cron-job.org](https://cron-job.org) — miễn phí, chọn được khung giờ, và chạy
+đúng giờ hơn cron của GitHub Actions (Actions trễ 5–20 phút khi hệ thống bận, mà
+ngưỡng ngủ chỉ 15 phút).
+
+```
+mỗi 5 phút, GET
+  https://salesmate-api-dev.onrender.com/api/health
+  https://salesmate-ai-core.onrender.com/health
+```
+
+**Hai job riêng, không phải một.** Cron ngoài hồi sinh được service đã ngủ; mọi
+cơ chế bên trong thì không.
+
+**TUYỆT ĐỐI không ping `/api/chat`** — mỗi lượt gọi model thật và tốn tiền.
+
+Tạo xong phải **mở lịch sử chạy của từng job và xác nhận có dòng 200**. Lần đầu
+làm việc này, job im lặng không chạy và không để lại dấu vết nào trong log Render
+— mất hai ngày mới phát hiện.
+
+Kiểm lại sau 20 phút không ai đụng vào web: gọi cả hai URL, **cả hai phải dưới 1
+giây**. Trên 30 giây nghĩa là service đó vẫn ngủ.
+
+### Ngân sách 750 giờ — cạn là CHẾT, không phải chậm
+
+750 giờ instance mỗi tháng tính cho **cả workspace**, reset ngày 1. Giữ thức 24/7
+hai service tốn ~48 giờ/ngày, tức cạn sau ~15,6 ngày. Cạn thì Render **treo toàn
+bộ service free** tới đầu tháng sau.
+
+Kế hoạch đã chốt cho đợt demo:
+
+| Khoảng | Ping | Giờ |
+|---|---|---|
+| 22–31/08 | 24/7 | 480h + đã dùng |
+| 01–15/09 | 24/7 | 720h |
+| từ 16/09 | **TẮT cron** | còn ~30h cho lưu lượng tự nhiên |
+
+Xem đồng hồ ở Dashboard → Billing → *Free Instance Hours*.
+
+### Lưới an toàn trong app
+
+Khi khách mở widget chat, **trình duyệt của họ** gọi thẳng `ai-core/health` bằng
+`fetch(..., {mode: 'no-cors'})` — xem `danhThucTroLy()` trong
+`interface/frontend/src/api/index.js`. Trình duyệt ở ngoài Render nên đánh thức
+được thật.
+
+`no-cors` vì ta không cần đọc kết quả, chỉ cần request chạm tới Render. Nhờ vậy
+lõi AI không phải khai CORS cho tên miền frontend.
+
+URL lõi AI lấy từ `/api/health` chứ không hardcode — nó khác nhau giữa máy mình
+và Render.
+
+Đây là **lưới an toàn**, không thay được cron: nó chỉ chạy khi đã có người mở
+web, mà người đầu tiên chính là người phải chờ.
+
+### Điều không chữa được bằng gói free
+
+Ngày 20/08/2026 Render tắt hẳn spin-up của Web Service gói free vì sự cố Google
+Cloud. Service nào đang ngủ thì không dậy nổi, ping bao nhiêu cũng vô ích.
+
+Giữ thức liên tục thu hẹp rủi ro này gần bằng 0 — service đang chạy không đi qua
+đường spin-up. Nhưng nếu nó lỡ ngủ đúng lúc sự cố xảy ra thì không có gì trong
+tay mình cứu được. Muốn loại hẳn thì phải trả tiền: đổi `plan: free` thành
+`plan: starter` (~$7/tháng) cho `salesmate-ai-core` trong `render.yaml`.
+
+**Build đầu tiên trên Render lâu** (5–10 phút) vì phải cài `psycopg`. Các lần sau
+có cache, nhanh hơn nhiều.
 
 ## Bảng biến môi trường
 
