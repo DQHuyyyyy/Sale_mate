@@ -107,6 +107,7 @@ def search_apartments(
     ),
     subdivision: str | None = Query(default=None, description="Phân khu, ví dụ 'Ocean Park 2'"),
     type: str | None = Query(default=None, description="Loại căn, ví dụ '2 PN, 1WC'"),
+    wc: int | None = Query(default=None, ge=1, le=9, description="Số nhà vệ sinh"),
     limit: int = Query(default=100, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     _: CurrentUser | None = Depends(get_optional_user),
@@ -139,13 +140,35 @@ def search_apartments(
         # Trợ lý S đẩy bộ lọc này lên URL sau khi trả lời "có 4 căn ở Ocean Park
         # 2 dưới 3 tỷ" — thiếu nó thì lưới bên trái vẫn hiện đủ 21 căn và người
         # dùng thấy hai con số vênh nhau.
-        where.append(f"a.{COL_PHAN_KHU} = %s")
+        #
+        # Chuẩn hoá trước khi so, giống `inventory_search` phía lõi AI: dữ liệu
+        # ghi "Ocean Park 2" còn model có thể gửi "OceanPark 2" hay "ocean park 2".
+        where.append(f"{normalize_sql(f'a.{COL_PHAN_KHU}')} = {normalize_sql('%s')}")
         params.append(subdivision)
     if type:
-        # Dữ liệu viết không thống nhất ('1 PN, 1WC' vs '1PN, 1WC') nên so khớp
-        # sau khi bỏ khoảng trắng, không so nguyên văn.
-        where.append(f"{normalize_sql(f'a.{COL_LOAI_CAN}')} = {normalize_sql('%s')}")
+        # Khớp theo TIỀN TỐ, không phải bằng đúng — và đây là chỗ từng làm lưới
+        # bên trái trả 0 căn trong khi trợ lý liệt kê đủ danh sách.
+        #
+        # Lõi AI trả `unit_type` là tiền tố "2PN" mỗi khi số phòng ngủ ứng với
+        # NHIỀU giá trị thật trong DB (xem `_match_unit_type`) — mà 2PN có tới
+        # hai: "2PN, 1WC" và "2PN, 2WC". So bằng đúng thì "2pn" không bao giờ
+        # bằng "2pn,2wc", nên mọi câu hỏi theo số phòng ngủ đều ra rỗng.
+        #
+        # Tiền tố an toàn cho cả hai nguồn: dropdown trên form gửi nguyên chuỗi
+        # đầy đủ ("2PN, 2WC") và chuỗi đó vẫn là tiền tố của chính nó.
+        #
+        # Luật này phải khớp `inventory_search` ở src/agents/tools/search.py —
+        # hai bên lệch nhau là chat và lưới nói hai tập căn khác nhau.
+        where.append(f"{normalize_sql(f'a.{COL_LOAI_CAN}')} LIKE {normalize_sql('%s')} || '%%'")
         params.append(type)
+    if wc is not None:
+        # Số vệ sinh nằm ở ĐUÔI chuỗi loại căn: "2PN, 1WC" -> "2pn,1wc".
+        #
+        # Bộ lọc RIÊNG chứ không gộp vào `type`, vì `type` khớp theo tiền tố nên
+        # câu "căn 2 vệ sinh" — không nêu phòng ngủ — không diễn đạt được bằng
+        # nó. Cùng luật với `inventory_search` ở src/agents/tools/search.py.
+        where.append(f"{normalize_sql(f'a.{COL_LOAI_CAN}')} LIKE '%%' || %s")
+        params.append(f"{wc}wc")
     # Chỉ ràng giá khi client thực sự gửi — nếu không, căn chưa parse được
     # gia_tri (NULL) vẫn hiện ra thay vì biến mất im lặng.
     if price_min is not None:

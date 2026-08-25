@@ -140,6 +140,12 @@ _SUMMARY_LO_DUOC = frozenset({"subdivision", "building", "unit_type"})
 
 # "2 phòng ngủ", "2pn", "2 PN" — số phòng ngủ là tiêu chí hay được hỏi nhất.
 _BEDROOMS = re.compile(r"(\d)\s*(?:phòng\s*ngủ|pn\b)", re.IGNORECASE)
+# "1 vệ sinh", "2WC", "2 nhà vệ sinh", "1 toilet".
+#
+# Phải xét ĐỘC LẬP với số phòng ngủ. Trước đây chỉ đọc phòng ngủ nên "2 phòng
+# ngủ và 1 vệ sinh ở Ocean Park 3" cho ra 15 căn — gồm cả 9 căn 2PN-2WC — trong
+# khi đáp án đúng là 6. Trợ lý nói sai số, không phải chỉ hiện thừa.
+_WC = re.compile(r"(\d)\s*(?:nhà\s*)?(?:vệ\s*sinh|ve\s*sinh|wc\b|toilet)", re.IGNORECASE)
 # Phân khu: "Ocean Park 2", "OceanPark 2", "OP2", "phân khu 2", "khu 3".
 # Chỉ nhận số 1-3 — dự án có đúng ba phân khu, bắt "khu 7" rồi lọc ra rỗng thì
 # người dùng không hiểu vì sao.
@@ -485,6 +491,13 @@ def extract_criteria(query: str, entities: dict[str, Any] | None = None) -> dict
     if unit_type:
         criteria["unit_type"] = unit_type
 
+    # Đọc RỜI khỏi `unit_type`. Chuỗi trong DB gộp cả hai ("2PN, 1WC") nhưng
+    # `unit_type` khớp theo tiền tố, nên gộp số vệ sinh vào đó thì "căn 2 vệ
+    # sinh" — không nêu phòng ngủ — không có cách nào diễn đạt.
+    so_wc = _WC.search(query)
+    if so_wc:
+        criteria["wc"] = int(so_wc.group(1))
+
     building = _match_building(query, values.get("building", []))
     if building:
         criteria["building"] = building
@@ -542,6 +555,10 @@ def chuan_hoa(text: str) -> str:
 
 class SearchArgs(BaseModel):
     unit_type: str | None = Field(default=None, description="Loại căn, ví dụ '2PN' hoặc 'Studio'")
+    # Trường RIÊNG chứ không gộp vào `unit_type`. Dữ liệu ghi chung một chuỗi
+    # ("2PN, 1WC") nên gộp thì chỉ hỏi được "2 phòng ngủ 1 vệ sinh"; hỏi riêng
+    # "căn 2 vệ sinh" không diễn đạt nổi vì `unit_type` khớp theo TIỀN TỐ.
+    wc: int | None = Field(default=None, ge=1, le=9, description="Số nhà vệ sinh, ví dụ 2")
     subdivision: str | None = Field(
         default=None, description="Phân khu: 'Ocean Park 1', 'Ocean Park 2' hoặc 'Ocean Park 3'"
     )
@@ -588,12 +605,53 @@ class InventorySearchTool(AgentTool):
     """Tìm căn còn bán theo tiêu chí."""
 
     name = "inventory_search"
+    # Bình thường nguồn là từng MÃ CĂN, nên nhãn này gần như không dùng tới.
+    # Nó cứu đúng một ca: tra xong KHÔNG có căn nào khớp — lúc đó không mã căn
+    # nào để trỏ vào, mà khẳng định "kho không có căn như vậy" vẫn cần chứng
+    # minh. Thiếu nhãn thì `_nguon_cua_tool` rơi về tên tool và dòng "Nguồn"
+    # hiện "inventory_search", một cái tên máy bấm vào không ra gì.
+    nhan_nguon = "Dữ liệu tồn kho"
     description = (
         "Tìm danh sách căn hộ CÒN BÁN theo tiêu chí: số phòng ngủ, toà nhà, hướng, view, "
         "KHOẢNG GIÁ (tỷ đồng) và KHOẢNG DIỆN TÍCH (m2). Sắp xếp được theo giá hoặc diện tích "
         "nên trả lời được cả 'căn rẻ nhất'. Dùng khi người dùng mô tả căn muốn tìm mà không nêu mã căn."
     )
     args_schema = SearchArgs
+
+    def _khong_khop(self, rows: list[dict[str, Any]], args: SearchArgs) -> dict[str, Any]:
+        """Không có căn nào khớp — trả về KẾT LUẬN, không trả về rỗng.
+
+        `data=[]` từng là câu trả lời ở đây, và nó gây một lỗi nhìn rất tệ:
+        `ToolsNode` bỏ qua kết quả rỗng y hệt lúc không tool nào chạy, nên
+        `generate` mất sạch bằng chứng, rơi xuống tài liệu, rồi guardrail trả
+        "chưa đủ dữ liệu". Hỏi "căn 2 phòng ngủ 3 vệ sinh ở Ocean Park 1" thì
+        trợ lý xin thêm dữ liệu tồn kho — trong khi nó VỪA tra xong kho và biết
+        chắc chắn là không có.
+
+        "Đã tra hết kho và không có" là một sự thật, không phải thiếu thông tin.
+
+        Kèm theo những giá trị ĐANG CÓ sau khi nới hai tiêu chí hình dạng căn
+        (`unit_type`, `wc`) để model nói được câu hữu ích — "Ocean Park 1 chỉ có
+        loại 1 và 2 vệ sinh" — thay vì một lời từ chối cụt.
+        """
+        noi_long = args.model_copy(update={"unit_type": None, "wc": None})
+        con_lai = self._filter(rows, noi_long)
+        loai_dang_co = sorted({str(r.get("unit_type") or "").strip() for r in con_lai if r.get("unit_type")})
+
+        data: dict[str, Any] = {
+            "tong_so_khop": 0,
+            "ket_luan": (
+                "Đã tra HẾT kho và KHÔNG có căn nào khớp. Đây là kết luận chắc chắn, "
+                "KHÔNG phải thiếu dữ liệu — đừng hỏi xin thêm thông tin tồn kho."
+            ),
+        }
+        if loai_dang_co:
+            data["loai_can_dang_co"] = loai_dang_co
+            data["goi_y_noi_tieu_chi"] = (
+                "Nói cho khách biết những loại căn đang có ở trên để họ chọn lại, "
+                "chỉ dựa vào danh sách này, không suy đoán thêm."
+            )
+        return data
 
     async def run(self, **kwargs: Any) -> ToolResult:
         try:
@@ -616,14 +674,23 @@ class InventorySearchTool(AgentTool):
         except Exception as exc:  # noqa: BLE001 - lỗi DB, không làm đứt luồng agent
             return ToolResult.failure(f"Không truy vấn được cơ sở dữ liệu tồn kho: {exc}")
 
-        rows = self._filter(rows, args)
-        if not rows:
+        khop = self._filter(rows, args)
+        if not khop:
+            # ⚠️ Phân biệt "lọc xong không còn căn nào" với "kho rỗng từ đầu".
+            #
+            # Chỉ ca thứ nhất mới được kết luận chắc chắn. Kho rỗng nghĩa là
+            # `database_url` rơi về `sqlite:///./data/app.db` — một file rỗng
+            # trong container khi thiếu biến môi trường (xem render.yaml). Lúc
+            # đó tuyên bố "đã tra hết kho và không có căn nào" là nói chắc chắn
+            # một điều SAI, tệ hơn hẳn việc nhận chưa đủ dữ liệu.
+            data = self._khong_khop(rows, args) if rows else []
             return ToolResult(
                 ok=True,
-                data=[],
+                data=data,
                 source="inventory:postgres",
                 error="Không có căn nào còn bán khớp tiêu chí.",
             )
+        rows = khop
 
         hien = [_gon(r) for r in rows[: min(args.limit or MAX_RESULTS, MAX_RESULTS)]]
 
@@ -673,6 +740,13 @@ class InventorySearchTool(AgentTool):
         if args.unit_type:
             wanted = _fold(args.unit_type)
             result = [r for r in result if _fold(str(r.get("unit_type") or "")).startswith(wanted)]
+
+        if args.wc is not None:
+            # Số vệ sinh nằm ở ĐUÔI chuỗi ("2PN, 1WC" -> "2PN1WC"). Dùng
+            # `endswith` chứ không `in`: "1WC" nằm lọt trong "11WC" nếu có căn
+            # nào ghi kiểu đó, và tìm 1 vệ sinh mà trả căn 11 vệ sinh thì sai.
+            duoi = f"{args.wc}WC"
+            result = [r for r in result if _fold(str(r.get("unit_type") or "")).endswith(duoi)]
 
         if args.direction:
             wanted = _fold(args.direction)

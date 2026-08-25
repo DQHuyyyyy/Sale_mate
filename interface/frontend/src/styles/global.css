@@ -271,7 +271,10 @@ nav.main a svg {
   padding: 16px;
   box-shadow: var(--shadow);
   display: grid;
-  grid-template-columns: 1.1fr 1fr 1fr auto;
+  /* Năm cột: Tòa · Giá · Loại căn · Vệ sinh · nút. Ô Giá rộng hơn vì nó chứa
+     hai input và dấu gạch nối; ô Vệ sinh hẹp nhất vì nội dung chỉ là "1 vệ
+     sinh". Màn hẹp có media query lo, xem cuối file. */
+  grid-template-columns: 1fr 1.2fr 1fr 0.8fr auto;
   gap: 12px;
   align-items: end;
 }
@@ -1725,6 +1728,16 @@ table.data tbody tr:hover {
   border-radius: 12px;
   padding: 6px 6px 6px 12px;
 }
+/* Chiều cao do `useLayoutEffect` trong ChatSidebar đặt theo số dòng thật; ở đây
+   chỉ đặt trần và cách cuộn khi vượt trần.
+
+   Trần 168px ≈ 8 dòng. Cũ là 90px (~4 dòng) — quá chật để soát lại một câu hỏi
+   dài trước khi gửi. Vẫn phải có trần: `.cw-body` là `flex: 1` nên ô nhập cao
+   thêm bao nhiêu thì phần hội thoại mất đi đúng bấy nhiêu, và ô nhập nuốt hết
+   màn hình thì khách không còn thấy câu trả lời đang đọc dở.
+
+   `overflow-y: auto` cho phần vượt trần — trình duyệt tự cuộn theo con trỏ nên
+   người dùng luôn nhìn thấy chỗ mình đang gõ. */
 .cw-inrow textarea {
   flex: 1;
   border: 0;
@@ -1733,7 +1746,8 @@ table.data tbody tr:hover {
   font-family: inherit;
   font-size: 13.5px;
   padding: 6px 0;
-  max-height: 90px;
+  max-height: 168px;
+  overflow-y: auto;
   line-height: 1.4;
 }
 .cw-inrow textarea:focus {
@@ -2690,3 +2704,36 @@ table.data tbody tr:hover {
   }
 }
 
+
+/* Chip bộ lọc đang áp dụng trên trang tìm kiếm.
+
+   Cần vì form KHÔNG hiện được hết tiêu chí: không có ô phân khu, và trợ lý S
+   gửi tiền tố "2PN" không khớp mục nào trong dropdown. Thiếu dãy này thì người
+   dùng thấy "9 căn" dưới một form ghi toàn "Tất cả" — không hiểu vì sao thiếu
+   căn, cũng không có cách nào bỏ lọc. */
+.loc-dang-ap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: -4px 0 16px;
+}
+.loc-nhan {
+  font-size: 13px;
+  color: var(--faint);
+}
+/* Dấu × nằm TRONG nút, không phải nút riêng: cả chip là vùng bấm nên trên điện
+   thoại không phải nhắm vào một ký tự rộng 8px. */
+.chip-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.chip-go span {
+  font-size: 15px;
+  line-height: 1;
+  color: var(--faint);
+}
+.chip-go:hover span {
+  color: var(--brand);
+}

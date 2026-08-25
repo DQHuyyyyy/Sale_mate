@@ -190,14 +190,44 @@ def _da_hoi_roi(state: AgentState) -> set[str]:
     return {_chuan(state.get("query", "")), *(_chuan(c) for c in _cau_hoi_nguoi_dung(state)[:3])}
 
 
+def _dan_vao_ngo_cut(cau: str, tieu_chi_rong: list[dict[str, Any]]) -> bool:
+    """Câu này có lặp lại đúng bộ tiêu chí vừa chứng minh là KHÔNG có căn nào không.
+
+    `_tra_loi_duoc` chỉ hỏi "có tool nào NHẬN câu này" — mà tool nhận không có
+    nghĩa là tool RA được gì. Ca thật: hỏi "2 phòng ngủ và 3 vệ sinh ở Ocean
+    Park 1" (kho không có căn 3 vệ sinh nào), rồi bốn nút gợi ý đều là "Đếm số
+    căn 2PN, 3 vệ sinh…", "So sánh các căn 2PN, 3 vệ sinh…". Bấm cái nào cũng
+    quay lại đúng chỗ vừa đứng.
+
+    So theo QUAN HỆ BAO HÀM chứ không so bằng: gợi ý thường thêm tiêu chí (giá
+    thấp nhất, diện tích lớn nhất) vào bộ đã rỗng — thêm điều kiện vào một tập
+    rỗng thì vẫn rỗng.
+    """
+    if not tieu_chi_rong:
+        return False
+    cua_cau = extract_criteria(cau) or {}
+    return any(
+        rong and all(cua_cau.get(k) == v for k, v in rong.items() if k not in _KHONG_LOC) for rong in tieu_chi_rong
+    )
+
+
+# Trường đổi CÁCH TRÌNH BÀY chứ không đổi tập căn khớp. Để chúng tham gia so
+# sánh thì "rẻ nhất" (thêm sort) bị coi là khác bộ rỗng và lọt qua.
+_KHONG_LOC = frozenset({"sort", "limit"})
+
+
 def _loc(cac_cau: list[str], state: AgentState) -> list[str]:
     """Bỏ câu trùng, sai khuôn, đã hỏi rồi, hoặc hệ thống không trả lời nổi."""
     ten_tai_lieu = phuong_an_tu_tai_lieu(state)
     da_hoi = _da_hoi_roi(state)
+    rong = state.get("tieu_chi_rong") or []
     giu = [
         c
         for c in dict.fromkeys(c.strip() for c in cac_cau if c.strip())
-        if _dung_khuon(c) and _chuan(c) not in da_hoi and _tra_loi_duoc(c, ten_tai_lieu)
+        if _dung_khuon(c)
+        and _chuan(c) not in da_hoi
+        and _tra_loi_duoc(c, ten_tai_lieu)
+        and not _dan_vao_ngo_cut(c, rong)
     ]
     return giu[:TOI_DA_PHUONG_AN]
 

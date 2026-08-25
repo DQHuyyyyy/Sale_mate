@@ -22,7 +22,15 @@ export function logout() {
 }
 
 // ---- Căn hộ ----
-export function searchApartments({ tower, priceMin, priceMax, priceMaxExclusive, subdivision, type } = {}) {
+export function searchApartments({
+  tower,
+  priceMin,
+  priceMax,
+  priceMaxExclusive,
+  subdivision,
+  type,
+  wc,
+} = {}) {
   return request('/api/apartments', {
     params: {
       tower,
@@ -33,6 +41,9 @@ export function searchApartments({ tower, priceMin, priceMax, priceMaxExclusive,
       price_max_exclusive: priceMaxExclusive || undefined,
       subdivision,
       type,
+      // Tách khỏi `type` vì `type` khớp theo tiền tố: "căn 2 vệ sinh" không nêu
+      // phòng ngủ nên không diễn đạt được bằng nó.
+      wc,
     },
   });
 }

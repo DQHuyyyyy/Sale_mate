@@ -169,6 +169,7 @@ class ToolsNode(BaseNode):
         citations: list[Citation] = []
         ran: list[str] = []
         tieu_chi: dict[str, Any] = {}
+        rong: list[dict[str, Any]] = []
 
         for tool, binding in candidates:
             args = binding.dung_args(query, entities)
@@ -197,13 +198,21 @@ class ToolsNode(BaseNode):
                 logger.info("Tool %s không tìm thấy dữ liệu khớp", tool.name)
                 continue
 
+            # Tra xong mà không căn nào khớp là một KẾT LUẬN, và tầng gợi ý phải
+            # biết để không mời người dùng bấm vào đúng ngõ cụt đó. Đã xảy ra
+            # thật: hỏi "2 phòng ngủ 3 vệ sinh ở Ocean Park 1" (kho không có căn
+            # 3 vệ sinh nào) và nút gợi ý là "So sánh các căn 2PN, 3 vệ sinh ở
+            # Ocean Park 1".
+            if isinstance(result.data, dict) and result.data.get("tong_so_khop") == 0:
+                rong.append(args)
+
             blocks.append(_format(tool, result))
             citations.extend(_nguon_cua_tool(tool, result))
 
         if not blocks:
             # Vẫn báo tool nào đã chạy dù không ra dữ liệu — stream cần biết để
             # nói "đã tra nhưng không thấy", khác hẳn với "chưa tra gì".
-            return {**_EMPTY, "tools_ran": ran, "tool_filters": tieu_chi}
+            return {**_EMPTY, "tools_ran": ran, "tool_filters": tieu_chi, "tieu_chi_rong": rong}
 
         # Không trả "metadata" ở đây: BaseNode dùng setdefault để gắn thời gian
         # chạy, trả sẵn khoá đó là nuốt mất số đo của mọi node.
@@ -212,6 +221,7 @@ class ToolsNode(BaseNode):
             "tool_citations": citations,
             "tools_ran": ran,
             "tool_filters": tieu_chi,
+            "tieu_chi_rong": rong,
         }
 
     def tom_tat(self, result: dict[str, Any]) -> str:

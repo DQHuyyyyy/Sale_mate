@@ -16,6 +16,7 @@ from src.agents.suggest import (
     TOI_DA_KY_TU,
     TOI_DA_PHUONG_AN,
     _co_tool_nhan,
+    _loc,
     goi_y_bang_model,
     goi_y_khi_thieu_du_lieu,
     goi_y_ngoai_pham_vi,
@@ -365,3 +366,53 @@ class TestKhongLapCauVuaHoi:
         state["query"] = "Ưu đãi Ocean Park 2"
 
         assert goi_y_tiep_theo(state) == ["Vị trí Vinhomes Ocean Park 2"]
+
+
+class TestKhongMoiVaoNgoCut:
+    """Gợi ý không được lặp lại bộ tiêu chí vừa chứng minh là rỗng.
+
+    Ca thật: hỏi "2 phòng ngủ và 3 vệ sinh ở Ocean Park 1" — kho không có căn 3
+    vệ sinh nào — rồi cả bốn nút gợi ý đều là "Đếm số căn 2PN, 3 vệ sinh…",
+    "So sánh các căn 2PN, 3 vệ sinh…". Bấm cái nào cũng quay về chỗ vừa đứng.
+
+    `_tra_loi_duoc` chỉ hỏi "có tool nào NHẬN câu này". Tool nhận không có nghĩa
+    là tool RA được gì.
+    """
+
+    RONG = [{"unit_type": "2PN", "wc": 3, "subdivision": "Ocean Park 1"}]
+
+    @pytest.fixture(autouse=True)
+    def _tu_vung(self, monkeypatch):
+        """`extract_criteria` rút loại căn từ từ vựng ĐỌC TỪ DB, mà fixture chung
+        của bộ test cấp một SQLite rỗng. Không nạp thì `unit_type` luôn None và
+        cả nhóm test này xanh giả."""
+        from src.agents.tools.search import vocabulary
+
+        monkeypatch.setattr(
+            vocabulary,
+            "_values",
+            {"unit_type": ["1PN, 1WC", "2PN, 1WC", "2PN, 2WC", "Studio"], "building": [], "direction": []},
+        )
+        monkeypatch.setattr(vocabulary, "_loaded_at", float("inf"))
+
+    def test_bo_cau_lap_lai_tieu_chi_rong(self) -> None:
+        giu = _loc(["So sánh các căn 2PN, 3 vệ sinh ở Ocean Park 1"], {"tieu_chi_rong": self.RONG})
+
+        assert giu == []
+
+    def test_them_tieu_chi_vao_bo_rong_van_la_rong(self) -> None:
+        """ "giá thấp nhất" chỉ đổi cách sắp xếp — tập căn vẫn rỗng."""
+        giu = _loc(["Tìm căn 2PN, 3 vệ sinh giá thấp nhất ở Ocean Park 1"], {"tieu_chi_rong": self.RONG})
+
+        assert giu == []
+
+    def test_van_giu_cau_noi_long_tieu_chi(self) -> None:
+        """Chốt ngược: bỏ bớt điều kiện thì có thể ra căn, đừng lọc oan."""
+        cau = ["Tìm căn 2PN, 2 vệ sinh ở Ocean Park 1", "Tìm căn 2 phòng ngủ ở Ocean Park 1"]
+
+        assert _loc(cau, {"tieu_chi_rong": self.RONG}) == cau
+
+    def test_khong_co_tieu_chi_rong_thi_giu_nguyen_hanh_vi_cu(self) -> None:
+        cau = ["So sánh các căn 2PN, 3 vệ sinh ở Ocean Park 1"]
+
+        assert _loc(cau, {}) == cau

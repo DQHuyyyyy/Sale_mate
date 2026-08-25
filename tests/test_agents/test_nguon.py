@@ -329,3 +329,42 @@ class TestModelVietTenRutGon:
         tra_loi = f"Theo {self.TEN}, trần lãi suất là 6%/năm."
 
         assert len(loc_nguon_da_dung([_doc(self.TEN)], tra_loi, co_du_lieu_tool=True)) == 1
+
+
+class TestTuChoiNhacLaiTieuChi:
+    """Lời từ chối nhắc lại tiêu chí người dùng KHÔNG phải khẳng định.
+
+    Ca thật: hỏi "căn 2 phòng ngủ và 3 vệ sinh ở Ocean Park 1" (kho không có
+    căn 3 vệ sinh nào). Trợ lý từ chối, nhưng câu từ chối nhắc lại đúng cụm
+    "2 phòng ngủ và 3 vệ sinh" — `_SO_LIEU` khớp "2 phong ngu" nên tính là
+    khẳng định, lưới an toàn bật, và ba tài liệu vô can leo lên dòng "Nguồn":
+    "Tổng quan dự án Ocean Park 1", "Tổng quan dự án Ocean Park 3", "Vị trí
+    Ocean Park 1".
+
+    Số phòng ngủ và số vệ sinh là thứ NGƯỜI DÙNG nêu; giá, diện tích, số lượng
+    căn là thứ hệ thống TRẢ VỀ. Chỉ nhóm sau mới cần chứng minh.
+    """
+
+    def test_tu_choi_nhac_lai_so_phong_ngu_thi_khong_trich_nguon(self) -> None:
+        tra_loi = (
+            "Mình chưa có đủ dữ liệu để trả lời chính xác câu này. Bạn cho mình biết "
+            "thêm dữ liệu tồn kho căn hộ tại Ocean Park 1 có 2 phòng ngủ và 3 vệ sinh nhé."
+        )
+
+        assert loc_nguon_da_dung([_doc("Tổng quan dự án Vinhomes Ocean Park 1")], tra_loi, co_du_lieu_tool=True) == []
+
+    def test_van_giu_khi_tu_choi_mot_phan_co_so_lieu_that(self) -> None:
+        """Chốt ngược: phần đã trả lời được vẫn cần nguồn để khách mang đi kiểm."""
+        tra_loi = "Căn VOP962 giá 2,7 tỷ. Vay 70% khoảng 1,89 tỷ. Mình chưa có đủ dữ liệu về lãi suất áp dụng."
+
+        assert [c.title for c in loc_nguon_da_dung([_db("VOP962")], tra_loi, co_du_lieu_tool=True)] == ["VOP962"]
+
+    def test_ma_can_trong_bai_van_tinh_la_khang_dinh(self) -> None:
+        """Nhắc đích danh một căn là khẳng định, dù không kèm con số nào.
+
+        Không có luật này thì bỏ "phong ngu" khỏi `_SO_LIEU` sẽ xoá oan nguồn
+        của câu "Căn VOP619 có 2 phòng ngủ, mình chưa có dữ liệu giá".
+        """
+        tra_loi = "Căn VOP619 có 2 phòng ngủ. Mình chưa có đủ dữ liệu về giá."
+
+        assert [c.title for c in loc_nguon_da_dung([_db("VOP619")], tra_loi, co_du_lieu_tool=True)] == ["VOP619"]

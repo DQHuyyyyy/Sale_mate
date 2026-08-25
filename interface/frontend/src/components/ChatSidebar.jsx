@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { danhThucTroLy, getApartment, modifyApartmentImage, streamChatMessage } from '../api';
 import CauTraLoi from './CauTraLoi';
@@ -116,6 +116,7 @@ function boLocTuTieuChi(filters) {
   if (c.subdivision) params.subdivision = c.subdivision;
   if (c.building) params.tower = c.building;
   if (c.unit_type) params.type = c.unit_type;
+  if (c.wc != null) params.wc = String(c.wc);
 
   return Object.keys(params).length ? params : null;
 }
@@ -242,6 +243,39 @@ export default function ChatSidebar({ open, onToggle }) {
   useEffect(() => {
     if (open) inputRef.current?.focus();
   }, [open]);
+
+  /**
+   * Ô nhập cao dần theo số dòng người dùng gõ.
+   *
+   * `rows={1}` khoá chiều cao ở một dòng và không có gì thay đổi nó, nên câu dài
+   * bị cuộn ngầm bên trong: khách gõ tới dòng thứ năm thì bốn dòng đầu biến mất
+   * khỏi tầm nhìn, không đọc lại được để soát trước khi gửi. `max-height` trong
+   * CSS vốn được viết cho một ô biết nở ra — chỉ là chưa ai viết phần nở.
+   *
+   * Phải đặt `auto` TRƯỚC khi đọc `scrollHeight`: giữ nguyên chiều cao cũ thì
+   * `scrollHeight` không bao giờ nhỏ đi, và ô đã cao lên sẽ không co lại khi
+   * người dùng xoá bớt chữ.
+   *
+   * `useLayoutEffect` chứ không phải `useEffect` — đo và đặt chiều cao xong
+   * trước khi trình duyệt vẽ, nếu không mỗi lần xuống dòng là một nháy giật.
+   * Phụ thuộc vào `input` nên chạy cho MỌI đường làm giá trị đổi: gõ tay, bấm
+   * nút gợi ý, và cả lúc `setInput('')` sau khi gửi (ô co lại về một dòng).
+   */
+  useLayoutEffect(() => {
+    const o = inputRef.current;
+    if (!o) return undefined;
+
+    const doLai = () => {
+      o.style.height = 'auto';
+      o.style.height = `${o.scrollHeight}px`;
+    };
+    doLai();
+
+    // Sidebar rộng 33vw, nên kéo cửa sổ hẹp lại là chữ xuống dòng khác đi và
+    // chiều cao vừa đo thành thiếu — đúng lại triệu chứng chữ bị khuất.
+    window.addEventListener('resize', doLai);
+    return () => window.removeEventListener('resize', doLai);
+  }, [input, cheDo]);
 
   // Đánh thức lõi AI ngay khi mở widget, trước khi khách kịp gõ xong câu hỏi.
   // Chỉ bắn một lần mỗi phiên: lõi AI chỉ ngủ sau 15 phút không có lưu lượng,

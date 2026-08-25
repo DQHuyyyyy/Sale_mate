@@ -123,10 +123,23 @@ def la_loi_tu_choi(cau_tra_loi: str) -> bool:
 # Bắt buộc có đơn vị đi kèm vì chữ số trần xuất hiện khắp nơi vô hại: "Ocean
 # Park 1", "OP3", "tòa S2". So trên chuỗi đã bỏ dấu nên chỉ cần viết dạng không
 # dấu.
-_SO_LIEU = re.compile(r"\d[\d.,]*\s*(ty\b|trieu\b|m2\b|m²|%|can\b|pn\b|phong ngu)")
+#
+# ⚠️ CỐ Ý không có "phong ngu", "pn", "wc", "ve sinh". Chúng là TIÊU CHÍ người
+# dùng nêu ra, và lời từ chối gần như luôn nhắc lại tiêu chí đó — "chưa đủ dữ
+# liệu về căn 2 phòng ngủ và 3 vệ sinh" bị tính là khẳng định, nên nguồn không
+# bị xoá và ba tài liệu vô can leo lên dòng "Nguồn". Đo được trên production.
+#
+# Giá, diện tích, phần trăm, số lượng căn thì khác: chúng là thứ hệ thống TRẢ
+# VỀ, người dùng không tự nêu trong câu hỏi.
+_SO_LIEU = re.compile(r"\d[\d.,]*\s*(ty\b|trieu\b|m2\b|m²|%|can\b)")
 
 # Cách nói trỏ vào một căn cụ thể mà không nhắc mã — "Căn này giá 2,7 tỷ".
 _TRO_VAO_CAN = ("can nay", "can do", "can tren", "can dau tien", "can thu")
+
+# Mã căn trong câu trả lời. Nhắc đích danh một căn LÀ khẳng định, kể cả khi
+# không kèm con số nào: "Căn VOP619 có 2 phòng ngủ, mình chưa có dữ liệu giá"
+# là từ chối MỘT PHẦN và phần đã trả lời vẫn cần nguồn để kiểm.
+_MA_CAN_TRONG_CAU = re.compile(r"\b[A-Z]{2,4}\d{2,5}\b")
 
 
 def _co_khang_dinh_ve_can(cau_tra_loi: str) -> bool:
@@ -145,9 +158,15 @@ def _co_khang_dinh_ve_can(cau_tra_loi: str) -> bool:
 
     `_CUM_TU_CHOI` đã bắt một phần ca hỏi ngược ("cho mình thêm thông tin"),
     nhưng bắt theo cụm từ thì model đổi cách nói một chút là lọt. Ở đây hỏi
-    thẳng vào thứ CẦN chứng minh: có con số hoặc có trỏ vào một căn cụ thể.
+    thẳng vào thứ CẦN chứng minh: có số liệu, có mã căn, hoặc có trỏ vào một
+    căn cụ thể.
+
+    Số phòng ngủ và số vệ sinh KHÔNG tính — xem chú thích ở `_SO_LIEU`. Chúng
+    là tiêu chí người dùng nêu, mà lời từ chối luôn nhắc lại tiêu chí.
     """
     thap = _khong_dau(cau_tra_loi)
+    if _MA_CAN_TRONG_CAU.search(cau_tra_loi):
+        return True
     return bool(_SO_LIEU.search(thap)) or any(cum in thap for cum in _TRO_VAO_CAN)
 
 

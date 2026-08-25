@@ -50,6 +50,10 @@ class AgentState(TypedDict, total=False):
             trợ lý đang làm gì thay vì ngồi nhìn màn hình trống.
         tool_filters: Tiêu chí từng tool đã dùng, để giao diện đồng bộ bộ lọc
             trên trang tìm kiếm với thứ trợ lý vừa trả lời.
+        tieu_chi_rong: Các bộ tiêu chí vừa tra và CHẮC CHẮN không có căn nào
+            khớp. Tầng gợi ý đọc để không mời người dùng bấm vào ngõ cụt —
+            "So sánh các căn 2PN, 3 vệ sinh ở Ocean Park 1" từng lọt ra giao
+            diện trong khi kho không có căn 3 vệ sinh nào.
         plan_action: Quyết định của node plan: "act" · "answer" · "clarify"
             · "retrieve".
         plan_reason: Lý do ngắn gọn, hiện thẳng cho người dùng thấy agent
@@ -93,6 +97,7 @@ class AgentState(TypedDict, total=False):
     tool_citations: list[Citation]
     tools_ran: list[str]
     tool_filters: dict[str, Any]
+    tieu_chi_rong: list[dict[str, Any]]
 
     plan_action: str
     plan_reason: str
@@ -132,6 +137,7 @@ def initial_state(
         tool_citations=[],
         tools_ran=[],
         tool_filters={},
+        tieu_chi_rong=[],
         iterations=0,
         da_thu=[],
         da_truy_hoi=False,

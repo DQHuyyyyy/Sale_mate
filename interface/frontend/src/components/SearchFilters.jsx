@@ -6,7 +6,12 @@ import { SearchIcon } from './Icons';
 const PRICE_MIN = 0;
 const PRICE_MAX = 20;
 
-const DEFAULT_FILTERS = { tower: '', priceMin: '', priceMax: '', type: '' };
+const DEFAULT_FILTERS = { tower: '', priceMin: '', priceMax: '', type: '', wc: '' };
+
+// Kho hiện có 1–3 vệ sinh. Khai cứng chứ không rút từ dữ liệu như `types`: danh
+// sách loại căn thay đổi theo hàng còn bán, còn số vệ sinh thì không — và rút
+// động thì lúc bán hết căn 3WC ô lọc lặng lẽ mất một mục.
+const SO_WC = [1, 2, 3];
 
 export default function SearchFilters({ onSearch, loading, types = [], value }) {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
@@ -27,6 +32,12 @@ export default function SearchFilters({ onSearch, loading, types = [], value }) 
   }, [khoaUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const update = (key) => (event) => setFilters({ ...filters, [key]: event.target.value });
+
+  // Trợ lý S gửi tiền tố "2PN", mà dropdown chỉ có giá trị đầy đủ ("2PN, 1WC",
+  // "2PN, 2WC"). Không thêm vào thì `<select>` không khớp mục nào và hiện "Tất
+  // cả" — ô lọc nói dối về điều kiện đang chạy. Thêm đúng chuỗi đang lọc để
+  // người dùng đổi sang giá trị khác được mà không mất tiêu chí hiện tại.
+  const loaiCan = filters.type && !types.includes(filters.type) ? [filters.type, ...types] : types;
 
   const submit = (event) => {
     event.preventDefault();
@@ -85,9 +96,21 @@ export default function SearchFilters({ onSearch, loading, types = [], value }) 
         <label htmlFor="fType">Loại căn</label>
         <select id="fType" value={filters.type} onChange={update('type')}>
           <option value="">Tất cả</option>
-          {types.map((type) => (
+          {loaiCan.map((type) => (
             <option key={type} value={type}>
               {type}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="field">
+        <label htmlFor="fWc">Vệ sinh</label>
+        <select id="fWc" value={filters.wc} onChange={update('wc')}>
+          <option value="">Tất cả</option>
+          {SO_WC.map((so) => (
+            <option key={so} value={so}>
+              {so} vệ sinh
             </option>
           ))}
         </select>
