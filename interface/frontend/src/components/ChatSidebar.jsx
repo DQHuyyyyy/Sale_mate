@@ -1,8 +1,9 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { danhThucTroLy, getApartment, modifyApartmentImage, streamChatMessage } from '../api';
+import AnhPhongTo from './AnhPhongTo';
 import CauTraLoi from './CauTraLoi';
-import { CloseIcon, PlusIcon, RobotMascot, SendIcon, WandIcon } from './Icons';
+import { CloseIcon, ExpandIcon, PlusIcon, RobotMascot, SendIcon, WandIcon } from './Icons';
 
 // Gợi ý mở đầu. NHÃN và CÂU HỎI tách nhau có chủ đích: nút đọc gọn là
 // "Ocean Park 1", nhưng gửi đúng chữ đó thì trợ lý trả lời về tiện ích chứ
@@ -167,12 +168,38 @@ function moTaBuoc(event, daTraTonKho = false) {
   return null;
 }
 
+// Địa chỉ email nằm sẵn trong câu backend trả về — rút ra để dựng nút bấm được.
+// CỐ Ý không khai lại email ở đây: khai hai nơi thì sửa một nơi là nút mở ra một
+// địa chỉ khác với địa chỉ đang hiện trên màn hình. Không khớp thì vẫn không sao,
+// email vẫn đọc được trong thân bài, chỉ mất cái nút.
+const EMAIL_TRONG_CAU = /[\w.+-]+@[\w-]+\.[\w.-]+/;
+
+/**
+ * Dựng bong bóng cho một lỗi gọi API.
+ *
+ * 429 KHÔNG phải lỗi dưới góc nhìn người dùng: backend trả về lời mời liên hệ
+ * chuyên viên tư vấn, cố ý không nói "hết lượt". Tô đỏ nó là dịch ngược lời mời
+ * đó thành một sự cố kỹ thuật — đúng thứ quyết định sản phẩm muốn tránh.
+ */
+function khungLoi(error, maCanQuanTam) {
+  if (error?.status === 429) {
+    return {
+      content: error.message,
+      lienHe: true,
+      error: false,
+      emailTuVan: error.message?.match(EMAIL_TRONG_CAU)?.[0] ?? null,
+      maCanQuanTam,
+    };
+  }
+  return { content: error.message, error: true };
+}
+
 /**
  * Trợ lý S — sidebar bên phải, thu gọn thành nút tròn chữ "S".
  *
- * Mở được cho cả khách chưa đăng nhập. Backend giới hạn số lượt theo IP nên khi
- * hỏi quá nhanh sẽ nhận lỗi 429 kèm số giây phải đợi — hiện nguyên văn câu đó
- * cho người dùng, không nuốt đi.
+ * Mở được cho cả khách chưa đăng nhập. Backend giới hạn số lượt hỏi của khách
+ * vãng lai; chạm trần thì trả 429 kèm LỜI MỜI liên hệ chuyên viên tư vấn, và
+ * widget hiện nó như một tin nhắn bình thường — xem `khungLoi`.
  *
  * Giữ lịch sử hội thoại trong state và gửi kèm mỗi lượt, đúng contract
  * POST /api/chat {message, history} -> {reply}.
@@ -205,6 +232,39 @@ export default function ChatSidebar({ open, onToggle }) {
   // Ảnh đang xem cũng nằm trên URL — xem lý do ở đầu ApartmentDetail.jsx.
   const chiSoAnhDangXem = Math.max(0, Number(new URLSearchParams(vitri.search).get('anh') ?? 0) || 0);
   const [canDangXem, setCanDangXem] = useState(null);
+
+  // Ảnh đang mở to. null = không mở.
+  const [anhPhongTo, setAnhPhongTo] = useState(null);
+
+  // Lượt sửa tiếp theo lấy ảnh nào làm gốc: 'goc' = ảnh thật trong gallery,
+  // 'ai' = ảnh AI vừa sinh. Chỉ là LỰA CHỌN MẶC ĐỊNH — người dùng đổi được.
+  const [nguonSua, setNguonSua] = useState('goc');
+
+  /**
+   * Ảnh AI gần nhất của ĐÚNG căn đang xem, để sửa tiếp trên đó.
+   *
+   * Suy ra từ `messages` chứ không giữ state riêng. Bản trước giữ state rồi xoá
+   * nó mỗi khi người dùng bấm sang ảnh khác trong gallery — chuỗi sửa mất hẳn,
+   * không có đường quay lại, trong khi tấm ảnh đó vẫn nằm ngay trong khung chat
+   * nhìn thấy được. Suy ra từ lịch sử thì nó còn đúng chừng nào bong bóng còn.
+   *
+   * Lọc theo mã căn: ảnh AI của căn khác không phải ảnh gốc hợp lệ cho căn này,
+   * và server cũng sẽ từ chối vì cặp (ma_can, image_id) không khớp.
+   */
+  const anhAICuoi = (() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const tin = messages[i];
+      if (tin.anhAI && tin.anhAICuaCan === maCanDangXem) return tin.anhAI;
+    }
+    return null;
+  })();
+
+  // Bấm sang ảnh khác trong gallery là một hành động RÕ RÀNG về ảnh: mặc định
+  // quay về ảnh gốc. Nhưng chỉ đổi mặc định thôi — `anhAICuoi` vẫn còn đó nên
+  // người dùng chọn lại "ảnh vừa tạo" bất cứ lúc nào.
+  useEffect(() => {
+    setNguonSua('goc');
+  }, [maCanDangXem, chiSoAnhDangXem]);
 
   // Đổi sang căn khác thì cho phép mời lại, và nạp vài thông tin để lời mời nói
   // đúng căn nào thay vì chỉ trơ một mã căn.
@@ -388,7 +448,7 @@ export default function ChatSidebar({ open, onToggle }) {
         sessionRef.current,
       );
     } catch (error) {
-      capNhat({ content: error.message, error: true });
+      capNhat(khungLoi(error, maCanDangXem));
     } finally {
       setSending(false);
       setBuoc('');
@@ -429,7 +489,17 @@ export default function ChatSidebar({ open, onToggle }) {
     setDangTraLoi(false);
 
     try {
-      const ket_qua = await modifyApartmentImage({ maCan: maCanDangXem, imageId: anh.id, yeuCau });
+      const ket_qua = await modifyApartmentImage({
+        maCan: maCanDangXem,
+        imageId: anh.id,
+        yeuCau,
+        // Sửa tiếp trên ảnh AI khi người dùng đang chọn vậy. Ảnh AI không được
+        // lưu ở đâu cả nên server không tự tìm lại được — client gửi lại.
+        anhNguon: nguonSua === 'ai' ? anhAICuoi : null,
+      });
+      // Vừa sinh xong thì mặc định lượt sau nối tiếp, để "đổi rèm sang xám" rồi
+      // "bỏ cái bàn đi" cộng dồn lên nhau thay vì quay về ảnh gốc.
+      setNguonSua('ai');
       setMessages((prev) =>
         prev.map((item) =>
           item.id === id
@@ -437,6 +507,9 @@ export default function ChatSidebar({ open, onToggle }) {
                 ...item,
                 content: `Ảnh căn ${maCanDangXem} sau khi ${yeuCau}`,
                 anhAI: ket_qua.anh,
+                // Gắn mã căn để lượt sau biết ảnh này thuộc căn nào — ảnh AI
+                // của căn khác không dùng làm gốc được.
+                anhAICuaCan: maCanDangXem,
                 options: goiYSauKhiSuaAnh(maCanDangXem),
               }
             : item,
@@ -444,7 +517,7 @@ export default function ChatSidebar({ open, onToggle }) {
       );
     } catch (error) {
       setMessages((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, content: error.message, error: true } : item)),
+        prev.map((item) => (item.id === id ? { ...item, ...khungLoi(error, maCanDangXem) } : item)),
       );
     } finally {
       setSending(false);
@@ -572,9 +645,40 @@ export default function ChatSidebar({ open, onToggle }) {
                     phải đi theo ảnh, nếu không đó thành ảnh thật của căn. */}
                 {item.anhAI && (
                   <figure className="cw-anh-ai">
-                    <img src={item.anhAI} alt={item.content} />
+                    {/* <button> chứ không phải onClick trên <img>: bàn phím và
+                        trình đọc màn hình dùng được, và con trỏ đổi thành tay
+                        nên người dùng biết là bấm được. */}
+                    <button
+                      type="button"
+                      className="cw-anh-mo"
+                      aria-label="Phóng to ảnh"
+                      onClick={() => setAnhPhongTo({ src: item.anhAI, alt: item.content })}
+                    >
+                      <img src={item.anhAI} alt={item.content} />
+                      <span className="cw-anh-zoom" aria-hidden="true">
+                        <ExpandIcon />
+                      </span>
+                    </button>
                     <figcaption>Ảnh minh hoạ do AI tạo — không phải ảnh thật của căn</figcaption>
                   </figure>
+                )}
+
+                {/* Lời mời liên hệ chuyên viên tư vấn. Nút `mailto` chứ không
+                    chỉ để chữ: trên điện thoại, bắt khách bôi đen rồi chép một
+                    địa chỉ email là mất phần lớn số người định liên hệ thật.
+                    Kèm sẵn tiêu đề và mã căn đang xem để chuyên viên biết ngay
+                    khách quan tâm căn nào. */}
+                {item.lienHe && item.emailTuVan && (
+                  <a
+                    className="cw-lien-he"
+                    href={`mailto:${item.emailTuVan}?subject=${encodeURIComponent(
+                      item.maCanQuanTam
+                        ? `Quan tâm căn ${item.maCanQuanTam} — Vinhomes Ocean Park`
+                        : 'Quan tâm căn hộ Vinhomes Ocean Park',
+                    )}`}
+                  >
+                    Gửi email cho chuyên viên tư vấn
+                  </a>
                 )}
               </div>
 
@@ -643,14 +747,43 @@ export default function ChatSidebar({ open, onToggle }) {
 
         {cheDo && (
           <div className="cw-chedo">
-            <WandIcon />
-            <span>
-              {TINH_NANG.find((tn) => tn.ma === cheDo)?.ten}
-              {maCanDangXem && ` · căn ${maCanDangXem}, ảnh ${chiSoAnhDangXem + 1}`}
-            </span>
-            <button aria-label="Thoát chế độ" onClick={() => setCheDo(null)}>
-              <CloseIcon />
-            </button>
+            <div className="cw-chedo-dau">
+              <WandIcon />
+              <span>{TINH_NANG.find((tn) => tn.ma === cheDo)?.ten}</span>
+              <button aria-label="Thoát chế độ" onClick={() => setCheDo(null)}>
+                <CloseIcon />
+              </button>
+            </div>
+
+            {/* Sửa trên ảnh nào là lựa chọn của NGƯỜI DÙNG, không phải suy đoán
+                của giao diện. Bản trước tự quyết rồi chỉ ghi một dòng chữ:
+                bấm sang ảnh khác trong gallery là chuỗi sửa mất hẳn, không có
+                đường quay lại, dù tấm ảnh AI vẫn nằm ngay trong khung chat.
+
+                Hiện cả hai nút kể cả khi chỉ có một lựa chọn hợp lệ — người
+                dùng thấy được là có hai đường, và thấy mình đang ở đường nào. */}
+            {cheDo === MODIFY && (
+              <div className="cw-chedo-nguon" role="radiogroup" aria-label="Sửa trên ảnh nào">
+                <button
+                  role="radio"
+                  aria-checked={nguonSua === 'goc'}
+                  className={nguonSua === 'goc' ? 'on' : ''}
+                  onClick={() => setNguonSua('goc')}
+                >
+                  Ảnh gốc{maCanDangXem && ` · ảnh ${chiSoAnhDangXem + 1}`}
+                </button>
+                <button
+                  role="radio"
+                  aria-checked={nguonSua === 'ai'}
+                  className={nguonSua === 'ai' ? 'on' : ''}
+                  disabled={!anhAICuoi}
+                  title={anhAICuoi ? undefined : 'Chưa có ảnh AI nào của căn này'}
+                  onClick={() => setNguonSua('ai')}
+                >
+                  Ảnh vừa tạo
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -681,6 +814,15 @@ export default function ChatSidebar({ open, onToggle }) {
           </button>
         </div>
       </div>
+
+      {anhPhongTo && (
+        <AnhPhongTo
+          src={anhPhongTo.src}
+          alt={anhPhongTo.alt}
+          ghiChu="Ảnh minh hoạ do AI tạo — không phải ảnh thật của căn"
+          onDong={() => setAnhPhongTo(null)}
+        />
+      )}
     </aside>
   );
 }

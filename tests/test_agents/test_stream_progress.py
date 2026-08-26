@@ -36,23 +36,28 @@ async def _collect(service, message):
 def test_context_nodes_khop_voi_node_dung_trong_graph(scripted_llm, settings):
     """Mọi node trong CONTEXT_NODES phải tồn tại — sai tên là stream bỏ qua âm thầm.
 
-    Dựng bản ĐẦY ĐỦ (bật mọi cờ) vì `orchestrate` là node tuỳ chọn: nó chỉ có
-    khi `enable_orchestrator` bật. Kiểm trên bản tối thiểu thì node tuỳ chọn
-    nào cũng làm test đỏ, còn kiểm trên bản đầy đủ thì vẫn bắt được lỗi thật —
-    gõ sai tên node trong CONTEXT_NODES.
+    Dựng bản ĐẦY ĐỦ (bật mọi cờ) vì `orchestrate` và `chinh_sach` là node tuỳ
+    chọn: chúng chỉ có khi cờ tương ứng bật. Kiểm trên bản tối thiểu thì node
+    tuỳ chọn nào cũng làm test đỏ, còn kiểm trên bản đầy đủ thì vẫn bắt được lỗi
+    thật — gõ sai tên node trong CONTEXT_NODES.
     """
-    day_du = settings.model_copy(update={"enable_orchestrator": True})
+    day_du = settings.model_copy(update={"enable_orchestrator": True, "enable_cong_chinh_sach": True})
     nodes = build_nodes(scripted_llm, EmptyRetriever(), day_du, ScriptedToolCallingProvider())
 
     assert set(CONTEXT_NODES) <= set(nodes)
 
 
 def test_node_tuy_chon_tat_co_thi_stream_van_chay(scripted_llm, settings):
-    """Tắt cờ thì `orchestrate` không tồn tại, và đường stream phải bỏ qua nó."""
+    """Tắt cờ thì node tuỳ chọn không tồn tại, và đường stream phải bỏ qua chúng.
+
+    So bằng == chứ không phải <=: thêm một node tuỳ chọn mà quên khai ở đây thì
+    test vẫn xanh, và không ai biết đường stream đang lặng lẽ bỏ qua nó.
+    """
     nodes = build_nodes(scripted_llm, EmptyRetriever(), settings)
 
     assert "orchestrate" not in nodes
-    assert set(CONTEXT_NODES) - set(nodes) == {"orchestrate"}
+    assert "chinh_sach" not in nodes
+    assert set(CONTEXT_NODES) - set(nodes) == {"orchestrate", "chinh_sach"}
 
 
 def test_tools_nam_trong_duong_lay_context():

@@ -12,6 +12,7 @@ os.environ.setdefault("JWT_SECRET", "test-secret-chi-dung-trong-test-0123456789a
 os.environ.setdefault("DATABASE_URL", "postgresql://user:pass@localhost:5432/test")
 
 import pytest  # noqa: E402
+from app.core import han_muc as han_muc_mod  # noqa: E402
 from app.core.deps import get_current_user  # noqa: E402
 from app.main import app  # noqa: E402
 from app.routers import apartments as apartments_router  # noqa: E402
@@ -190,26 +191,49 @@ class TestHanMucChat:
         monkeypatch.setattr(chat_router, "generate_reply", fake_reply)
         # Neo cờ tường minh: `.env` của máy dev có thể đang tắt hạn mức để tự
         # test, và test không được đổi kết quả theo cấu hình từng máy.
-        monkeypatch.setattr(chat_router.settings, "chat_rate_limit_enabled", bat_han_muc)
+        monkeypatch.setattr(han_muc_mod.settings, "chat_rate_limit_enabled", bat_han_muc)
         # Bộ đếm dùng chung cả tiến trình, phải làm sạch trước khi đo.
-        chat_router._gioi_han_khach._hits.clear()
+        chat_router._han_muc.khach._hits.clear()
         return TestClient(app)
 
     def test_khach_bi_chan_sau_khi_vuot_han_muc(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client = self._chuan_bi(monkeypatch, bat_han_muc=True)
 
         body = {"message": "chào", "history": []}
-        for lan in range(chat_router.KHACH_MOI_10_PHUT):
+        for lan in range(chat_router.KHACH_MOI_NGAY):
             assert client.post("/api/chat", json=body).status_code == 200, lan
 
         response = client.post("/api/chat", json=body)
         assert response.status_code == 429
         assert "Retry-After" in response.headers
 
+    def test_loi_moi_lien_he_thay_cho_thong_bao_het_luot(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Chạm trần phải MỜI LIÊN HỆ, tuyệt đối không báo "hết lượt".
+
+        Quyết định sản phẩm: người hỏi tới câu thứ 16 là lead nóng nhất trong
+        ngày. Báo cho họ một bức tường là mất khách đúng lúc họ quan tâm nhất.
+        Test này là thứ giữ cho câu đó không bị đổi ngược về thông báo kỹ thuật.
+        """
+        client = self._chuan_bi(monkeypatch, bat_han_muc=True)
+
+        body = {"message": "chào", "history": []}
+        for _ in range(chat_router.KHACH_MOI_NGAY):
+            client.post("/api/chat", json=body)
+
+        loi = client.post("/api/chat", json=body).json()["detail"]
+
+        assert han_muc_mod.EMAIL_TU_VAN in loi
+        # Cả cách nói thẳng lẫn cách nói vòng đều bị cấm: "thử lại sau N giây"
+        # chính là "hết lượt" viết khác đi.
+        for cam in ("hết lượt", "giới hạn", "quá nhiều", "thử lại sau", "hạn mức"):
+            assert cam not in loi.lower(), cam
+
     def test_tat_han_muc_thi_goi_bao_nhieu_cung_duoc(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Cờ tắt phải thật sự bỏ qua bộ đếm, không chỉ nới rộng nó."""
         client = self._chuan_bi(monkeypatch, bat_han_muc=False)
 
         body = {"message": "chào", "history": []}
-        for lan in range(chat_router.KHACH_MOI_10_PHUT + 5):
+        for lan in range(chat_router.KHACH_MOI_NGAY + 5):
             assert client.post("/api/chat", json=body).status_code == 200, lan

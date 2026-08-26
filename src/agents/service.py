@@ -18,6 +18,7 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
+from src.agents import chinh_sach
 from src.agents.contracts import LLMProvider
 from src.agents.graph import CONTEXT_NODES
 from src.agents.nguon import loc_nguon_da_dung
@@ -126,6 +127,28 @@ class LangGraphAgentService:
                         citations = event.citations
                     else:
                         yield event
+
+                # Chốt cổng chính sách TRƯỚC khi phát chữ. Trên đường stream đây
+                # là ranh giới không quay lại được: token đã gửi đi là khách đã
+                # đọc. Cùng hàm `chot()` mà `GenerateNode` gọi — hai đường phải
+                # quyết định giống hệt nhau, xem `src/agents/chinh_sach.py`.
+                cong = await chinh_sach.chot(state.get("chinh_sach_task"))
+                if cong.chan:
+                    async for event in self._phat_chan(cong, session_id):
+                        yield event
+                    return
+                if cong.nhay_cam:
+                    # Nhãn `nhay_cam` KHÔNG chặn — chỉ gắn cờ rồi cho trả lời
+                    # tiếp. Chặn câu "sale hứa giảm 5%" là bỏ mất câu trả lời tốt
+                    # hơn hẳn: trợ lý trích đúng tài liệu ưu đãi rồi nói cần sale
+                    # xác nhận. Cờ này là thứ `ChatEventType.SENSITIVE` sinh ra
+                    # để chở, và tới giờ chưa từng được phát ra.
+                    yield ChatEvent(
+                        type=ChatEventType.SENSITIVE,
+                        content=cong.ly_do,
+                        session_id=session_id,
+                        data={"nhan": cong.nhan},
+                    )
 
                 # Agent chủ động hỏi lại: câu hỏi ngược đã có sẵn, phát thẳng.
                 # Gọi model để diễn đạt lại chỉ tốn tiền và tạo cơ hội bịa thêm.
@@ -237,6 +260,32 @@ class LangGraphAgentService:
                 content="Trợ lý đang gặp sự cố. Bạn thử lại sau ít phút nhé.",
                 session_id=session_id,
             )
+
+    async def _phat_chan(self, cong: Any, session_id: str) -> AsyncIterator[ChatEvent]:
+        """Phát lời từ chối của cổng chính sách rồi đóng luồng.
+
+        `cho_trich_nguon=False` vì lượt bị chặn không khẳng định gì về căn hộ nào
+        — không có gì để trích nguồn.
+
+        Nhưng VẪN có nút gợi ý, và là bộ cố định `GOI_Y_SAU_KHI_CHAN`: người dùng
+        vừa bị từ chối là lúc dễ rời đi nhất. Cố định chứ không sinh từ câu hỏi —
+        sinh từ câu vừa bị chặn là dựng lối quay lại đúng chủ đề đó.
+        """
+        yield ChatEvent(
+            type=ChatEventType.SENSITIVE,
+            content=cong.ly_do,
+            session_id=session_id,
+            data={"nhan": cong.nhan, "chan": True},
+        )
+        yield ChatEvent(type=ChatEventType.TOKEN, content=cong.loi_tu_choi, session_id=session_id)
+        yield ChatEvent(
+            type=ChatEventType.DONE,
+            session_id=session_id,
+            data={
+                "options": list(chinh_sach.GOI_Y_SAU_KHI_CHAN),
+                "cho_trich_nguon": False,
+            },
+        )
 
     async def _prepare_context(self, state: AgentState, session_id: str) -> AsyncIterator[ChatEvent]:
         """Chạy dãy node lấy context (không qua graph) rồi phát event tiến trình.

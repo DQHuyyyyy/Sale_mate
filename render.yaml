@@ -61,22 +61,26 @@ services:
       - key: AI_CORE_TIMEOUT
         value: "60"
 
-      # ⚠️ TẮT TẠM ĐỂ LẤY FEEDBACK — NHỚ BẬT LẠI.
-      #
-      # Bật lại bằng cách đổi thành "true" ở đây rồi deploy, hoặc sửa thẳng
-      # trong Render dashboard nếu cần hiệu lực ngay.
-      #
       # Một cờ này gác CẢ HAI endpoint tốn tiền, không chỉ chat:
-      #   /api/chat          khách 10 lượt · đã đăng nhập 60 lượt
-      #   /api/images/modify khách  5 lượt · đã đăng nhập 20 lượt
-      # Cửa sổ 10 phút. Sinh ảnh đắt hơn hỏi đáp nhiều lần, và giờ nó cũng không
-      # còn hạn mức nào.
       #
-      # Cả hai endpoint đều CÔNG KHAI, không cần đăng nhập, và mỗi lượt đều gọi
-      # model thật. Trong lúc cờ này là false, bất kỳ ai có đường link đều gọi
-      # được không giới hạn — quota OpenAI cạn là hết cả bản demo.
+      #   /api/chat          khách 15 lượt/ngày · đã đăng nhập 120 lượt/10 phút
+      #   /api/images/modify khách 10 lượt/ngày · đã đăng nhập  40 lượt/10 phút
+      #
+      # Khách đếm theo NGÀY vì với họ đây là trần chi phí; nhân viên đếm theo 10
+      # phút vì với họ đây chỉ là phanh chống vòng lặp retry và tài khoản bị lộ —
+      # không ai gõ nổi 120 câu trong 10 phút. Xem app/core/han_muc.py.
+      #
+      # ⚠️ Đây là CÔNG TẮC KHẨN CẤP của ngày ra mắt. Bộ đếm của khách khoá theo
+      # IP, mà sau proxy của Render thì `request.client.host` CÓ THỂ là IP của
+      # proxy — lúc đó mọi khách chung một rổ và người thứ 16 bị chặn dù chưa hỏi
+      # câu nào. Nếu thấy hiện tượng đó thì đổi biến này thành "false" NGAY trong
+      # Render dashboard (hiệu lực tức thì, không cần deploy) rồi sửa sau.
+      #
+      # Đổi lại: trong lúc cờ là false, bất kỳ ai có đường link đều gọi model
+      # không giới hạn. Chỉ an toàn khi đã đặt trần chi tiêu ở console OpenAI và
+      # Ark — đó là phanh duy nhất không lách được.
       - key: CHAT_RATE_LIMIT_ENABLED
-        value: "false"
+        value: "true"
 
       # ---- Sinh ảnh (Modify Object) ----
       # Ba nhà cung cấp, chọn bằng một biến. Đo thật trên cùng ảnh và cùng yêu

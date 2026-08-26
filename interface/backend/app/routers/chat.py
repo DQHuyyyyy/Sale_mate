@@ -6,9 +6,8 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
-from app.core.config import settings
 from app.core.deps import get_optional_user
-from app.core.ratelimit import RateLimiter
+from app.core.han_muc import EMAIL_TU_VAN, HanMuc
 from app.schemas.auth import CurrentUser
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.chat import ChatError, generate_reply, stream_reply
@@ -18,40 +17,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 # Endpoint này công khai nên phải có hạn mức, không thì ai cũng gọi được và mỗi
-# lượt đều tốn tiền model. Khách chặt tay hơn nhân viên đã đăng nhập.
-KHACH_MOI_10_PHUT = 10
-NHAN_VIEN_MOI_10_PHUT = 60
-CUA_SO_GIAY = 600.0
+# lượt đều tốn tiền model. Xem `app/core/han_muc.py` để biết vì sao khách đếm
+# theo ngày còn nhân viên đếm theo 10 phút.
+KHACH_MOI_NGAY = 15
+NHAN_VIEN_MOI_10_PHUT = 120
 
-_gioi_han_khach = RateLimiter(KHACH_MOI_10_PHUT, CUA_SO_GIAY)
-_gioi_han_nhan_vien = RateLimiter(NHAN_VIEN_MOI_10_PHUT, CUA_SO_GIAY)
-
-
-def _kiem_tra_han_muc(request: Request, user: CurrentUser | None) -> None:
-    if not settings.chat_rate_limit_enabled:
-        # Tắt qua CHAT_RATE_LIMIT_ENABLED=false để tự test không bị chặn giữa
-        # chừng. Log ở mức WARNING vì đây là trạng thái BẤT THƯỜNG — quên bật
-        # lại trên môi trường công khai là ai cũng gọi được thoải mái.
-        logger.warning("Hạn mức chat đang TẮT — chỉ dùng khi tự test, nhớ bật lại")
-        return
-
-    if user is not None:
-        con_luot, cho_giay = _gioi_han_nhan_vien.check(f"user:{user.id}")
-    else:
-        # Sau proxy/CDN thì request.client.host là IP của proxy. Triển khai thật
-        # cần đọc X-Forwarded-For và cấu hình proxy tin cậy.
-        ip = request.client.host if request.client else "unknown"
-        con_luot, cho_giay = _gioi_han_khach.check(f"ip:{ip}")
-
-    if not con_luot:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=(
-                f"Bạn đã hỏi khá nhiều trong thời gian ngắn. Thử lại sau {cho_giay} giây, "
-                "hoặc đăng nhập để được hỏi nhiều hơn."
-            ),
-            headers={"Retry-After": str(cho_giay)},
-        )
+_han_muc = HanMuc(
+    khach_moi_ngay=KHACH_MOI_NGAY,
+    nhan_vien_moi_10_phut=NHAN_VIEN_MOI_10_PHUT,
+    # Không nói "hết lượt": người hỏi tới câu thứ 16 là người đang thật sự cân
+    # nhắc mua. Câu này phải là một lời mời, không phải một cánh cửa đóng lại.
+    loi_moi=(
+        "Để trao đổi kỹ hơn về căn hộ, bạn liên hệ chuyên viên tư vấn qua email "
+        f"{EMAIL_TU_VAN} nhé. Bên mình hỗ trợ trực tiếp, tư vấn theo đúng nhu cầu "
+        "và sắp lịch xem căn thực tế."
+    ),
+)
 
 
 @router.post("", response_model=ChatResponse)
@@ -65,7 +46,7 @@ async def chat(
     Công khai — khách vãng lai hỏi được, chỉ bị giới hạn số lượt. Lõi trả lời
     nằm trong app/services/chat.py; router này không đổi khi thay lõi.
     """
-    _kiem_tra_han_muc(request, user)
+    _han_muc.kiem_tra(request, user)
 
     try:
         reply = await generate_reply(payload.message, payload.history, payload.session_id)
@@ -87,7 +68,7 @@ async def chat_stream(
     Backend chỉ dẫn ống. Lõi AI phát `start` / `route` / `token` / `sources` /
     `done`; event `route` mang `data.step` để widget hiện trợ lý đang làm gì.
     """
-    _kiem_tra_han_muc(request, user)
+    _han_muc.kiem_tra(request, user)
 
     try:
         stream = stream_reply(payload.message, payload.history, payload.session_id)

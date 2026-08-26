@@ -80,6 +80,18 @@ class Settings(BaseSettings):
     # Phanh chống tai nạn cho ngân sách $5. 0 = không giới hạn. Chạm trần thì
     # cổng leo thang tự đóng và khách vẫn nhận câu trả lời từ đường tất định.
     orchestrator_daily_budget_usd: float = Field(default=0.0, ge=0.0)
+    # Cổng phân loại chính sách — chặn câu hỏi ngoài phạm vi / không an toàn
+    # TRƯỚC khi trả lời. Chạy SONG SONG với tools+retrieve nên gần như không cộng
+    # vào thời gian khách chờ. Xem `src/agents/chinh_sach.py`.
+    #
+    # Mặc định TẮT vì đây là cổng CHẶN: bật nhầm là từ chối khách thật. Bật ở dev,
+    # đo tỷ lệ từ chối oan trên bộ eval, rồi mới tính chuyện production — khác hẳn
+    # `che_do_leo_thang` vốn chỉ thêm bằng chứng nên chạy rộng không hại ai.
+    enable_cong_chinh_sach: bool = False
+    # Rỗng thì dùng `orchestrator_model`. Tách riêng để đổi được sang model rẻ
+    # hơn mà không đụng nhánh leo thang — phân loại 4 nhãn không cần model mạnh
+    # bằng việc chọn tool.
+    cong_chinh_sach_model: str = ""
     # Khi nào orchestrator chạy:
     #   tat       — không bao giờ, đường tất định lo hết
     #   khi_thieu — chỉ khi một trong ba luật hẹp khớp

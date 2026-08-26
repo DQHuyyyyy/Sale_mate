@@ -231,6 +231,20 @@ cọc, dấu hiệu hỏi tổng hợp thì **luôn đọc câu hiện tại**: 
 VOP397" ở lượt 1, lượt 3 hỏi "căn đó hướng nào" mà kế thừa ý định thì `dat_coc`
 ghi thêm một lead nữa.
 
+**Cửa sổ lịch sử là 10 lượt, mỗi lượt cắt ở 400 ký tự** — không phải 4 lượt như
+bản đầu. Bản 4 lượt gây một lỗi thật, tái hiện 3/3: kịch bản M03 hỏi "Ocean Park
+1 có căn 1PN nào không?", xen ba câu lạc đề, rồi "quay lại mấy căn 1PN lúc nãy,
+căn nào rẻ nhất?". Cửa sổ 4 lượt cắt mất **đúng lượt nêu Ocean Park 1**; model
+chỉ còn thấy hai lượt xen nói về Ocean Park 3 và Ocean Park 2. `phan_khu` không
+được kế thừa, tìm kiếm trải ra cả kho (40 căn thay vì 12), và trợ lý trả về một
+căn **ở Ocean Park 3** cho câu hỏi về Ocean Park 1.
+
+Mối lo của bản cũ vẫn đúng — cửa sổ rộng cho model nhiều cơ hội lôi lại tiêu chí
+người dùng đã bỏ — nên chữa bằng **prompt** ("đổi tường minh mới thắng; câu lạc
+đề nhắc phân khu khác KHÔNG phải đổi") chứ không chữa bằng cách bịt mắt model.
+Cắt 400 ký tự mỗi lượt để cửa sổ rộng mà prompt không phình: tiêu chí luôn nằm ở
+đầu câu, phần đuôi là danh sách căn và lời mời.
+
 Hai tính chất giữ cho thay đổi này an toàn:
 
 - **Không có lịch sử thì không gọi model.** Lượt đầu vốn không có gì để giải
@@ -307,6 +321,75 @@ sang `generate` với bằng chứng đã gom.
 ⚠️ `PlanNode`/`ActNode` và `ENABLE_AGENT_LOOP` **vẫn còn** — orchestrator chưa
 được đo trên bộ eval nên chưa có cơ sở để xoá. Không bật cả hai cờ cùng lúc:
 `build_graph` ưu tiên vòng lặp cũ và orchestrator sẽ không có cạnh nào dẫn tới.
+
+## Cổng phân loại chính sách — chặn TRƯỚC khi trả lời
+
+Bật bằng `ENABLE_CONG_CHINH_SACH`, **mặc định tắt**. Mã ở
+[`src/agents/chinh_sach.py`](src/agents/chinh_sach.py).
+
+**Vì sao cần:** thứ DUY NHẤT đang chặn câu hỏi lạc đề là *độ phủ truy hồi thấp*
+— một tai nạn may mắn, không phải cơ chế. Đo được: F02 hỏi chính sách vay, độ
+phủ 0,695 nên trợ lý trả lời đầy đủ. Cùng cơ chế đó, một câu chính trị tình cờ
+khớp từ khoá với tài liệu nào đó sẽ vượt ngưỡng và **không có gì chặn**.
+`GuardrailNode._is_sensitive` không lấp chỗ này: nó soi CÂU TRẢ LỜI, chỉ tìm
+"giá + từ cam kết", và cờ nó bật chưa từng được phát ra trên đường stream.
+
+Bốn nhãn, chỉ **hai** nhãn đầu chặn:
+
+| Nhãn | Ví dụ | Hành động |
+|---|---|---|
+| `an_toan` | chủ quyền · chính trị · jailbreak · đòi PII khách khác | **chặn** |
+| `ngoai_pham_vi` | giá vàng · làm thơ · giải bài tập | **chặn** |
+| `nhay_cam` | "sale hứa giảm 5%, xác nhận đi" | gắn cờ, **vẫn trả lời** |
+| `binh_thuong` | còn lại | đi tiếp |
+
+`nhay_cam` không chặn là chủ ý: chặn "sale hứa giảm 5%" là bỏ mất câu trả lời tốt
+hơn hẳn — trợ lý trích đúng tài liệu ưu đãi rồi nói cần sale xác nhận. Cờ này
+phát qua `ChatEventType.SENSITIVE`, nhãn đã khai sẵn trong hợp đồng đóng băng và
+tới giờ chưa từng được dùng.
+
+⚠️ **Prompt phải khai rõ thứ KHÔNG được xếp nhầm**: tính khoản vay không phải
+"giải bài tập", thủ tục sổ đỏ/thuế phí không phải "tư vấn pháp lý ràng buộc". Cấm
+"toán" theo từ khoá là tự giết `tinh_khoan_vay` đang chạy.
+
+**Cổng đọc CẢ câu người dùng hỏi ở lượt trước** (`<cau_truoc>`). Lượt bám đuôi
+đứng riêng thì vô hại: đã xảy ra thật — hỏi "Hoàng Sa và Trường Sa của nước nào",
+bị từ chối, rồi lượt sau chỉ gõ "góc độ lịch sử". Câu sau một mình trông như câu
+hỏi bình thường, và cổng chỉ đọc câu hiện tại sẽ mở đường vòng cho đúng chủ đề
+vừa chặn.
+
+**Lời từ chối phải dứt khoát, không nói "chưa có đủ dữ liệu".** Câu đó nghĩa là
+từ chối vì THIẾU TÀI LIỆU — nó mời người dùng gửi thêm nguồn rồi hỏi lại, và họ
+đã làm đúng vậy. Lượt bị chặn vẫn có nút gợi ý (`GOI_Y_SAU_KHI_CHAN`, cố định):
+người vừa bị từ chối là lúc dễ rời đi nhất.
+
+⚠️ **Cổng thất bại theo hướng MỞ, nên hạn mức Anthropic là vấn đề AN TOÀN.**
+`chot()` nuốt mọi lỗi và cho đi tiếp — chặn sạch khách vì sự cố nhà cung cấp còn
+tệ hơn. Nhưng ngày 26/08/2026 tài khoản Anthropic chạm trần chi tiêu tháng, mọi
+lượt phân loại ném 400, và **cổng ngừng bảo vệ hoàn toàn mà không dấu hiệu gì** —
+trợ lý vẫn trả lời trơn tru. Phát hiện bằng cách hỏi nó làm thơ và được đáp ứng.
+Dòng WARNING "Cổng chính sách hỏng" là tín hiệu duy nhất, đừng lọc nó khỏi log.
+
+### Chạy SONG SONG, không nối tiếp
+
+`ChinhSachNode` đứng **đầu** `CONTEXT_NODES` và chỉ bắn một task chạy nền rồi trả
+về ngay (~0ms). `chinh_sach.chot()` mới await, ngay trước `generate` — thời điểm
+muộn nhất còn chặn được, vì trên đường stream token đã gửi là khách đã đọc.
+
+Nhờ vậy lượt phân loại nấp dưới thời gian của `tools` + `retrieve`. Đo thật trên
+13 lượt: lượt **không bị chặn** 17,6s so với 18,3s của bản không cổng (TTFT 11,4s
+so với 10,9s) — nằm trong dao động giữa hai lần chạy. Lượt **bị chặn** còn nhanh
+hơn hẳn, 7,1s so với 15,7s, vì cắt trước cả generate lẫn sinh gợi ý.
+
+Đặt nối tiếp là lặp lại đúng sai lầm của `CHE_DO_LEO_THANG=moi_luot`: một model
+đắt nằm chắn giữa đường đi chung, cộng 4,3s vào mọi câu hỏi.
+
+Mặc định TẮT vì đây là cổng **chặn** — bật nhầm là từ chối khách thật. Khác hẳn
+`che_do_leo_thang` vốn chỉ thêm bằng chứng nên chạy rộng không hại ai. Đo trước
+trên bộ eval rồi mới bật: lần đo đầu chặn đúng 3/3, chặn oan 0/10.
+
+Module bị gọi từ **hai** chỗ — `GenerateNode` và `service._stream` — cùng khuôn
+với `nguon.py`. Đường stream không chạy qua graph nên không cắm một chỗ được.
 
 ## Luồng agent
 
@@ -509,6 +592,14 @@ ra `price 42,8 – 43,2` TỶ; kho không có căn nào giá 43 tỷ nên trả 
 gợi ý sau lại dựng "giá 42,8–43,2" từ chính tiêu chí sai đó — khách bấm hai lần
 liên tiếp vào hai ngõ cụt. `_rut_dien_tich` chạy TRƯỚC `_rut_gia` và **xoá** phần
 đã đọc, nếu không thì "từ 40 đến 50 m2" đẻ thêm `price_min = 40`.
+
+**Danh sách rút gọn phải NÓI RÕ nó là đầu của tập đã sắp xếp.** `inventory_search`
+sắp xếp trên toàn bộ tập khớp rồi mới cắt `limit`, nên phần tử đầu là cực trị
+thật của cả tập — nhưng model không suy ra được điều đó và đã trả lời sai thật:
+với `sort=gia_tang, limit=3` trên 12 căn, nó nói "chưa đủ dữ liệu để xác định căn
+rẻ nhất trong toàn bộ 12 căn" trong khi căn đầu danh sách chính là câu trả lời.
+Tái hiện 3/3. `_ghi_chu_sap_xep()` nói thẳng điều đó vào `data.ghi_chu`; bỏ nó ra
+là câu "căn nào rẻ nhất" quay lại từ chối oan.
 
 Vì sao `so_sanh_can` phải tồn tại: `inventory_lookup` dùng `re.search` nên chỉ
 bắt mã ĐẦU TIÊN. "So sánh VOP619 với VOP893" tra được đúng VOP619, model thiếu

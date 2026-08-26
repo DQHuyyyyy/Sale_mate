@@ -21,6 +21,7 @@ from langgraph.graph import END, START, StateGraph
 
 from src.agents.contracts import LLMProvider, ToolCallingProvider
 from src.agents.nodes.act import ActNode
+from src.agents.nodes.chinh_sach import ChinhSachNode
 from src.agents.nodes.generate import GenerateNode
 from src.agents.nodes.guardrail import GuardrailNode
 from src.agents.nodes.orchestrate import OrchestratorNode
@@ -38,7 +39,10 @@ from src.rag.contracts import Retriever
 # `orchestrate` nằm trong dãy này dù nó chỉ tồn tại khi bật cờ: mọi chỗ chạy
 # dãy đều bỏ qua node không có. Nhờ vậy graph, đường stream và bộ đo chạy
 # ĐÚNG một chuỗi, không thể cho ra hành vi khác nhau.
-CONTEXT_NODES: tuple[str, ...] = ("router", "tools", "retrieve", "orchestrate")
+# `chinh_sach` đứng ĐẦU và phải giữ nguyên vị trí đó: nó chỉ bắn một task chạy
+# nền, nên càng bắn sớm thì càng nhiều thời gian của nó nấp dưới `tools` và
+# `retrieve`. Đẩy xuống cuối là biến một cổng song song thành một cổng nối tiếp.
+CONTEXT_NODES: tuple[str, ...] = ("chinh_sach", "router", "tools", "retrieve", "orchestrate")
 
 
 def route_after_tools(state: AgentState) -> str:
@@ -94,6 +98,12 @@ def build_nodes(
         )
         nodes["act"] = ActNode()
 
+    if settings.enable_cong_chinh_sach and tool_provider is not None:
+        nodes["chinh_sach"] = ChinhSachNode(
+            tool_provider,
+            model=settings.cong_chinh_sach_model or settings.orchestrator_model,
+        )
+
     if settings.enable_orchestrator and tool_provider is not None:
         nodes["orchestrate"] = OrchestratorNode(
             tool_provider,
@@ -132,15 +142,26 @@ def build_graph(nodes: dict[str, object]):
     co_vong_lap = "plan" in nodes and "act" in nodes
     co_orchestrator = "orchestrate" in nodes
 
+    co_cong_chinh_sach = "chinh_sach" in nodes
+
     ten_node = ["router", "tools", "retrieve", "generate", "guardrail"]
     if co_vong_lap:
         ten_node += ["plan", "act"]
     if co_orchestrator:
         ten_node.append("orchestrate")
+    if co_cong_chinh_sach:
+        ten_node.append("chinh_sach")
     for name in ten_node:
         graph.add_node(name, nodes[name])
 
-    graph.add_edge(START, "router")
+    # Cổng chính sách chen vào TRƯỚC router. Nó trả về ngay (chỉ bắn task chạy
+    # nền) nên không làm chậm dãy; đứng sớm để lượt phân loại có nhiều thời gian
+    # nhất chạy song song với tools và retrieve.
+    if co_cong_chinh_sach:
+        graph.add_edge(START, "chinh_sach")
+        graph.add_edge("chinh_sach", "router")
+    else:
+        graph.add_edge(START, "router")
     graph.add_edge("router", "tools")
 
     # Đích sau khi gom xong context. Ba khả năng, xét theo thứ tự ưu tiên:

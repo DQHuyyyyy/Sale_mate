@@ -65,16 +65,24 @@ Thumbs.db
 *.db
 *.sqlite3
 
-# Output tự động của script eval — đổi mỗi lần chạy, không commit để tránh
-# nhiễu git history. Số liệu quan trọng đã tóm tắt có phân tích trong
-# eval/results/report.md (file đó VẪN track bình thường).
-/eval/results/retrieval_eval.json
-/eval/results/knowledge_chunks.json
-/eval/results/meeyland_chunks.json
-/eval/results/batdongsan_chunks.json
-/eval/results/inventory_chunks.json
-/eval/results/manual_eval_results.json
-/eval/results/answer_eval_*.json
+# Output của script eval — GIỮ Ở LOCAL, không commit.
+#
+# Mỗi lần chạy ghi ra một cặp file mới; chỉ một ngày 26/08/2026 đã sinh 22 file
+# `raw_*` nặng 768 KB. Chúng là log thô của một lần chạy trên một máy, không ai
+# đọc lại sau một tuần, và đẩy lên chỉ làm nhiễu git history.
+#
+# Chặn theo THƯ MỤC chứ không liệt kê tên file. Bản trước liệt kê bảy tên cụ thể
+# (`retrieval_eval.json`, `answer_eval_*.json`…), rồi runner mới đổi sang tên
+# `raw_*` / `diem_*` là lọt hết — luật chặn phải rộng hơn cái nó chặn, nếu không
+# mỗi lần đổi tên file là một lần rò.
+#
+# ⚠️ Chỉ chặn `eval/results/`. JSON ở nơi khác trong `eval/` là ĐẦU VÀO chứ
+# không phải kết quả — `runner/kich_ban.json` và `runner/luat_cham.json` là
+# nguồn sự thật của bộ chấm, chặn nhầm là clone mới không chạy được eval.
+/eval/results/*
+!/eval/results/.gitkeep
+# Đã nằm trong repo từ trước và vẫn track: phân tích viết tay, không phải output.
+!/eval/results/report.md
 
 # Logs
 logs/

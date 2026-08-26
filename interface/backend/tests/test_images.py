@@ -17,6 +17,7 @@ import base64  # noqa: E402
 
 import httpx  # noqa: E402
 import pytest  # noqa: E402
+from app.core import han_muc as han_muc_mod  # noqa: E402
 from app.main import app  # noqa: E402
 from app.routers import images as images_router  # noqa: E402
 from app.services import image_edit  # noqa: E402
@@ -29,7 +30,7 @@ BODY = {"ma_can": "VOP398", "image_id": 1, "yeu_cau": "đổi sofa thành màu n
 def _moi_truong(monkeypatch: pytest.MonkeyPatch) -> None:
     """Neo cấu hình tường minh: `.env` của máy dev đổi được nhà cung cấp và tắt
     hạn mức, test không được đổi kết quả theo từng máy."""
-    monkeypatch.setattr(images_router.settings, "chat_rate_limit_enabled", False)
+    monkeypatch.setattr(han_muc_mod.settings, "chat_rate_limit_enabled", False)
     monkeypatch.setattr(image_edit.settings, "image_provider", "openai")
     monkeypatch.setattr(image_edit.settings, "openai_api_key", "test-key")
     monkeypatch.setattr(image_edit.settings, "google_api_key", "test-key")
@@ -45,7 +46,7 @@ def _client() -> TestClient:
 def test_tra_ve_data_uri_khong_luu_o_dau(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ảnh AI KHÔNG được lưu: để lẫn vào ảnh thật là quảng cáo sai sự thật."""
 
-    async def gia_lap(ma_can, image_id, yeu_cau):  # noqa: ARG001
+    async def gia_lap(ma_can, image_id, yeu_cau, anh_nguon=None):  # noqa: ARG001
         return b"\x89PNG-gia", "image/png"
 
     monkeypatch.setattr(images_router, "sua_anh_can", gia_lap)
@@ -104,15 +105,15 @@ def test_thieu_key_thi_bao_dung_ten_bien(
 
 
 def test_han_muc_chan_khi_bat(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def gia_lap(ma_can, image_id, yeu_cau):  # noqa: ARG001
+    async def gia_lap(ma_can, image_id, yeu_cau, anh_nguon=None):  # noqa: ARG001
         return b"anh", "image/png"
 
     monkeypatch.setattr(images_router, "sua_anh_can", gia_lap)
-    monkeypatch.setattr(images_router.settings, "chat_rate_limit_enabled", True)
-    images_router._gioi_han_khach._hits.clear()
+    monkeypatch.setattr(han_muc_mod.settings, "chat_rate_limit_enabled", True)
+    images_router._han_muc.khach._hits.clear()
 
     client = _client()
-    for lan in range(images_router.KHACH_MOI_10_PHUT):
+    for lan in range(images_router.KHACH_MOI_NGAY):
         assert client.post("/api/images/modify", json=BODY).status_code == 200, lan
 
     response = client.post("/api/images/modify", json=BODY)
@@ -296,3 +297,99 @@ class TestSeedream:
 
         with pytest.raises(ImageEditError, match="ARK_API_KEY"):
             asyncio.run(sua_anh_can("VOP001", 1, "đổi sofa"))
+
+
+# ---------------- Sửa TIẾP trên ảnh AI vừa sinh ----------------
+
+
+_PNG = base64.b64encode(b"\x89PNG\r\n\x1a\n-gia-lap").decode()
+_ANH_NGUON = f"data:image/png;base64,{_PNG}"
+
+
+class TestDocAnhNguon:
+    """Ảnh AI không được lưu ở đâu, nên client phải gửi lại byte để sửa tiếp.
+
+    Đường này KHÔNG mở ra SSRF — server không đi tải gì cả. Nhưng byte thì do
+    client kiểm soát, nên phải kiểm đủ trước khi tiêu tiền gọi nhà cung cấp.
+    """
+
+    def test_doc_duoc_data_uri_hop_le(self) -> None:
+        goc, mime = image_edit._doc_anh_nguon(_ANH_NGUON)
+
+        assert mime == "image/png"
+        assert goc.startswith(b"\x89PNG")
+
+    @pytest.mark.parametrize(
+        "xau",
+        [
+            "https://example.com/anh.png",  # URL — đúng thứ endpoint này cấm
+            "data:image/png,khong-co-base64",
+            "khong-phai-data-uri",
+            "",
+        ],
+    )
+    def test_bo_moi_thu_khong_phai_data_uri(self, xau: str) -> None:
+        with pytest.raises(image_edit.ImageEditError):
+            image_edit._doc_anh_nguon(xau)
+
+    def test_bo_mime_ngoai_danh_sach(self) -> None:
+        """`image/svg+xml` là ảnh nhưng chứa script — không cho qua."""
+        with pytest.raises(image_edit.ImageEditError):
+            image_edit._doc_anh_nguon(f"data:image/svg+xml;base64,{_PNG}")
+
+    def test_base64_rac_thi_bao_loi_ngay(self) -> None:
+        """Không có `validate=True` thì base64 lặng lẽ bỏ ký tự lạ và decode ra
+        vài byte vô nghĩa, hỏng tận lúc gọi nhà cung cấp — tốn tiền vô ích."""
+        with pytest.raises(image_edit.ImageEditError):
+            image_edit._doc_anh_nguon("data:image/png;base64,!!!khong@phai#base64$$$")
+
+    def test_bo_anh_vuot_tran(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(image_edit, "_TRAN_ANH_BYTE", 8)
+
+        with pytest.raises(image_edit.ImageEditError):
+            image_edit._doc_anh_nguon(_ANH_NGUON)
+
+
+class TestSuaTiep:
+    def test_co_anh_nguon_thi_khong_tai_anh_goc(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Chuỗi sửa nối tiếp phải dùng ảnh AI, không quay về ảnh gốc của căn."""
+        da_tai = []
+        monkeypatch.setattr(image_edit, "_anh_cua_can", lambda ma, i: "https://drive/anh.jpg")
+        # `image_edit_enabled` là property suy ra từ key, không gán thẳng được.
+        monkeypatch.setattr(image_edit.settings, "image_provider", "gemini")
+        monkeypatch.setattr(image_edit.settings, "google_api_key", "test-key")
+
+        async def khong_duoc_goi(url):
+            da_tai.append(url)
+            raise AssertionError("có ảnh nguồn mà vẫn đi tải ảnh gốc")
+
+        monkeypatch.setattr(image_edit, "_tai_anh", khong_duoc_goi)
+
+        nhan = {}
+
+        async def gia_lap_goi(goc, mime, yeu_cau):
+            nhan["goc"] = goc
+            return httpx.Response(200, json={"data": [{"b64_json": base64.b64encode(b"moi").decode()}]})
+
+        monkeypatch.setattr(image_edit, "_goi_gemini", gia_lap_goi)
+        monkeypatch.setattr(image_edit, "_doc_anh_tra_ve", lambda data: (b"moi", "image/png"))
+
+        anh, _ = asyncio.run(image_edit.sua_anh_can("VOP398", 1, "bỏ cái bàn", _ANH_NGUON))
+
+        assert anh == b"moi"
+        assert not da_tai
+        assert nhan["goc"].startswith(b"\x89PNG")
+
+    def test_van_kiem_can_va_anh_co_that(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Byte đến từ client, nhưng (ma_can, image_id) vẫn phải có thật — nếu
+        không endpoint thành dịch vụ sửa ảnh miễn phí cho ảnh bất kỳ."""
+        monkeypatch.setattr(image_edit.settings, "image_provider", "gemini")
+        monkeypatch.setattr(image_edit.settings, "google_api_key", "test-key")
+
+        def khong_thay(ma_can, image_id):
+            raise image_edit.ImageEditError("Không tìm thấy ảnh này trong căn đang xem.")
+
+        monkeypatch.setattr(image_edit, "_anh_cua_can", khong_thay)
+
+        with pytest.raises(image_edit.ImageEditError):
+            asyncio.run(image_edit.sua_anh_can("VOP999", 1, "bỏ cái bàn", _ANH_NGUON))

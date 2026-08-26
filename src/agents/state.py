@@ -66,6 +66,12 @@ class AgentState(TypedDict, total=False):
             không đốt sạch quota.
         da_thu: Chữ ký các hành động đã thử — để nhận ra agent đang lặp lại
             chính nó và cắt sớm.
+        chinh_sach_task: Task đang chạy nền của cổng phân loại chính sách, hoặc
+            None khi cổng tắt / câu xã giao. Giữ TASK chứ không giữ kết quả vì
+            node chỉ khởi động rồi trả về ngay — chờ ở đây là mất hết cái lợi
+            của việc chạy song song. `chinh_sach.chot()` mới await nó, ngay
+            trước generate. Xem `src/agents/chinh_sach.py`.
+        chinh_sach_nhan: Nhãn cổng đã gán, để log và eval đọc lại được.
         leo_thang: Tên luật đã kích hoạt orchestrator (""=không leo thang). Ghi
             lại tên chứ không ghi bool để lúc hết ngân sách còn biết luật nào
             kéo chi phí lên. Xem `src/agents/leo_thang.py`.
@@ -106,6 +112,9 @@ class AgentState(TypedDict, total=False):
     plan_options: list[str]
     iterations: int
     da_thu: list[str]
+
+    chinh_sach_task: Any
+    chinh_sach_nhan: str
 
     leo_thang: str
     orchestrator_loi: str

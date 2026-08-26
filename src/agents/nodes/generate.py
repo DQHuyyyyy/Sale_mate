@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.agents import chinh_sach
 from src.agents.contracts import LLMProvider
 from src.agents.nodes.base import BaseNode
 from src.agents.prompts import system_prompt
@@ -65,11 +66,19 @@ class GenerateNode(BaseNode):
         self._max_tokens = max_tokens
 
     async def execute(self, state: AgentState) -> dict[str, Any]:
+        # Chốt cổng chính sách NGAY TRƯỚC khi sinh chữ. Đây là thời điểm muộn
+        # nhất còn chặn được, và cũng là thời điểm sớm nhất mà lượt phân loại
+        # chạy song song đã có đủ thời gian xong. Chặn sau khi sinh chữ thì trên
+        # đường stream khách đã đọc hết câu trả lời rồi.
+        cong = await chinh_sach.chot(state.get("chinh_sach_task"))
+        if cong.chan:
+            return {"answer": cong.loi_tu_choi, "citations": [], "chinh_sach_nhan": cong.nhan}
+
         # Kế hoạch quyết định hỏi lại: câu hỏi ngược đã nằm sẵn ở `plan_reason`,
         # dùng thẳng. Gọi model lần nữa để "diễn đạt lại" chỉ tốn tiền và tạo
         # cơ hội cho nó bịa thêm dữ kiện chưa có.
         if state.get("plan_action") == "clarify":
-            return {"answer": state.get("plan_reason", "").strip()}
+            return {"answer": state.get("plan_reason", "").strip(), "chinh_sach_nhan": cong.nhan}
 
         answer = await self._llm.complete(
             build_messages(state),
@@ -77,7 +86,7 @@ class GenerateNode(BaseNode):
             temperature=self._temperature,
             max_tokens=self._max_tokens,
         )
-        return {"answer": answer.strip()}
+        return {"answer": answer.strip(), "chinh_sach_nhan": cong.nhan}
 
     def tom_tat(self, result: dict[str, Any]) -> str:
         return f"model={self._model} · sinh {len(result.get('answer') or '')} ký tự"

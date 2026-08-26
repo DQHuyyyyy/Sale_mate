@@ -17,7 +17,9 @@ bắt server tải về bất cứ thứ gì (SSRF).
 from __future__ import annotations
 
 import base64
+import binascii
 import logging
+import re
 from typing import Any
 
 import httpx
@@ -225,17 +227,68 @@ def _doc_anh_openai(data: dict[str, Any]) -> tuple[bytes, str]:
     return base64.b64decode(muc["b64_json"]), "image/png"
 
 
-async def sua_anh_can(ma_can: str, image_id: int, yeu_cau: str) -> tuple[bytes, str]:
+_MIME_CHO_PHEP = frozenset({"image/png", "image/jpeg", "image/jpg", "image/webp"})
+
+_DATA_URI = re.compile(r"^data:(?P<mime>image/[a-zA-Z0-9.+-]{1,24});base64,(?P<du_lieu>[A-Za-z0-9+/=\s]+)$")
+
+
+def _doc_anh_nguon(anh_nguon: str) -> tuple[bytes, str]:
+    """Giải mã data URI client gửi lên, để sửa TIẾP trên ảnh AI vừa sinh.
+
+    Ảnh AI cố ý không được lưu ở đâu (xem docstring đầu file), nên lượt sau
+    server không có cách nào tự tìm lại nó — client phải gửi lại. Đường này
+    KHÔNG đi tải gì cả nên không mở ra SSRF, nhưng byte thì do client kiểm soát,
+    nên kiểm đủ ba thứ trước khi tiêu tiền gọi nhà cung cấp: đúng hình dạng data
+    URI, MIME nằm trong danh sách cho phép, và không vượt trần kích thước.
+    """
+    khop = _DATA_URI.match(anh_nguon.strip())
+    if khop is None:
+        raise ImageEditError("Ảnh nguồn không đúng định dạng. Thử sửa lại từ ảnh gốc của căn nhé.")
+
+    mime = khop.group("mime").lower()
+    if mime not in _MIME_CHO_PHEP:
+        raise ImageEditError("Ảnh nguồn dùng định dạng không hỗ trợ.")
+
+    try:
+        # `validate=True`: base64 mặc định BỎ QUA ký tự lạ, nên chuỗi rác vẫn
+        # decode ra vài byte vô nghĩa rồi hỏng tận lúc gọi nhà cung cấp.
+        goc = base64.b64decode(re.sub(r"\s", "", khop.group("du_lieu")), validate=True)
+    except (ValueError, binascii.Error) as exc:
+        raise ImageEditError("Ảnh nguồn không giải mã được. Thử sửa lại từ ảnh gốc của căn nhé.") from exc
+
+    if not goc:
+        raise ImageEditError("Ảnh nguồn rỗng.")
+    if len(goc) > _TRAN_ANH_BYTE:
+        raise ImageEditError("Ảnh nguồn quá lớn.")
+    return goc, mime
+
+
+async def sua_anh_can(
+    ma_can: str,
+    image_id: int,
+    yeu_cau: str,
+    anh_nguon: str | None = None,
+) -> tuple[bytes, str]:
     """Sinh ảnh mới từ ảnh gốc của căn. Trả (bytes, mime).
 
     Không lưu ở đâu cả — người gọi tự quyết định đưa về client thế nào.
+
+    `anh_nguon` có thì sửa tiếp trên đó thay vì ảnh gốc. `ma_can`/`image_id`
+    VẪN bắt buộc và vẫn được tra: chúng buộc yêu cầu vào một căn có thật, kể cả
+    khi byte ảnh đến từ client.
     """
     nha_cung_cap = settings.image_provider
     if not settings.image_edit_enabled:
         ten_key = _TEN_KEY.get(nha_cung_cap, "API key")
         raise ImageEditError(f"Tính năng sửa ảnh chưa được cấu hình. Điền {ten_key} trong .env ở gốc repo.")
 
-    goc, mime = await _tai_anh(_anh_cua_can(ma_can, image_id))
+    if anh_nguon:
+        # Tra ảnh gốc DÙ không dùng tới byte của nó — đây là phép kiểm quyền:
+        # cặp (ma_can, image_id) phải có thật, nếu không hàm dưới ném lỗi.
+        _anh_cua_can(ma_can, image_id)
+        goc, mime = _doc_anh_nguon(anh_nguon)
+    else:
+        goc, mime = await _tai_anh(_anh_cua_can(ma_can, image_id))
 
     try:
         goi = {"openai": _goi_openai, "seedream": _goi_seedream}.get(nha_cung_cap, _goi_gemini)

@@ -65,6 +65,37 @@ _TRUONG_GON = (
 )
 
 
+_NHAN_SAP_XEP = {
+    "gia_tang": ("giá tăng dần", "RẺ NHẤT"),
+    "gia_giam": ("giá giảm dần", "ĐẮT NHẤT"),
+    "dien_tich_tang": ("diện tích tăng dần", "NHỎ NHẤT"),
+    "dien_tich_giam": ("diện tích giảm dần", "LỚN NHẤT"),
+}
+
+
+def _ghi_chu_sap_xep(sort: str | None, tong: int) -> str:
+    """Nói rõ danh sách rút gọn là ĐẦU của tập đã sắp xếp, không phải mẫu ngẫu nhiên.
+
+    Thiếu câu này thì model không suy ra được, và nó đã trả lời sai thật: hỏi
+    "quay lại mấy căn 1PN lúc nãy, căn nào rẻ nhất?" với `sort=gia_tang, limit=3`,
+    model trả lời "chưa đủ dữ liệu để xác định căn rẻ nhất trong toàn bộ 12 căn"
+    — trong khi căn đầu danh sách CHÍNH LÀ căn rẻ nhất của cả 12. Tái hiện 3/3.
+
+    Sắp xếp chạy trên toàn bộ tập khớp rồi mới cắt (`_sap_xep` trước khi lấy
+    `[:limit]`), nên phần tử đầu là cực trị thật của cả tập, không phải của riêng
+    ba căn đem ra khoe.
+    """
+    nhan = _NHAN_SAP_XEP.get(sort or "")
+    if nhan is None:
+        return ""
+    thu_tu, cuc_tri = nhan
+    return (
+        f" Danh sách đã sắp xếp theo {thu_tu} trên CẢ {tong} căn khớp rồi mới cắt, "
+        f"nên phần tử ĐẦU TIÊN là căn {cuc_tri} trong toàn bộ {tong} căn — "
+        "khẳng định được, không cần thêm dữ liệu."
+    )
+
+
 def _gon(row: dict[str, Any]) -> dict[str, Any]:
     """Bản rút gọn của một căn, để chở được nhiều căn trong cùng ngân sách token.
 
@@ -712,7 +743,7 @@ class InventorySearchTool(AgentTool):
             data["ghi_chu"] = (
                 f"Có TẤT CẢ {len(rows)} căn khớp tiêu chí; `can_hien_thi` chỉ là {len(hien)} căn đầu. "
                 f"Hỏi SỐ LƯỢNG thì trả lời {len(rows)}, đừng đếm số phần tử trong mảng."
-            )
+            ) + _ghi_chu_sap_xep(args.sort, len(rows))
 
         return ToolResult(ok=True, data=data, source="inventory:postgres")
 

@@ -85,16 +85,33 @@ suy ra được (bỏ hẳn khoá không biết, KHÔNG điền null hay chuỗi
   dien_tich_max số, đơn vị m2
   von_tu_co     số, đơn vị TỶ đồng
 
+Lấy tiêu chí của ĐỐI TƯỢNG mà câu hỏi mới trỏ tới, không phải của lượt gần nhất
+chỉ vì nó gần. Cụm "lúc nãy", "ban đầu", "hồi đầu", "quay lại" trỏ về lượt XA
+hơn, không phải lượt liền trước. Các lượt xen giữa về chủ đề khác không đổi tiêu
+chí của đối tượng đang được nhắc lại.
+
+Người dùng đổi tiêu chí tường minh ("đổi sang Ocean Park 2 đi") thì tiêu chí mới
+thắng. Chỉ nhắc tới một phân khu khác trong câu hỏi lạc đề thì KHÔNG phải đổi.
+
 Tuyệt đối không suy đoán tiêu chí mà hội thoại chưa hề nêu. Không có gì thì trả {{}}."""
 
-# Chỉ lấy vài lượt gần nhất: tham chiếu ("căn đó") gần như luôn trỏ về lượt liền
-# trước, còn nhét cả hội thoại dài vào vừa tốn token vừa cho model nhiều cơ hội
-# lôi lại tiêu chí mà người dùng đã bỏ.
-_SO_LUOT_NHIN_LAI = 4
+# 10 lượt, khớp `CHAT_HISTORY_LIMIT`. Bản đầu để 4 và đó là một LỖI THẬT, tái hiện
+# 3/3 lần: kịch bản M03 hỏi "Ocean Park 1 có căn 1PN nào không?", xen ba câu lạc
+# đề, rồi hỏi "quay lại mấy căn 1PN lúc nãy, căn nào rẻ nhất?". Cửa sổ 4 lượt cắt
+# mất đúng lượt nêu "Ocean Park 1" — model chỉ còn thấy hai lượt xen nói về Ocean
+# Park 3 và Ocean Park 2. `phan_khu` không được kế thừa, tìm kiếm trải ra cả kho,
+# và trợ lý trả về một căn ở Ocean Park 3 cho câu hỏi về Ocean Park 1.
+#
+# Mối lo cũ vẫn đúng — cửa sổ rộng cho model nhiều cơ hội lôi lại tiêu chí người
+# dùng đã bỏ — nên chữa bằng PROMPT (luật "đổi tường minh mới thắng" ở trên) chứ
+# không chữa bằng cách bịt mắt model. Cắt ngắn từng lượt để cửa sổ rộng mà prompt
+# không phình: tiêu chí luôn nằm ở đầu câu, phần đuôi là danh sách căn và lời mời.
+_SO_LUOT_NHIN_LAI = 10
+_TOI_DA_KY_TU_MOI_LUOT = 400
 
 
 def _tom_tat(history: list[ChatMessage]) -> str:
-    return "\n".join(f"{m.role.value}: {m.content}" for m in history[-_SO_LUOT_NHIN_LAI:])
+    return "\n".join(f"{m.role.value}: {m.content[:_TOI_DA_KY_TU_MOI_LUOT]}" for m in history[-_SO_LUOT_NHIN_LAI:])
 
 
 def _doc_json(raw: str) -> Any:

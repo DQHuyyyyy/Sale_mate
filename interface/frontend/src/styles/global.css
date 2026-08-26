@@ -1487,6 +1487,26 @@ table.data tbody tr:hover {
   background: #fef3f2;
   color: #b42318;
 }
+/* Nút mở email cho chuyên viên tư vấn, hiện dưới lời mời khi khách vãng lai
+   dùng hết lượt hỏi. Tô đậm như một hành động chính chứ không phải một dòng chữ
+   phụ: đây là bước tiếp theo duy nhất còn lại của cả phiên, và người đọc tới đây
+   là người quan tâm nhất. Không dùng lớp `err` — xem `khungLoi` trong
+   ChatSidebar.jsx. */
+.cw-lien-he {
+  display: block;
+  margin-top: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: var(--brand);
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  text-align: center;
+  text-decoration: none;
+}
+.cw-lien-he:hover {
+  filter: brightness(0.94);
+}
 .ctyping {
   display: flex;
   gap: 4px;
@@ -1962,10 +1982,13 @@ table.data tbody tr:hover {
 
 /* Thanh báo đang ở chế độ đặc biệt — để người dùng không gõ câu hỏi thường
    rồi ngạc nhiên vì nó đi sinh ảnh. */
+/* Thanh chế độ xếp DỌC: hàng đầu là tên chế độ, hàng dưới là chọn ảnh nguồn.
+   Nhồi cả hai vào một hàng ngang thì trong sidebar 33vw hai nút chọn bị bóp
+   đến mức không đọc được nhãn. */
 .cw-chedo {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 7px;
   margin-bottom: 8px;
   padding: 7px 10px;
   border-radius: 8px;
@@ -1974,15 +1997,20 @@ table.data tbody tr:hover {
   font-size: 12.5px;
   color: var(--brand);
 }
+.cw-chedo-dau {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .cw-chedo svg {
   width: 15px;
   height: 15px;
   flex: none;
 }
-.cw-chedo span {
+.cw-chedo-dau span {
   flex: 1;
 }
-.cw-chedo button {
+.cw-chedo-dau button {
   border: 0;
   background: none;
   color: var(--brand);
@@ -1990,9 +2018,41 @@ table.data tbody tr:hover {
   display: grid;
   place-items: center;
 }
-.cw-chedo button svg {
+.cw-chedo-dau button svg {
   width: 14px;
   height: 14px;
+}
+
+/* Chọn ảnh nguồn. Nút đang chọn tô nền đặc — trong một thanh vốn đã màu xanh
+   nhạt, chỉ đổi màu chữ thì không đủ để thấy mình đang ở đường nào. */
+.cw-chedo-nguon {
+  display: flex;
+  gap: 6px;
+}
+.cw-chedo-nguon button {
+  flex: 1;
+  border: 1px solid #d7e6ff;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--brand);
+  font: inherit;
+  font-size: 11.5px;
+  padding: 5px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cw-chedo-nguon button.on {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+  font-weight: 600;
+}
+/* Chưa có ảnh AI thì nút vẫn HIỆN, chỉ mờ đi: người dùng thấy được là có hai
+   đường và biết cần làm gì để mở đường thứ hai. Ẩn hẳn thì tính năng vô hình. */
+.cw-chedo-nguon button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* ---------- Ảnh do AI dựng ---------- */
@@ -2009,6 +2069,100 @@ table.data tbody tr:hover {
   font-size: 11px;
   color: var(--faint);
   font-style: italic;
+}
+
+/* Ảnh AI bấm được để phóng to. Nút bọc quanh ảnh chứ không phải onClick trên
+   <img>: bàn phím và trình đọc màn hình dùng được. Reset hết nền/viền mặc định
+   để nó trông đúng như một tấm ảnh. */
+.cw-anh-mo {
+  display: block;
+  position: relative;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 10px;
+  overflow: hidden;
+}
+/* Kính lúp chỉ hiện khi rê chuột hoặc focus — để yên thì nó che mất chính phần
+   ảnh người dùng đang muốn nhìn. */
+.cw-anh-zoom {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: rgba(16, 24, 40, 0.62);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.cw-anh-zoom svg {
+  width: 16px;
+  height: 16px;
+}
+.cw-anh-mo:hover .cw-anh-zoom,
+.cw-anh-mo:focus-visible .cw-anh-zoom {
+  opacity: 1;
+}
+
+/* ---------- Ảnh phóng to ----------
+   z-index trên cả sidebar (61) lẫn backdrop menu (39): ảnh mở từ trong sidebar
+   nên phải phủ lên chính nó, nếu không tấm ảnh to lại nằm dưới khung chat. */
+.anh-to {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(16, 24, 40, 0.86);
+  display: grid;
+  place-items: center;
+  padding: 32px;
+}
+.anh-to-khung {
+  margin: 0;
+  max-width: 100%;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+/* Trừ hao chỗ cho dòng ghi chú bên dưới, nếu không ảnh cao bằng đúng khung và
+   đẩy ghi chú ra ngoài màn hình. */
+.anh-to-khung img {
+  max-width: 100%;
+  max-height: calc(100vh - 96px);
+  object-fit: contain;
+  border-radius: 8px;
+}
+.anh-to-khung figcaption {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 12px;
+  font-style: italic;
+  text-align: center;
+}
+.anh-to-dong {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  display: grid;
+  place-items: center;
+}
+.anh-to-dong:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+.anh-to-dong svg {
+  width: 18px;
+  height: 18px;
 }
 
 /* Phân khu trên thẻ căn hộ — góc phải trên, đối xứng với badge tình trạng bên

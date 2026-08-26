@@ -15,44 +15,30 @@ import base64
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from app.core.config import settings
 from app.core.deps import get_optional_user
-from app.core.ratelimit import RateLimiter
+from app.core.han_muc import EMAIL_TU_VAN, HanMuc
 from app.schemas.auth import CurrentUser
 from app.schemas.images import ModifyImageRequest, ModifyImageResponse
 from app.services.image_edit import ImageEditError, sua_anh_can
 
 router = APIRouter(prefix="/api/images", tags=["images"])
 
-# Chặt hơn hạn mức chat rất nhiều: mỗi lần sinh ảnh tốn gấp nhiều lần một câu
-# trả lời văn bản, và endpoint này công khai.
-KHACH_MOI_10_PHUT = 5
-NHAN_VIEN_MOI_10_PHUT = 20
-CUA_SO_GIAY = 600.0
+# Chặt hơn hạn mức chat: mỗi lần sinh ảnh tốn gấp nhiều lần một câu trả lời văn
+# bản (~$0,03 so với ~$0,02), và endpoint này công khai.
+KHACH_MOI_NGAY = 10
+NHAN_VIEN_MOI_10_PHUT = 40
 
-_gioi_han_khach = RateLimiter(KHACH_MOI_10_PHUT, CUA_SO_GIAY)
-_gioi_han_nhan_vien = RateLimiter(NHAN_VIEN_MOI_10_PHUT, CUA_SO_GIAY)
-
-
-def _kiem_tra_han_muc(request: Request, user: CurrentUser | None) -> None:
-    if not settings.chat_rate_limit_enabled:
-        return
-
-    if user is not None:
-        con_luot, cho_giay = _gioi_han_nhan_vien.check(f"user:{user.id}")
-    else:
-        ip = request.client.host if request.client else "unknown"
-        con_luot, cho_giay = _gioi_han_khach.check(f"ip:{ip}")
-
-    if not con_luot:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=(
-                f"Bạn đã tạo khá nhiều ảnh trong thời gian ngắn. Thử lại sau {cho_giay} giây, "
-                "hoặc đăng nhập để được tạo nhiều hơn."
-            ),
-            headers={"Retry-After": str(cho_giay)},
-        )
+_han_muc = HanMuc(
+    khach_moi_ngay=KHACH_MOI_NGAY,
+    nhan_vien_moi_10_phut=NHAN_VIEN_MOI_10_PHUT,
+    # Cùng luật với chat: mời liên hệ, không báo hết lượt. Câu khác đi vì người
+    # đang thử bố trí nội thất quan tâm thứ khác với người đang hỏi giá.
+    loi_moi=(
+        "Để xem thêm phương án bố trí nội thất cho căn này, bạn liên hệ chuyên viên "
+        f"tư vấn qua email {EMAIL_TU_VAN} nhé. Bên mình dựng phương án chi tiết theo "
+        "đúng nhu cầu của bạn."
+    ),
+)
 
 
 @router.post("/modify", response_model=ModifyImageResponse)
@@ -66,10 +52,15 @@ async def modify_image(
     Trả ảnh dưới dạng data URI, KHÔNG lưu ở đâu cả — đây là ảnh minh hoạ do AI
     tạo cho một tài sản có thật, để lẫn vào ảnh thật là quảng cáo sai sự thật.
     """
-    _kiem_tra_han_muc(request, user)
+    _han_muc.kiem_tra(request, user)
 
     try:
-        anh, mime = await sua_anh_can(payload.ma_can, payload.image_id, payload.yeu_cau)
+        anh, mime = await sua_anh_can(
+            payload.ma_can,
+            payload.image_id,
+            payload.yeu_cau,
+            payload.anh_nguon,
+        )
     except ImageEditError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 

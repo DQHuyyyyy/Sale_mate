@@ -193,10 +193,15 @@ export async function danhThucTroLy() {
  * Trả về data URI, KHÔNG lưu ở server: đây là ảnh minh hoạ do AI tạo cho một
  * tài sản có thật, để lẫn vào ảnh thật là quảng cáo sai sự thật.
  */
-export function modifyApartmentImage({ maCan, imageId, yeuCau }) {
+/**
+ * @param anhNguon Data URI của ảnh AI vừa sinh, để sửa TIẾP trên đó. Bỏ trống
+ *   thì server dùng ảnh gốc của căn. Phải gửi lại từ client vì ảnh AI cố ý
+ *   không được lưu ở đâu — server không có cách nào tự tìm lại nó.
+ */
+export function modifyApartmentImage({ maCan, imageId, yeuCau, anhNguon }) {
   return request('/api/images/modify', {
     method: 'POST',
-    body: { ma_can: maCan, image_id: imageId, yeu_cau: yeuCau },
+    body: { ma_can: maCan, image_id: imageId, yeu_cau: yeuCau, anh_nguon: anhNguon ?? null },
   });
 }
 
