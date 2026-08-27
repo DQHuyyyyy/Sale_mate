@@ -133,6 +133,10 @@ def la_loi_tu_choi(cau_tra_loi: str) -> bool:
 # VỀ, người dùng không tự nêu trong câu hỏi.
 _SO_LIEU = re.compile(r"\d[\d.,]*\s*(ty\b|trieu\b|m2\b|m²|%|can\b)")
 
+# Thuộc tính của MỘT căn: giá, diện tích, phần trăm. Tách khỏi `_SO_LIEU` vì
+# "23 căn" là con số TỔNG HỢP — nó đếm tập kết quả, không trỏ vào căn nào.
+_THUOC_TINH_MOT_CAN = re.compile(r"\d[\d.,]*\s*(ty\b|trieu\b|m2\b|m²|%)")
+
 # Cách nói trỏ vào một căn cụ thể mà không nhắc mã — "Căn này giá 2,7 tỷ".
 _TRO_VAO_CAN = ("can nay", "can do", "can tren", "can dau tien", "can thu")
 
@@ -168,6 +172,31 @@ def _co_khang_dinh_ve_can(cau_tra_loi: str) -> bool:
     if _MA_CAN_TRONG_CAU.search(cau_tra_loi):
         return True
     return bool(_SO_LIEU.search(thap)) or any(cum in thap for cum in _TRO_VAO_CAN)
+
+
+def _khang_dinh_ve_mot_can_cu_the(cau_tra_loi: str) -> bool:
+    """Câu trả lời có khẳng định về MỘT CĂN cụ thể không — chặt hơn hàm trên.
+
+    Lưới an toàn ở cuối `loc_nguon_da_dung` dựng lại vài nguồn mã căn đã bị loại.
+    Nó chỉ đúng cho ca nó sinh ra để cứu: câu trả lời nói *về một căn* mà không
+    nhắc mã ("Căn này giá 2,7 tỷ") — mã căn có thật đứng sau con số đó.
+
+    "23 căn" thì KHÁC HẲN. Đó là con số đếm cả tập kết quả, không có căn nào để
+    trỏ vào, nên dựng lại ba mã căn bất kỳ là gán bằng chứng sai cho một khẳng
+    định đúng.
+
+    Ca thật, đúng câu hỏi đã từng gây lỗi: "Căn ở Ocean Park 1" →
+    `inventory_search` trả 23 căn kèm 3 căn hiển thị → trợ lý HỎI NGƯỢC "bạn
+    muốn lọc theo tiêu chí nào?" và chỉ nêu con số 23 → không mã nào lọt bộ lọc
+    → lưới an toàn dựng lại VOP758, VOP285, VOP619 dưới một câu không nhắc căn
+    nào. `_co_khang_dinh_ve_can` trả True vì `_SO_LIEU` tính cả "23 can", nên
+    chốt cũ không chặn được — nó bắt ĐÚNG là có khẳng định, chỉ sai ở chỗ khẳng
+    định đó thuộc loại tổng hợp.
+    """
+    thap = _khong_dau(cau_tra_loi)
+    if _MA_CAN_TRONG_CAU.search(cau_tra_loi):
+        return True
+    return bool(_THUOC_TINH_MOT_CAN.search(thap)) or any(cum in thap for cum in _TRO_VAO_CAN)
 
 
 def _bo_trung(citations: Iterable[Citation]) -> list[Citation]:
@@ -263,9 +292,11 @@ def loc_nguon_da_dung(
     # nên xoá sạch nguồn là xoá đúng thứ chứng minh trợ lý không bịa. Giữ lại
     # vài cái đầu — bớt ồn mà không mất bằng chứng.
     #
-    # Trừ khi câu trả lời chưa khẳng định gì: không có gì để chứng minh thì
-    # không có nguồn. Xem `_co_khang_dinh_ve_can`.
-    if not _co_khang_dinh_ve_can(cau_tra_loi):
+    # Trừ khi câu trả lời chưa khẳng định gì VỀ MỘT CĂN CỤ THỂ. Con số tổng hợp
+    # ("còn 23 căn") là khẳng định thật, nhưng nó không trỏ vào căn nào — dựng
+    # lại ba mã căn bất kỳ ở đây là gán bằng chứng sai cho một câu đúng, và
+    # người đọc bắt được ngay. Xem `_khang_dinh_ve_mot_can_cu_the`.
+    if not _khang_dinh_ve_mot_can_cu_the(cau_tra_loi):
         return giu
 
     du_phong = [c for c in co_nhan if c.kind == "db"][:TOI_DA_NGUON_TAI_LIEU]

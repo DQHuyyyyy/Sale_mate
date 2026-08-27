@@ -73,6 +73,35 @@ _NHAN_SAP_XEP = {
 }
 
 
+def _ghi_chu_cat_bot(tong: int) -> str:
+    """Nói cho MODEL biết danh sách bị cắt, và cấm nó nói lại điều đó với khách.
+
+    Hai việc khác nhau, bản trước gộp làm một nên hỏng:
+
+    1. Model phải biết `can_hien_thi` không phải toàn bộ, để hỏi số lượng thì
+       trả lời đúng tổng chứ không đếm phần tử trong mảng.
+    2. KHÁCH thì không cần biết. Người mua nhà hỏi "căn ở Ocean Park 2" không
+       quan tâm hệ thống chở được bao nhiêu phần tử một lượt.
+
+    Bản trước viết "`can_hien_thi` chỉ là 30 căn đầu" — nhắc thẳng tên trường và
+    con số, nên model tưởng đó là thông tin cần truyền đạt và nói lại nguyên văn.
+    Đo được trên production, tái hiện ở cả hai lần chạy eval:
+
+        "Có 43 căn ở Ocean Park 2 khớp dữ liệu; hiện ngữ cảnh cung cấp chi tiết
+         30 căn đầu, nên mình liệt kê các căn này…"
+
+    Trợ lý đang kể cho khách nghe về ngữ cảnh của chính nó. Vô nghĩa với người
+    mua, và nghe như hệ thống đang giấu 13 căn.
+    """
+    return (
+        f"Tổng cộng {tong} căn khớp tiêu chí. Danh sách dưới đây chỉ chở được một phần — "
+        f"hỏi SỐ LƯỢNG thì trả lời {tong}, đừng đếm số phần tử trong mảng.\n"
+        "TUYỆT ĐỐI không nói với người dùng rằng danh sách bị cắt bớt, không nêu số căn "
+        "đang hiển thị, không nhắc tên trường dữ liệu — đó là chi tiết kỹ thuật. Muốn thu "
+        "hẹp thì mời họ nêu thêm tiêu chí."
+    )
+
+
 def _ghi_chu_sap_xep(sort: str | None, tong: int) -> str:
     """Nói rõ danh sách rút gọn là ĐẦU của tập đã sắp xếp, không phải mẫu ngẫu nhiên.
 
@@ -90,9 +119,10 @@ def _ghi_chu_sap_xep(sort: str | None, tong: int) -> str:
         return ""
     thu_tu, cuc_tri = nhan
     return (
-        f" Danh sách đã sắp xếp theo {thu_tu} trên CẢ {tong} căn khớp rồi mới cắt, "
-        f"nên phần tử ĐẦU TIÊN là căn {cuc_tri} trong toàn bộ {tong} căn — "
-        "khẳng định được, không cần thêm dữ liệu."
+        f"\nDanh sách đã sắp xếp theo {thu_tu} trên CẢ {tong} căn khớp rồi mới cắt, "
+        f"nên phần tử ĐẦU TIÊN là căn {cuc_tri} trong toàn bộ {tong} căn — khẳng định "
+        "thẳng, không cần thêm dữ liệu. Cũng không cần giải thích cơ chế sắp xếp này "
+        "cho người dùng."
     )
 
 
@@ -740,10 +770,7 @@ class InventorySearchTool(AgentTool):
             # theo thứ mà thực tế không lọc.
             data["tieu_chi_bo_qua"] = bo_qua
         if not data["day_du"]:
-            data["ghi_chu"] = (
-                f"Có TẤT CẢ {len(rows)} căn khớp tiêu chí; `can_hien_thi` chỉ là {len(hien)} căn đầu. "
-                f"Hỏi SỐ LƯỢNG thì trả lời {len(rows)}, đừng đếm số phần tử trong mảng."
-            ) + _ghi_chu_sap_xep(args.sort, len(rows))
+            data["ghi_chu"] = _ghi_chu_cat_bot(len(rows)) + _ghi_chu_sap_xep(args.sort, len(rows))
 
         return ToolResult(ok=True, data=data, source="inventory:postgres")
 

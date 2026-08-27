@@ -52,9 +52,16 @@ class TestNguonDuLieu:
         assert [c.title for c in giu] == ["VOP345"]
 
     def test_luoi_du_phong_cung_co_tran(self) -> None:
+        """Lưới bật thì cũng chỉ giữ vài cái đầu — bớt ồn mà không mất bằng chứng.
+
+        Câu mẫu phải khẳng định về MỘT căn ("căn này ... 2,7 tỷ"). Bản trước dùng
+        "Có 9 căn phù hợp" và đó chính là hình dạng đã gây lỗi trên production:
+        con số ĐẾM không trỏ vào căn nào, nên lưới không được phép bật. Xem
+        `TestChuaKhangDinhGi.test_hoi_nguoc_kem_dem_tong_thi_van_khong_trich_nguon`.
+        """
         nguon = [_db(f"VOP{i:03d}") for i in range(1, 10)]
 
-        giu = loc_nguon_da_dung(nguon, "Có 9 căn phù hợp.", co_du_lieu_tool=True)
+        giu = loc_nguon_da_dung(nguon, "Căn này giá 2,7 tỷ.", co_du_lieu_tool=True)
 
         assert len(giu) == TOI_DA_NGUON_TAI_LIEU
 
@@ -73,6 +80,34 @@ class TestChuaKhangDinhGi:
         )
 
         assert loc_nguon_da_dung(nguon, tra_loi, co_du_lieu_tool=True) == []
+
+    def test_hoi_nguoc_kem_dem_tong_thi_van_khong_trich_nguon(self) -> None:
+        """Cùng ca trên nhưng câu trả lời có thêm con số ĐẾM — và nó lọt lưới cũ.
+
+        Bản trước chỉ hỏi "có khẳng định gì không", mà `_SO_LIEU` tính cả
+        "23 can" là số liệu, nên lưới an toàn bật và dựng lại đúng ba mã căn vừa
+        bị loại. Đo trên production: người dùng thấy ngay ba mã căn dưới một câu
+        không hề nhắc tới căn nào.
+
+        "23 căn" là khẳng định THẬT nhưng thuộc loại TỔNG HỢP — nó đếm tập kết
+        quả, không trỏ vào căn nào để mà lấy ba mã ra chứng minh.
+        """
+        nguon = [_db(m) for m in ("VOP758", "VOP285", "VOP619")]
+        tra_loi = (
+            "Bạn muốn tìm căn ở Ocean Park 1 theo tiêu chí nào: số phòng ngủ, "
+            "khoảng giá, diện tích, tòa, hướng hay view? Hiện dữ liệu tồn kho "
+            "đang có 23 căn tại Ocean Park 1."
+        )
+
+        assert loc_nguon_da_dung(nguon, tra_loi, co_du_lieu_tool=True) == []
+
+    def test_khang_dinh_ve_mot_can_thi_luoi_van_bat(self) -> None:
+        """Chốt ngược: đây đúng là ca lưới an toàn sinh ra để cứu, đừng chặn nhầm."""
+        nguon = [_db(m) for m in ("VOP758", "VOP285")]
+
+        giu = loc_nguon_da_dung(nguon, "Căn này giá 2,7 tỷ, diện tích 43m2.", co_du_lieu_tool=True)
+
+        assert [c.title for c in giu] == ["VOP758", "VOP285"]
 
     def test_chu_so_tran_khong_tinh_la_so_lieu(self) -> None:
         """ "Ocean Park 1" có chữ số nhưng không khẳng định gì về căn."""

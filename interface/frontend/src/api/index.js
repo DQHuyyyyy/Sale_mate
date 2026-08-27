@@ -5,6 +5,11 @@ export { ApiError, getToken, setToken, setUnauthorizedHandler } from './client';
 
 // ---- Auth ----
 export async function login(username, password) {
+  // Xoá token cũ TRƯỚC khi gọi. Gửi kèm `Authorization` của một phiên đã chết
+  // vào chính lời gọi đăng nhập là vô nghĩa, và nó làm `request()` hiểu nhầm
+  // 401 "sai mật khẩu" thành 401 "phiên hết hạn" — xem chú thích ở client.js.
+  setToken(null);
+
   const data = await request('/api/auth/login', {
     method: 'POST',
     body: { username, password },

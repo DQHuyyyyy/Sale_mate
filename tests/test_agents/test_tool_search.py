@@ -11,7 +11,13 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 
-from src.agents.tools.search import InventorySearchTool, extract_criteria, vocabulary
+from src.agents.tools.search import (
+    InventorySearchTool,
+    _ghi_chu_cat_bot,
+    _ghi_chu_sap_xep,
+    extract_criteria,
+    vocabulary,
+)
 from src.data.sources.inventory import InventoryUnit
 from src.data.stores.inventory_db import InventoryDB
 
@@ -292,3 +298,40 @@ class TestKhongKhopVanLaKetLuan:
         ket_qua = await InventorySearchTool().run(unit_type="2PN")
 
         assert ket_qua.data == [], "kho rỗng thì không được kết luận gì"
+
+
+class TestGhiChuKhongLoChiTietKyThuat:
+    """`ghi_chu` viết CHO MODEL đọc, nhưng model diễn giải lại cho KHÁCH.
+
+    Bản trước viết "`can_hien_thi` chỉ là 30 căn đầu" — nhắc thẳng tên trường và
+    con số, nên model tưởng đó là thông tin cần truyền đạt. Đo trên production,
+    tái hiện ở cả hai lần chạy eval:
+
+        "Có 43 căn ở Ocean Park 2 khớp dữ liệu; hiện ngữ cảnh cung cấp chi tiết
+         30 căn đầu, nên mình liệt kê các căn này…"
+
+    Trợ lý đang kể cho khách nghe về ngữ cảnh của chính nó — vô nghĩa với người
+    mua nhà, và nghe như hệ thống đang giấu 13 căn.
+    """
+
+    def test_khong_nhac_ten_truong_du_lieu(self) -> None:
+        ghi_chu = _ghi_chu_cat_bot(43)
+
+        assert "can_hien_thi" not in ghi_chu
+
+    def test_khong_neu_so_can_dang_hien_thi(self) -> None:
+        """Chỉ có TỔNG được nêu. Con số 30 lọt vào là model sẽ đọc nó ra."""
+        ghi_chu = _ghi_chu_cat_bot(43)
+
+        assert "43" in ghi_chu
+        assert "30" not in ghi_chu
+
+    def test_cam_tuong_minh_viec_ke_lai_cho_nguoi_dung(self) -> None:
+        ghi_chu = _ghi_chu_cat_bot(43).lower()
+
+        assert "không nói với người dùng" in ghi_chu
+
+    def test_ghi_chu_sap_xep_cung_khong_moi_giai_thich_co_che(self) -> None:
+        ghi_chu = _ghi_chu_sap_xep("gia_tang", 12).lower()
+
+        assert "không cần giải thích cơ chế" in ghi_chu

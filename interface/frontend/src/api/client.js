@@ -75,7 +75,17 @@ export async function request(path, { method = 'GET', body, params, formData } =
     throw new ApiError('Không kết nối được máy chủ. Kiểm tra backend đã chạy chưa.', 0);
   }
 
-  if (response.status === 401) {
+  // 401 có HAI nghĩa hoàn toàn khác nhau, phân biệt bằng việc CÓ gửi token hay không:
+  //
+  //   có token  -> token hết hạn hoặc bị thu hồi. Xoá token, đá về trang đăng nhập.
+  //   không có  -> chính lời gọi đăng nhập bị từ chối. Backend đã nói rõ lý do
+  //                ("Tên đăng nhập hoặc mật khẩu không đúng." / "Tài khoản đã bị
+  //                tắt.") — phải để nguyên câu đó đi tiếp.
+  //
+  // Bản trước gộp cả hai: gõ sai mật khẩu cũng hiện "Phiên đăng nhập đã hết hạn",
+  // nên người dùng nhìn màn hình đăng nhập mà không biết mình gõ sai hay hệ thống
+  // vừa đăng xuất họ. Nó còn gọi `onUnauthorized()` giữa lúc đang đăng nhập.
+  if (response.status === 401 && token) {
     setToken(null);
     if (onUnauthorized) onUnauthorized();
     throw new ApiError('Phiên đăng nhập đã hết hạn. Đăng nhập lại để tiếp tục.', 401);

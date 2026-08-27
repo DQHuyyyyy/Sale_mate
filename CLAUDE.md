@@ -601,6 +601,19 @@ gợi ý sau lại dựng "giá 42,8–43,2" từ chính tiêu chí sai đó —
 liên tiếp vào hai ngõ cụt. `_rut_dien_tich` chạy TRƯỚC `_rut_gia` và **xoá** phần
 đã đọc, nếu không thì "từ 40 đến 50 m2" đẻ thêm `price_min = 40`.
 
+**`ghi_chu` viết cho MODEL đọc, nhưng model diễn giải lại cho KHÁCH.** Hai việc
+khác nhau và phải tách: model *cần biết* danh sách bị cắt (để hỏi số lượng thì
+trả lời tổng, không đếm phần tử trong mảng); khách *không cần biết*. Bản trước
+viết `` `can_hien_thi` chỉ là 30 căn đầu `` — nhắc thẳng tên trường và con số,
+nên model tưởng đó là thông tin phải truyền đạt và nói lại nguyên văn:
+
+> "Có 43 căn ở Ocean Park 2 khớp dữ liệu; hiện **ngữ cảnh cung cấp chi tiết 30
+> căn đầu**, nên mình liệt kê các căn này…"
+
+Trợ lý đang kể cho khách nghe về ngữ cảnh của chính nó. Vô nghĩa với người mua
+nhà, và nghe như hệ thống đang giấu 13 căn. `_ghi_chu_cat_bot()` nêu **duy nhất
+con số tổng** rồi cấm tường minh việc kể lại cơ chế — có test khoá cả hai vế.
+
 **Danh sách rút gọn phải NÓI RÕ nó là đầu của tập đã sắp xếp.** `inventory_search`
 sắp xếp trên toàn bộ tập khớp rồi mới cắt `limit`, nên phần tử đầu là cực trị
 thật của cả tập — nhưng model không suy ra được điều đó và đã trả lời sai thật:
@@ -751,12 +764,25 @@ trong `GuardrailNode._all_citations`. Cả hai cần `answer` để đối chi�
 nói "căn này" thay vì nhắc mã) thì giữ lại vài cái đầu. Xoá sạch nguồn là xoá
 đúng thứ chứng minh trợ lý không bịa.
 
-**Nhưng lưới chỉ cứu KHẲNG ĐỊNH.** `_co_khang_dinh_ve_can` hỏi câu trả lời có
-con số kèm đơn vị, hoặc có trỏ vào một căn cụ thể, hay không — chưa nói gì thì
-không có gì để chứng minh. Thiếu chốt này thì lượt trợ lý **hỏi ngược** để làm
-rõ tiêu chí vẫn dựng lên ba mã căn dưới một câu không nhắc tới căn nào; đã xảy
-ra thật với "Căn ở Ocean Park 1". Con số phải kèm đơn vị vì chữ số trần có ở
-khắp nơi vô hại — "Ocean Park 1", "tòa S2".
+**Nhưng lưới chỉ cứu KHẲNG ĐỊNH VỀ MỘT CĂN.** Có hai phép kiểm, đừng lẫn:
+
+| Hàm | Hỏi gì | Dùng ở đâu |
+|---|---|---|
+| `_co_khang_dinh_ve_can` | có khẳng định gì cần chứng minh không | nhánh **từ chối** — từ chối một phần vẫn phải giữ nguồn |
+| `_khang_dinh_ve_mot_can_cu_the` | khẳng định đó có trỏ vào MỘT căn không | **lưới an toàn** ở cuối |
+
+Khác nhau đúng ở một chữ: **"23 căn"**. Đó là khẳng định thật (nên hàm thứ nhất
+trả `True`, và từ chối một phần vẫn giữ nguồn), nhưng nó **đếm cả tập kết quả**,
+không có căn nào để trỏ vào — nên hàm thứ hai trả `False` và lưới không bật.
+
+Vì sao phải tách: lượt trợ lý **hỏi ngược** để làm rõ tiêu chí thường kèm một
+con số đếm. Đo trên production với đúng câu "Căn ở Ocean Park 1": tool trả 23
+căn, trợ lý hỏi lại tiêu chí và chỉ nêu con số 23, không mã nào lọt bộ lọc — và
+lưới dựng lại VOP758, VOP285, VOP619 dưới một câu **không nhắc căn nào**. Người
+đọc bắt được ngay, rồi mất tin vào cả dòng nguồn ở những lượt đúng.
+
+Con số phải kèm đơn vị vì chữ số trần có ở khắp nơi vô hại — "Ocean Park 1",
+"tòa S2". Và đơn vị `căn` chỉ tính cho hàm thứ nhất, không tính cho hàm thứ hai.
 
 **Kết quả TỔNG HỢP không có mã căn để trỏ vào.** Tool khai `nhan_nguon` (thuộc
 tính tuỳ chọn, đọc bằng `getattr` nên không đụng hợp đồng đóng băng) để dòng
@@ -901,6 +927,26 @@ cột, để không phụ thuộc việc migration nào đã chạy ở môi tr�
 module store. Tồn kho chỉ vá module tool là đủ vì nó chỉ đọc; tool này **ghi**.
 Đã xảy ra thật khi viết test cho nó: một dòng `from src.data.stores.dat_coc_db
 import get_dat_coc_db` để đọc lại kết quả đã tạo bảng thật trên Supabase.
+
+## 401 có hai nghĩa — đừng gộp
+
+`request()` trong [client.js](interface/frontend/src/api/client.js) phân biệt
+bằng việc lời gọi CÓ gửi token hay không:
+
+| | Nghĩa | Xử lý |
+|---|---|---|
+| có token | token hết hạn / bị thu hồi | xoá token, đá về trang đăng nhập |
+| không token | chính lời gọi **đăng nhập** bị từ chối | giữ nguyên thông điệp của backend |
+
+Bản trước gộp cả hai, nên gõ sai mật khẩu cũng hiện **"Phiên đăng nhập đã hết
+hạn"** — người dùng nhìn màn hình đăng nhập mà không biết mình gõ sai hay hệ
+thống vừa đăng xuất họ. Backend vẫn nói đúng (`"Tên đăng nhập hoặc mật khẩu không
+đúng."`), FE mới là chỗ vứt câu đó đi. Nó còn gọi `onUnauthorized()` giữa lúc
+đang đăng nhập.
+
+`login()` cũng **xoá token cũ trước khi gọi**: gửi kèm `Authorization` của một
+phiên đã chết vào chính lời gọi đăng nhập là vô nghĩa, và nó đẩy 401 "sai mật
+khẩu" vào nhánh "phiên hết hạn".
 
 ## Tracing
 
