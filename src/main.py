@@ -94,9 +94,9 @@ async def config_dang_chay() -> dict[str, object]:
 
     Vì sao cần: biến môi trường của Render nằm trong dashboard, không ai đọc
     được từ repo, và biến nào không khai thì code lặng lẽ lấy giá trị mặc định.
-    Hệ quả đã xảy ra thật: local bật `ENABLE_AGENT_LOOP` và chạy `gpt-4o`, prod
-    không khai biến nào trong hai cái đó nên rơi về `False` và `gpt-4o-mini` —
-    cùng một câu hỏi cho ra hai chất lượng khác hẳn, mà không có dấu hiệu gì.
+    Hệ quả đã xảy ra thật: local bật `ENABLE_AGENT_LOOP` và chạy model trả lời
+    đắt, prod không khai biến nào trong hai cái đó nên rơi về `False` và một
+    model rẻ hơn — cùng một câu hỏi cho ra hai chất lượng khác hẳn, không dấu hiệu.
     Đoán mò hai bên lệch chỗ nào tốn nhiều thời gian hơn hẳn một endpoint.
 
     CHỈ trả tên cấu hình và cờ có/không, KHÔNG trả giá trị bí mật: khoá API và

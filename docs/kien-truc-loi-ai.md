@@ -437,7 +437,7 @@ Mỗi mục dưới đây là một lỗi **đã xảy ra thật**, kèm chỗ �
 | Biến | Mặc định | Tác dụng |
 |---|---|---|
 | `LLM_MODEL_FAST` | `gpt-5.6-luna` | Router, giải tham chiếu, gợi ý |
-| `LLM_MODEL_ANSWER` | `gpt-4o` | Sinh câu trả lời — đổi thì **đo trước** |
+| `LLM_MODEL_ANSWER` | `gpt-5.6-luna` | Sinh câu trả lời — đổi thì **đo trước** |
 | `ENABLE_RAG` | `true` | Tắt → luôn trả "chưa đủ dữ liệu" |
 | `ENABLE_ORCHESTRATOR` | `false` | Nhánh leo thang |
 | `CHE_DO_LEO_THANG` | `moi_luot` | `tat` · `khi_thieu` · `moi_luot` — xem [§5](#5-cổng-leo-thang) |

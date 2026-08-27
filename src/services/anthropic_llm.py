@@ -105,7 +105,10 @@ class AnthropicToolProvider:
         self,
         api_key: str,
         *,
-        default_model: str = "claude-sonnet-5",
+        # BẮT BUỘC truyền, KHÔNG có mặc định — cùng lý do với `OpenAIProvider`:
+        # tên model chỉ khai ở `.env`, một mặc định ở đây là nơi thứ hai định
+        # nghĩa nó và chỉ lộ ra khi wiring đã hỏng.
+        default_model: str,
         effort: str = "low",
         max_tokens: int = 4096,
         timeout_s: float = 120.0,

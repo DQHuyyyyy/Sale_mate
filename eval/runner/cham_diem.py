@@ -35,7 +35,18 @@ from eval.runner.bo_cau_hoi import doc_golden  # noqa: E402
 
 GOC = Path(__file__).resolve().parents[2]
 DUONG_LUAT = Path(__file__).resolve().parent / "luat_cham.json"
-MODEL_JUDGE = "claude-sonnet-5"
+
+
+def _model_judge_mac_dinh() -> str:
+    """Lấy model Judge từ `.env` chứ không viết cứng tên ở đây.
+
+    Cùng luật với code sản phẩm: tên model chỉ khai một chỗ. Judge dùng lại
+    `ORCHESTRATOR_MODEL` vì đó đã là model Anthropic của dự án — đổi model trong
+    `.env` là Judge đổi theo, không ai phải nhớ sửa thêm file này.
+    """
+    from src.core.config import get_settings
+
+    return get_settings().orchestrator_model
 
 
 def doc_luat() -> dict[str, dict[str, Any]]:
@@ -215,7 +226,7 @@ def dung_dong(
 def main() -> int:
     parser = argparse.ArgumentParser(description="Chấm điểm file kết quả thô")
     parser.add_argument("file", help="Đường dẫn file raw_*.json")
-    parser.add_argument("--model", default=MODEL_JUDGE)
+    parser.add_argument("--model", default=_model_judge_mac_dinh())
     parser.add_argument("--effort", default="low", help="low/medium/high — ga chi phí của Sonnet 5")
     parser.add_argument("--khong-judge", action="store_true", help="Chỉ chấm rule-based, không gọi model")
     args = parser.parse_args()

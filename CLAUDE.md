@@ -194,22 +194,30 @@ kê tài liệu và `data/contracts.py` đóng băng. Đánh đổi: sửa file 
 thì trang hiện bản mới trong khi trợ lý đọc bản cũ — nên response luôn kèm
 `version` để chênh lệch đó nhìn thấy được.
 
-## Phân bổ model — ba vai, hai nhà cung cấp
+## Phân bổ model — bốn vai, hai nhà cung cấp
 
 | Vai | Model | Giá $/1M vào–ra | Ghi chú |
 |---|---|---|---|
-| router (nhãn + giải tham chiếu), gợi ý | `gpt-5.6-luna` | 0.20 – 1.20 | **rẻ hơn** `gpt-4o-mini` trước đó |
-| sinh câu trả lời | `gpt-4o` | 2.50 – 10.00 | chưa đổi, xem bên dưới |
+| router (nhãn + giải tham chiếu), gợi ý | `gpt-5.6-luna` | 0.20 – 1.20 | |
+| sinh câu trả lời | `gpt-5.6-luna` | 0.20 – 1.20 | đã đo, xem bên dưới |
 | orchestrator (nhánh leo thang) | `claude-sonnet-5` | 2.00 – 10.00 | giá ưu đãi, hết **31/08/2026** rồi về 3–15 |
+| cổng phân loại chính sách | `claude-sonnet-5` | 2.00 – 10.00 | rỗng thì lấy theo `ORCHESTRATOR_MODEL` |
 
 Bảng giá nằm ở [`src/core/gia_model.py`](src/core/gia_model.py), mỗi mục có cờ
 `da_xac_minh` — mục chưa xác minh vẫn tính được nhưng ghi WARNING, để không ai
 lỡ báo cáo một con số tự tin mà sai.
 
-**Vì sao `LLM_MODEL_ANSWER` vẫn là `gpt-4o`:** đây là khâu DUY NHẤT từng có hồi
-quy thật khi đổi sang model rẻ — `gpt-4o-mini` bỏ qua luật trích nguồn trên
-production trong khi `gpt-4o` ở local thì tuân. Muốn đổi thì **đo trước** bằng
-`eval answer --doi-chieu`, và chỉ đổi khi `phai_tu_choi` không giảm.
+**`LLM_MODEL_ANSWER` là khâu DUY NHẤT từng có hồi quy thật khi hạ model.** Bản rẻ
+dùng trước kia bỏ mất toà/tầng/phòng và bỏ luôn luật trích nguồn trên production,
+nên dòng "Nguồn" biến mất — trong khi cùng câu hỏi ở local với model đắt thì vẫn
+đủ. Vì vậy nó bị khoá ở model đắt suốt một thời gian dài, kèm yêu cầu phải đo.
+
+**Đã đo, 26/08/2026:** chạy đủ 29 câu golden dataset trên `gpt-5.6-luna`, chấm
+bằng `claude-sonnet-5` — **17 đạt / 2 không đạt**, và dòng "Nguồn" xuất hiện đầy
+đủ ở mọi lượt có khẳng định. Xem `eval/results/diem_20260826-1609_batch3-sua.md`.
+
+Luật giữ nguyên cho lần đổi sau: **đo trước** bằng `eval answer --doi-chieu`, chỉ
+đổi khi `phai_tu_choi` không giảm và dòng "Nguồn" vẫn còn.
 
 **Sonnet 5 có ba ràng buộc riêng**, sai là 400 hoặc đội tiền:
 `temperature` bị **từ chối** (nên router phải ở lại OpenAI — chỗ đó cần
@@ -787,8 +795,9 @@ số đó là thứ khách mang đi hỏi ngân hàng. `loc_nguon_da_dung` ràng
 cho ra hai kiểu trích nguồn tuỳ vào việc cổng leo thang có mở hay không.
 
 FE hợp nhất hai nguồn: dấu `[Mã căn]` model tự viết, và event `sources`. Không
-được bỏ vế thứ hai — production chạy `gpt-4o-mini` và model đó bỏ qua luật trích
-nguồn, dòng "Nguồn" biến mất hẳn trong khi local dùng `gpt-4o` thì vẫn có.
+được bỏ vế thứ hai — đã có lần production chạy một model rẻ hơn local, model đó
+bỏ qua luật trích nguồn, và dòng "Nguồn" biến mất hẳn trên prod trong khi local
+vẫn đủ. Nguồn do backend duyệt là vế không phụ thuộc model viết ngoan hay không.
 
 ⚠️ **Nhãn model tự viết KHÔNG còn được tính là nguồn.** FE chỉ hiện danh sách
 backend duyệt (`nguonThat`), vì hai lý do đã xảy ra thật: model đọc mục "Nguồn

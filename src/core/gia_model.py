@@ -53,9 +53,11 @@ BANG_GIA: dict[str, GiaModel] = {
         ghi_chu="giá giới thiệu, hết 31/08/2026 rồi về 3.00/15.00",
     ),
     # --- CHƯA XÁC MINH: lấy từ trí nhớ, cần đối chiếu trang giá trước khi
-    # đem con số đi báo cáo. Giữ lại vì baseline hiện tại đang chạy gpt-4o.
-    "gpt-4o": GiaModel(2.50, 10.00, 1.25),
-    "gpt-4o-mini": GiaModel(0.15, 0.60, 0.075),
+    # đem con số đi báo cáo. Không model nào ở đây đang chạy trong hệ thống.
+    #
+    # Model đã gỡ khỏi bảng thì `gia_cua()` trả None kèm WARNING chứ không đoán
+    # bằng 0 — đọc lại file eval cũ đo trên model đó sẽ hiện "không biết giá",
+    # đúng hơn là một con số sai trông có vẻ chắc chắn.
     "claude-opus-5": GiaModel(5.00, 25.00, 0.50),
     "text-embedding-3-small": GiaModel(0.02, 0.0),
 }

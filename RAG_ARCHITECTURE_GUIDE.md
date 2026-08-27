@@ -60,7 +60,7 @@ Dự án phân tách rõ ràng giữa **Dữ liệu thật** và **Logic lập t
   - Chống bịa đặt số liệu (Anti-Hallucination): Từ chối lịch sự khi dữ liệu không đủ.
 
 ### 2.5. Generation & Streaming Response (`src/services/llm.py` & `src/agents/service.py`)
-- **Streaming Response**: Sử dụng `OpenAIProvider.stream()` (gọi `gpt-4o-mini`) phát từng token theo thời gian thực về cho client.
+- **Streaming Response**: Sử dụng `OpenAIProvider.stream()` (gọi model khai ở `LLM_MODEL_ANSWER`, hiện là `gpt-5.6-luna`) phát từng token theo thời gian thực về cho client.
 - **Format Output tách riêng `answer` & `sources[]`**:
   ```json
   {

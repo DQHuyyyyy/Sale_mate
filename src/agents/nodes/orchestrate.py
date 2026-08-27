@@ -133,8 +133,10 @@ class OrchestratorNode(BaseNode):
             logger.warning("Orchestrator hỏng, đi tiếp bằng bằng chứng đã có: %s", exc)
             return {"leo_thang": luat, "orchestrator_loi": str(exc)}
 
+        # Không có nhánh `or "<tên model>"`: bịa tên ở đây là tính tiền theo một
+        # model KHÁC với model vừa chạy, và bộ đếm ngân sách sai mà trông vẫn đúng.
         so_chi_tieu.ghi_nhan(
-            self._model or "claude-sonnet-5",
+            self._model,
             token_vao=ket_qua.get("orchestrator_token_vao", 0),
             token_ra=ket_qua.get("orchestrator_token_ra", 0),
             token_cache=ket_qua.get("orchestrator_token_cache", 0),

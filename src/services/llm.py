@@ -104,7 +104,7 @@ def _tham_so_model(model: str, temperature: float | None, max_tokens: int | None
     bỏ sót; cái thứ ba HỎNG CÂM và tốn nhiều thời gian nhất để tìm ra:
 
     1. `max_tokens` đã đổi tên thành `max_completion_tokens`. Dùng tên mới cho
-       tất cả — `gpt-4o` nhận được cả hai, nên một đường code là đủ.
+       tất cả — thế hệ cũ nhận được cả hai, nên một đường code là đủ.
     2. Họ `gpt-5` bỏ hẳn `temperature`.
     """
     tran = max_tokens or 1024
@@ -125,7 +125,11 @@ class OpenAIProvider:
         self,
         api_key: str,
         *,
-        default_model: str = "gpt-4o-mini",
+        # BẮT BUỘC truyền, KHÔNG có mặc định. Tên model chỉ được khai ở `.env`
+        # rồi đi qua `Settings` — một mặc định ở đây là nơi thứ hai định nghĩa
+        # model, và nó chỉ hiện ra khi wiring hỏng: lúc đó code lặng lẽ chạy một
+        # model khác với thứ `.env` ghi. Thiếu tham số thì vỡ ngay lúc khởi động.
+        default_model: str,
         timeout_s: float = 60.0,
         client: AsyncOpenAI | None = None,
     ) -> None:

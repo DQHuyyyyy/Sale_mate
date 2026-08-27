@@ -125,18 +125,23 @@ services:
       # bằng model thật, nên truy hồi luôn rỗng mà KHÔNG báo lỗi.
       - key: OPENAI_API_KEY
         sync: false
-      # gpt-5.6-luna: $0.20/$1.20 mỗi triệu token — RẺ HƠN gpt-4o-mini nó thay
-      # thế, nên đổi sang đây không có mặt trái về chi phí. Chạy router (phân
-      # nhãn + giải tham chiếu từ lịch sử) và sinh gợi ý câu hỏi tiếp theo.
+      # gpt-5.6-luna: $0.20/$1.20 mỗi triệu token. Chạy router (phân nhãn +
+      # giải tham chiếu từ lịch sử) và sinh gợi ý câu hỏi tiếp theo.
       - key: LLM_MODEL_FAST
         value: gpt-5.6-luna
-      # Model TRẢ LỜI. Từng để gpt-4o-mini cho rẻ, và đó là nguyên nhân chính
-      # khiến prod trả lời tệ hơn hẳn local: cùng câu hỏi, bản mini bỏ mất toà,
-      # tầng, phòng, loại căn, và bỏ luôn luật trích nguồn nên dòng "Nguồn"
-      # biến mất. Model rẻ vẫn dùng cho router/plan/gợi ý qua LLM_MODEL_FAST —
-      # ba việc đó chỉ cần phân loại, không cần viết hay.
+      # Model TRẢ LỜI — cùng luna với LLM_MODEL_FAST.
+      #
+      # Khâu này từng là chỗ DUY NHẤT có hồi quy thật khi hạ model: bản mini bỏ
+      # mất toà, tầng, phòng, loại căn, và bỏ luôn luật trích nguồn nên dòng
+      # "Nguồn" biến mất trên prod. Vì vậy suốt một thời gian nó bị khoá ở một
+      # model đắt hơn hẳn, kèm yêu cầu "muốn đổi thì phải ĐO trước".
+      #
+      # Đã đo, ngày 26/08/2026: chạy đủ 29 câu golden dataset trên luna, chấm
+      # bằng claude-sonnet-5 — 17 đạt / 2 không đạt, và dòng "Nguồn" xuất hiện
+      # đầy đủ ở mọi lượt có khẳng định. Xem eval/results/diem_*_batch3-sua.md.
+      # Yêu cầu "đo trước khi đổi" vẫn còn nguyên giá trị cho lần đổi sau.
       - key: LLM_MODEL_ANSWER
-        value: gpt-4o
+        value: gpt-5.6-luna
       - key: LOG_LEVEL
         value: INFO
       # Rỗng = TẮT ghi log ra file. Mặc định của code là "logs", nhưng đĩa của
@@ -202,6 +207,19 @@ services:
       # khách VẪN nhận câu trả lời từ đường tất định, không phải thông báo lỗi.
       - key: ORCHESTRATOR_DAILY_BUDGET_USD
         value: "1.0"
+
+      # ---- Cổng phân loại chính sách ----
+      # Chặn câu hỏi ngoài phạm vi / không an toàn TRƯỚC khi trả lời. Chạy SONG
+      # SONG với tools+retrieve nên gần như không cộng vào thời gian khách chờ:
+      # đo thật 17,6s so với 18,3s ở lượt không bị chặn.
+      #
+      # ⚠️ Cổng chạy bằng Sonnet 5 và thất bại theo hướng MỞ — hết hạn mức
+      # Anthropic là nó ngừng chặn trong im lặng, trợ lý vẫn trả lời trơn tru.
+      # Đã xảy ra thật ngày 26/08/2026. Dòng WARNING "Cổng chính sách hỏng" là
+      # tín hiệu duy nhất; hạn mức Anthropic ở đây là vấn đề AN TOÀN, không phải
+      # chuyện kế toán.
+      - key: ENABLE_CONG_CHINH_SACH
+        value: "true"
 
       # ---- Vector store cho RAG ----
       # Thiếu ba biến này thì qdrant_url rơi về http://localhost:6333, trong

@@ -33,6 +33,11 @@ from src.services.llm import (
     _to_openai_tool_messages,
 )
 
+# Provider bắt buộc nhận `default_model` — không có mặc định trong code, tên
+# model chỉ khai ở `.env`. Test chỉ cần một chuỗi bất kỳ: không lượt gọi API nào
+# thật sự xảy ra ở đây, client đã bị thay bằng đồ giả.
+MODEL_GIA = "model-gia-cho-test"
+
 _SPEC_TOOL = {
     "type": "function",
     "function": {
@@ -59,7 +64,7 @@ _TRANSCRIPT = [
 class TestTuanThuProtocol:
     @pytest.mark.parametrize(
         "provider",
-        [ScriptedToolCallingProvider(), AnthropicToolProvider("k", client=object())],
+        [ScriptedToolCallingProvider(), AnthropicToolProvider("k", default_model=MODEL_GIA, client=object())],
     )
     def test_cai_dung_giao_dien(self, provider: Any) -> None:
         assert isinstance(provider, ToolCallingProvider)
@@ -160,7 +165,7 @@ class TestThamSoGuiSonnet5:
     """Ba thứ riêng của Sonnet 5 — sai là 400 hoặc đội tiền."""
 
     def _tham_so(self, system: str = "prompt ngắn") -> dict[str, Any]:
-        provider = AnthropicToolProvider("k", effort="low", client=object())
+        provider = AnthropicToolProvider("k", default_model=MODEL_GIA, effort="low", client=object())
         return provider._dung_tham_so(system, _TRANSCRIPT, [_SPEC_TOOL], None, None)
 
     def test_khong_bao_gio_gui_temperature(self) -> None:
@@ -189,14 +194,14 @@ class TestThamSoGuiSonnet5:
 
     def test_khong_tool_va_system_ngan_thi_khong_danh_moc(self) -> None:
         """Prefix quá ngắn thì Anthropic lặng lẽ bỏ qua — đánh mốc chỉ gây hiểu nhầm."""
-        provider = AnthropicToolProvider("k", client=object())
+        provider = AnthropicToolProvider("k", default_model=MODEL_GIA, client=object())
 
         tham_so = provider._dung_tham_so("ngắn", [], [], None, None)
 
         assert "cache_control" not in tham_so["system"][0]
 
     def test_khong_tool_nhung_system_dai_thi_van_danh_moc(self) -> None:
-        provider = AnthropicToolProvider("k", client=object())
+        provider = AnthropicToolProvider("k", default_model=MODEL_GIA, client=object())
 
         tham_so = provider._dung_tham_so("x" * (NGUONG_CACHE_KY_TU + 1), [], [], None, None)
 
@@ -228,12 +233,22 @@ class TestOrchestratorGiaLap:
         assert not luot.con_goi_tool
 
 
+# KHÔNG phải tên một model nào — chỉ là chuỗi cố ý không bắt đầu bằng tiền tố
+# `_HO_KHONG_NHAN_TEMPERATURE`, để chạm vào nhánh còn lại của `_tham_so_model`.
+#
+# Nhánh đó là thứ cho phép đổi model bằng MỘT dòng trong .env: đặt model ngoài
+# họ gpt-5 vào `LLM_MODEL_ANSWER` thì code tự gửi kèm `temperature` và không
+# nâng trần token. Viết tên một model thật ở đây sẽ khiến người đọc tưởng dự án
+# đang dùng nó.
+MODEL_NGOAI_HO_GPT5 = "model-ngoai-ho-gpt5"
+
+
 class TestThamSoTheoHoModel:
     """Ba khác biệt giữa các thế hệ model OpenAI, cả ba đo được trên máy thật."""
 
     def test_luon_dung_ten_tham_so_moi(self) -> None:
-        """`max_tokens` đã đổi thành `max_completion_tokens`; gpt-4o nhận cả hai."""
-        for model in ("gpt-4o", "gpt-5.6-luna"):
+        """`max_tokens` đã đổi thành `max_completion_tokens` — dùng tên mới cho mọi model."""
+        for model in (MODEL_NGOAI_HO_GPT5, "gpt-5.6-luna"):
             tham_so = _tham_so_model(model, None, 256)
 
             assert "max_tokens" not in tham_so
@@ -242,8 +257,8 @@ class TestThamSoTheoHoModel:
     def test_ho_gpt5_khong_nhan_temperature(self) -> None:
         assert "temperature" not in _tham_so_model("gpt-5.6-luna", 0.0, 256)
 
-    def test_model_cu_van_nhan_temperature(self) -> None:
-        assert _tham_so_model("gpt-4o", 0.0, 256)["temperature"] == 0.0
+    def test_model_ngoai_ho_gpt5_van_nhan_temperature(self) -> None:
+        assert _tham_so_model(MODEL_NGOAI_HO_GPT5, 0.0, 256)["temperature"] == 0.0
 
     def test_model_suy_luan_co_san_han_muc(self) -> None:
         """Chốt chặn hồi quy cho lỗi HỎNG CÂM tốn nhiều thời gian nhất.
@@ -258,6 +273,6 @@ class TestThamSoTheoHoModel:
     def test_san_khong_lam_giam_han_muc_da_lon(self) -> None:
         assert _tham_so_model("gpt-5.6-luna", None, 4096)["max_completion_tokens"] == 4096
 
-    def test_model_cu_giu_nguyen_han_muc_nho(self) -> None:
+    def test_model_ngoai_ho_gpt5_giu_nguyen_han_muc_nho(self) -> None:
         """Model không suy luận thì 10 token là đủ cho một nhãn — đừng nâng thừa."""
-        assert _tham_so_model("gpt-4o", None, 10)["max_completion_tokens"] == 10
+        assert _tham_so_model(MODEL_NGOAI_HO_GPT5, None, 10)["max_completion_tokens"] == 10

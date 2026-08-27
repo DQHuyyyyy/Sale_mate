@@ -69,13 +69,15 @@ class TestDongCauHinh:
         assert "$" not in TongKet(prompt_version="v7").dong_cau_hinh()
 
     def test_bang_so_sanh_neu_ca_hai_cau_hinh(self) -> None:
-        truoc = TongKet(prompt_version="v7", nhan="baseline", model_answer="gpt-4o")
-        sau = TongKet(prompt_version="v7", nhan="pr4-luna", model_answer="gpt-5.6-luna")
+        """Bảng phải nêu model của CẢ HAI lần chạy — so hai lần khác model mà
+        bảng chỉ ghi một tên thì người đọc không biết con số nào của bên nào."""
+        truoc = TongKet(prompt_version="v7", nhan="baseline", model_answer="model-cu")
+        sau = TongKet(prompt_version="v7", nhan="moi", model_answer="model-moi")
 
         bang = so_sanh(truoc, sau)
 
-        assert "gpt-4o" in bang
-        assert "gpt-5.6-luna" in bang
+        assert "model-cu" in bang
+        assert "model-moi" in bang
 
 
 class TestLichSu:

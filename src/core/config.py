@@ -47,11 +47,19 @@ class Settings(BaseSettings):
     # ---------- LLM ----------
     # Hai tầng model: model rẻ cho router/phân loại, model mạnh cho câu trả lời.
     openai_api_key: str = ""
-    llm_model_answer: str = "gpt-4o"
-    # gpt-5.6-luna: $0.20/$1.20 mỗi triệu token — RẺ HƠN gpt-4o-mini đang chạy
-    # trước đó, nên đổi sang đây không có mặt trái về chi phí. Model này chạy
-    # router (phân nhãn + giải tham chiếu) và sinh gợi ý câu hỏi tiếp theo.
-    # Tài khoản chưa có quyền dùng thì đặt lại LLM_MODEL_FAST trong .env.
+    # Cùng một model cho cả hai tầng, $0.20/$1.20 mỗi triệu token.
+    #
+    # Khâu TRẢ LỜI từng bị khoá ở một model đắt hơn hẳn: đây là chỗ duy nhất có
+    # hồi quy thật khi hạ model — bản rẻ trước đó bỏ mất toà/tầng/phòng và bỏ
+    # luôn luật trích nguồn, nên dòng "Nguồn" biến mất trên production.
+    #
+    # Đã đo lại ngày 26/08/2026 trên đủ 29 câu golden dataset, chấm bằng
+    # claude-sonnet-5: 17 đạt / 2 không đạt, trích nguồn đầy đủ ở mọi lượt có
+    # khẳng định (eval/results/diem_*_batch3-sua.md). Luật "đổi model thì ĐO
+    # TRƯỚC bằng `cli eval answer --doi-chieu`" vẫn nguyên giá trị cho lần sau.
+    llm_model_answer: str = "gpt-5.6-luna"
+    # Tầng rẻ: router (phân nhãn + giải tham chiếu) và sinh gợi ý câu hỏi tiếp
+    # theo. Tài khoản chưa có quyền dùng thì đặt lại LLM_MODEL_FAST trong .env.
     llm_model_fast: str = "gpt-5.6-luna"
     llm_temperature: float = Field(default=0.3, ge=0.0, le=2.0)
     # 2048 chứ không phải 1024: câu "liệt kê các căn dưới 3 tỷ" trả 21 căn đã

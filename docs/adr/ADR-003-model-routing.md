@@ -1,7 +1,8 @@
 # ADR-003: Định tuyến model hai tầng
 
 **Ngày:** 2026-08-01
-**Trạng thái:** Accepted
+**Trạng thái:** Accepted — cấu trúc hai biến giữ nguyên, **giá trị đã đổi**
+(xem "Cập nhật 2026-08-26" ở cuối)
 
 ## Bối cảnh
 
@@ -31,8 +32,8 @@ Dùng cùng một model mạnh cho cả hai là vừa chậm vừa đắt một 
 Chọn phương án 3, cấu hình qua hai biến môi trường tách biệt:
 
 ```
-LLM_MODEL_FAST=gpt-4o-mini     # router, phân loại nhạy cảm
-LLM_MODEL_ANSWER=gpt-4o        # câu trả lời cuối
+LLM_MODEL_FAST=<model rẻ>      # router, phân loại nhạy cảm
+LLM_MODEL_ANSWER=<model mạnh>  # câu trả lời cuối
 ```
 
 Thêm một lớp nữa trước cả hai: **luật từ khoá**. Câu hỏi chứa "sổ đỏ", "thủ tục",
@@ -52,3 +53,27 @@ Thêm một lớp nữa trước cả hai: **luật từ khoá**. Câu hỏi ch�
   sai (truy hồi thừa, câu trả lời lệch) sẽ lớn hơn khoản tiết kiệm được.
 - Luật từ khoá phải giữ ngắn và dễ đọc. Khi nó phình ra thành hàng trăm dòng thì
   đó là dấu hiệu nên bỏ luật, để model làm hết.
+
+## Cập nhật 2026-08-26 — hai tầng giờ dùng CÙNG một model
+
+```
+LLM_MODEL_FAST=gpt-5.6-luna
+LLM_MODEL_ANSWER=gpt-5.6-luna
+```
+
+Thoạt nhìn là bỏ quyết định của ADR này, nhưng không phải: **cấu trúc hai biến
+tách biệt vẫn còn nguyên**, chỉ là hiện tại chúng trỏ vào cùng một model. Vì sao
+đáng giữ nguyên cấu trúc — đổi một tầng mà không đụng tầng kia vẫn là một dòng
+biến môi trường.
+
+Vì sao đổi được: khâu trả lời từng bị khoá ở model đắt vì đó là chỗ DUY NHẤT có
+hồi quy thật khi hạ model — bản rẻ hồi đó bỏ mất toà/tầng/phòng và bỏ luôn luật
+trích nguồn trên production. Điều kiện gỡ khoá là **phải đo**, và đã đo: 29 câu
+golden dataset trên luna, chấm bằng `claude-sonnet-5` — 17 đạt / 2 không đạt,
+dòng "Nguồn" đầy đủ ở mọi lượt có khẳng định
+(`eval/results/diem_20260826-1609_batch3-sua.md`).
+
+Hai hệ quả ở phần trên vẫn đúng, và có thêm một cái: **hai tầng cùng model thì
+mất luôn tấm lưới "router sai thì câu trả lời vẫn ổn nhờ model mạnh"**. Nếu về
+sau router phân loại tệ đi, đừng chỉ chỉnh prompt router — cân nhắc tách lại hai
+model, đó chính là thứ cấu trúc này để dành cho.

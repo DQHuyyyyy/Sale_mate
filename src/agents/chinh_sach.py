@@ -19,9 +19,10 @@ không có cách nào cắm một chỗ mà cả hai cùng nhận.
 
 ## ⚠️ Cổng thất bại theo hướng MỞ — phải theo dõi hạn mức Anthropic
 
-Cổng chạy bằng `claude-sonnet-5` qua `ToolCallingProvider`. `chot()` nuốt mọi lỗi
-và cho đi tiếp: chặn sạch khách vì một sự cố nhà cung cấp còn tệ hơn nhiều so với
-việc lọt vài câu lạc đề.
+Cổng chạy qua `ToolCallingProvider`, model lấy từ `CONG_CHINH_SACH_MODEL` (rỗng
+thì theo `ORCHESTRATOR_MODEL`) — tên model chỉ khai ở `.env`, không viết cứng ở
+đây. `chot()` nuốt mọi lỗi và cho đi tiếp: chặn sạch khách vì một sự cố nhà cung
+cấp còn tệ hơn nhiều so với việc lọt vài câu lạc đề.
 
 Cái giá của lựa chọn đó đã xảy ra thật, ngày 26/08/2026: tài khoản Anthropic chạm
 trần chi tiêu tháng, mọi lượt phân loại ném 400, và **cổng ngừng bảo vệ hoàn toàn
