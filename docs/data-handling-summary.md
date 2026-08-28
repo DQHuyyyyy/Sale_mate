@@ -1,6 +1,17 @@
-> ⚠️ **Cập nhật 2026-08-08:** toàn bộ script ingest/eval đã chuyển từ `scripts/`
-> vào `src/data/ingest/` + `src/data/cli.py` + `src/eval/`. Lệnh cũ trong tài liệu
-> này không còn chạy — dùng `python -m src.cli ingest --all` thay thế.
+> ⚠️ **Đây là BẢN GHI LỊCH SỬ của đợt Data Handling (05/08/2026), không phải tài
+> liệu vận hành.** Phần mô tả *đã làm gì và vì sao* giữ nguyên để tra cứu; phần
+> *lệnh chạy* đã cập nhật theo `src/cli.py` hiện tại.
+>
+> **Hai thay đổi lớn xảy ra SAU bản ghi này, đọc phần dưới phải nhớ:**
+>
+> 1. Script ingest/eval đã chuyển từ `scripts/` vào `src/cli.py` — một cửa duy nhất.
+> 2. **Ba nguồn `meeyland`, `batdongsan`, `inventory` đã bị GỠ** (871 chunk xoá khỏi
+>    Qdrant). `SOURCES` giờ chỉ còn `knowledge` — 11 tài liệu / 39 chunk. Hai nguồn
+>    đầu là tin rao của môi giới khác kèm giá và số điện thoại của họ; nguồn thứ ba
+>    nhân bản tồn kho Postgres. Xem `CLAUDE.md` mục "Dữ liệu RAG".
+>
+> Tài liệu vận hành hiện hành: [`../CLAUDE.md`](../CLAUDE.md) và
+> [`RAG_ARCHITECTURE_GUIDE.md`](RAG_ARCHITECTURE_GUIDE.md).
 
 # Data Handling — Tổng hợp thay đổi (Viet, cập nhật 2026-08-05)
 
@@ -24,7 +35,7 @@ Postgres, đúng kiến trúc "có cấu trúc → Postgres" mà leader yêu c�
 | File | Tác dụng |
 |---|---|
 | `src/data/stores/inventory_db.py` (mới) | `InventoryDB` — SQLAlchemy Core, upsert bằng DELETE+INSERT (portable giữa SQLite test và Postgres thật, không dùng cú pháp riêng của Postgres) |
-| `interface/backend/scripts/migrate_inventory.py` (mới) | Nạp 100 căn từ CSV vào Postgres — idempotent, chạy lại an toàn |
+| `interface/backend/scripts/migrate_inventory.py` ⚰️ **đã xoá** | Nạp 100 căn từ CSV vào Postgres — idempotent. Không còn cần: `inventory_units` giờ là VIEW trên `salemate_v1` ([migration 005](../interface/backend/migrations/005_inventory_units_view.sql)), không phải bảng phải nạp |
 | `src/agents/tools/inventory.py` (sửa) | Query Postgres qua `asyncio.to_thread` thay vì đọc CSV |
 | `src/data/sources/inventory.py` (không đổi) | Vẫn là nguồn CSV gốc — chỉ dùng để migrate, không còn được tool gọi trực tiếp |
 
@@ -96,7 +107,7 @@ Cloud (Docker local không cần). Đã sửa 5 script ingest để truyền đ�
 | `src/data/sources/knowledge_docs.py` | Loader cho tài liệu kiến thức chung dạng Markdown (chính sách, pháp lý, tiện ích...). Đọc file `.md` có front-matter bắt buộc `title`/`section`/`visibility` — báo lỗi ngay nếu thiếu, tránh gắn nhầm quyền cho nội dung nhạy cảm. |
 | `src/data/metadata_schema.py` | Định nghĩa **6 khoá metadata bắt buộc** cho MỌI nguồn: `visibility`, `section`, `project`, `source_site`, `image_urls`, `version`. Có hàm `validate_metadata()` để chặn sớm nguồn mới thiếu khoá. Đây là "hợp đồng ngầm" giữa các nguồn dữ liệu — không có trong `contracts.py` (đóng băng) vì chỉ là quy ước nội bộ module data. |
 
-### 2.2. Script ingest (`scripts/`)
+### 2.2. Nguồn ingest (nay ở `src/data/ingest.py`, khai trong `SOURCES`)
 
 | File | Tác dụng |
 |---|---|
@@ -269,13 +280,15 @@ pip install -r requirements.txt -r requirements-dev.txt
 # 2. Điền .env — xin Viet giá trị QDRANT_URL/QDRANT_API_KEY/SUPABASE_* thật
 cp .env.example .env
 
-# 3. Xin data/raw/ (inventory.csv, photos/, *.html, knowledge/) từ Viet qua Drive
+# 3. data/raw/knowledge/ da nam san trong repo — khong phai xin ai
+#    (cac thu muc *_crawl_raw/ chi la luu tru, khong con ingest)
 
-# 4. Ingest lần lượt (thứ tự không bắt buộc, trừ ingest_more_sources hơi lâu ~15 phút)
-python -m src.cli ingest --all       # hoac tung nguon: ingest inventory
+# 4. Ingest — nay chi con mot nguon `knowledge`, chay vai giay
+python -m src.cli ingest --all
+python -m src.cli status             # kiem lai: 11 tai lieu / 39 chunk
 
 # 5. Verify
-PYTHONUTF8=1 PYTHONPATH=. python -m pytest tests/ -q
+make check                          # lint + format + test (753 ca)
 python -m src.cli eval retrieval
 python -m src.cli search "thu tuc sang ten so do"   # can OPENAI_API_KEY
 ```

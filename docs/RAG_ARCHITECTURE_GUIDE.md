@@ -11,11 +11,11 @@ Dự án phân tách rõ ràng giữa **Dữ liệu thật** và **Logic lập t
 ```
                                   ┌────────────────────────────────────────┐
                                   │       FILE DỮ LIỆU THẬT: data/         │
-                                  │ - data/vop_listings.json (Real Sheet)  │
-                                  │ - data/raw/ (CSV Tồn kho & Excel)      │
+                                  │ - data/raw/knowledge/ (11 tài liệu .md)│
+                                  │   NGUỒN DUY NHẤT của Qdrant            │
                                   └───────────────────┬────────────────────┘
                                                       │
-                                                      │ (Script nạp đọc file)
+                                                      │ (src/cli.py ingest --all)
                                                       ▼
 ┌───────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                   LOGIC XỬ LÝ & RAG: src/data/                                    │
@@ -29,7 +29,9 @@ Dự án phân tách rõ ràng giữa **Dữ liệu thật** và **Logic lập t
 └───────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Thư mục `data/` (Ngoài root)**: Nơi lưu trữ **Dữ liệu thật** (file `vop_listings.json` chứa 100+ căn Vinhomes Ocean Park + ảnh + giá + chiết khấu, các file CSV tồn kho nội bộ).
+- **Thư mục `data/raw/knowledge/` (Ngoài root)**: **11 tài liệu chính sách** dạng `.md` — nguồn duy nhất được ingest. Mỗi file một `doc_id = knowledge:{tên file}`, khớp một-đối-một với Qdrant.
+
+  ⚠️ **Giá, diện tích và tình trạng căn KHÔNG nằm ở đây.** Chúng ở Postgres và tool đọc trực tiếp lúc hỏi — RAG luôn là bản chụp, còn giá đổi hàng ngày. Bản tài liệu trước mô tả `data/vop_listings.json` với 100+ căn; file đó **không còn tồn tại** và 871 chunk tin rao sinh ra từ nó đã bị xoá khỏi Qdrant.
 - **Thư mục `src/data/` (Trong src)**: Nơi chứa **Mã nguồn thuật toán** (Code parser đọc file, code chunking, code tạo vector, code Qdrant store, code Cross-Encoder rerank).
 
 ---
@@ -37,8 +39,8 @@ Dự án phân tách rõ ràng giữa **Dữ liệu thật** và **Logic lập t
 ## 🧩 2. Tổng Quan Các Thành Phần Đã Build Trong RAG
 
 ### 2.1. Ingestion & Data Handling (`src/data/ingestion/` & `src/data/parsers.py`)
-- **Dữ liệu thô**: Parse từ `data/vop_listings.json` (Real Data từ Google Sheet).
-- **Metadata Schema**: Đóng gói đầy đủ các trường: `ma_can`, `price`, `area`, `num_bedrooms`, `building`, `doc_kind` (`"listing"` vs `"policy"`), `image_url` (Link Ảnh căn hộ), `visibility` (`"public"` vs `"internal"`).
+- **Dữ liệu thô**: Parse từ `data/raw/knowledge/*.md`. Mỗi file bắt buộc có front-matter `title` / `section` / `visibility` **và** một heading H1 khớp `title` — thiếu là `load_knowledge_file` báo lỗi. (Đã có lần 10/10 file thiếu H1 nên kho không nạp lại được suốt một thời gian dài mà không ai biết.)
+- **Metadata Schema**: Đóng gói đầy đủ các trường: `ma_can`, `price`, `area`, `num_bedrooms`, `building`, `doc_kind` (hiện **chỉ còn** `"policy"`), `image_url` (Link Ảnh căn hộ), `visibility` (`"public"` vs `"internal"`).
 - **Chunking**: Sử dụng `SentenceChunker` tách đoạn ~900 ký tự, overlap 120 ký tự, giữ nguyên ranh giới câu.
 
 ### 2.2. Vector Search & Hybrid Filtering (`src/data/stores/` & `src/data/contracts.py`)
@@ -76,62 +78,98 @@ Dự án phân tách rõ ràng giữa **Dữ liệu thật** và **Logic lập t
   }
   ```
 
-### 2.6. RAG Evaluation Suite (`eval/` & `scripts/eval_rag_pipeline.py`)
-- **Golden Dataset**: Bộ 18 test cases chuẩn phân làm 4 nhóm (Tra cứu đơn, Có ràng buộc số, So sánh nhiều căn, Câu hỏi bẫy).
-- **Chỉ số Đạt Được**:
-  - 🎯 **Hit Rate@3**: **100.0%**
-  - 🎯 **Hit Rate@5**: **100.0%**
-  - 🛡️ **Refusal Accuracy**: **100.0%**
-  - ⚡ **Mean Latency**: **3.74 ms** (P90 = 6.24 ms)
+### 2.6. Bộ đánh giá (`eval/` + `src/eval/`)
+
+Hai bài đo **khác nhau**, đừng lẫn:
+
+| Lệnh | Đo gì | Bộ câu hỏi |
+|---|---|---|
+| `python -m src.cli eval retrieval` | embed → search → rerank, **không gọi LLM** | `eval/golden_dataset.json` (35 câu) |
+| `python -m src.cli eval answer` | cầm tài liệu rồi trả lời hay từ chối | `eval/answer_dataset.json` (26 câu) |
+
+Đổi prompt xong chạy `eval retrieval` thì con số không nhúc nhích — nó không
+đụng tới prompt. `eval answer` mới là bài đo prompt quyết định.
+
+Bộ `answer_dataset` cố ý **không có happy case**: mỗi câu là một cái bẫy, theo
+hai hướng ngược nhau — `phai_tra_loi` bẫy từ chối oan, `phai_tu_choi` bẫy bịa.
+Nhóm `phai_tu_choi` là cột phanh: nới prompt mà làm nó giảm là đổi lỗi nhẹ lấy
+lỗi nặng.
+
+Chấm bằng **luật tất định**, không dùng LLM làm giám khảo. Bộ chấm dùng lại
+`la_loi_tu_choi()` của `src/agents/nguon.py` — chính hàm chạy thật lúc runtime —
+nên eval và sản phẩm hiểu "từ chối" giống hệt nhau.
+
+Kết quả ghi ra `eval/results/`. Xem [`eval/README.md`](../eval/README.md).
 
 ---
 
 ## 🚀 3. Hướng Dẫn Cách Chạy Chi Tiết Cho Từng Thành Phần
 
-Đảm bảo bạn đã kích hoạt môi trường ảo Python trước khi chạy các lệnh dưới đây.
+> ⚠️ **Bốn script `scripts/ingest_real_data.py`, `demo_grounding.py`,
+> `demo_generation_stream.py`, `eval_rag_pipeline.py` đã bị XOÁ.** Mọi thao tác
+> dữ liệu giờ đi qua **một** cửa duy nhất là `src/cli.py`.
+>
+> Lý do gỡ: bốn script tự dựng `QdrantVectorStore` riêng nên chạy tốt, trong khi
+> `bootstrap.py` vẫn dùng in-memory — web app đứt khỏi dữ liệu nhiều ngày mà
+> không ai phát hiện. Một cửa thì cấu hình của script và của ứng dụng luôn là một.
 
-### 3.1. Chạy Ingest Dữ Liệu Thật từ `data/vop_listings.json`
-Lệnh này sẽ nạp 100+ căn bất động sản real data kèm link ảnh và chính sách bán hàng vào hệ thống:
+Kích hoạt môi trường ảo trước khi chạy.
 
-```powershell
-python scripts/ingest_real_data.py
+### 3.1. Xem vector store đang có gì
+
+```bash
+python -m src.cli status
 ```
 
----
+### 3.2. Nạp dữ liệu vào Qdrant
 
-### 3.2. Chạy Demo Nguồn & Prompt Grounding
-Kiểm tra khả năng ép LLM trích dẫn `[Mã căn]` và từ chối khi không có dữ liệu:
-
-```powershell
-python scripts/demo_grounding.py
+```bash
+python -m src.cli ingest --all
 ```
 
----
+Nguồn khai ở `SOURCES` cuối `src/data/ingest.py`. Hiện chỉ còn **`knowledge`** —
+11 tài liệu trong `data/raw/knowledge/`, khớp một-đối-một với `doc_id` trong
+Qdrant. Thêm nguồn mới: viết hàm `ingest_<tên>()` rồi thêm một dòng vào `SOURCES`,
+**không tạo script rời**.
 
-### 3.3. Chạy Demo Generation & Streaming (Tách riêng `answer` và `sources[]`)
-Kiểm tra luồng sinh chữ real-time từ OpenAI / Mock Provider và xem cấu trúc JSON đầu ra cho Frontend:
+⚠️ Ba nguồn tin rao cũ (`meeyland`, `batdongsan`, `inventory` — 871 chunk) **đã
+bị gỡ**. Hai nguồn đầu là tin rao của môi giới khác kèm giá và số điện thoại của
+họ; nguồn thứ ba nhân bản tồn kho Postgres.
 
-```powershell
-python scripts/demo_generation_stream.py
+### 3.3. Thử truy hồi một câu hỏi
+
+```bash
+python -m src.cli search "chính sách hỗ trợ lãi suất"
+python -m src.cli search "..." --internal   # kèm cả tài liệu visibility=internal
 ```
 
----
+### 3.4. Đo tầng truy hồi
 
-### 3.4. Chạy Benchmark Đánh Giá RAG Pipeline (Hit Rate & Latency)
-Chạy bộ kiểm thử 18 câu test trên toàn bộ Pipeline RAG và xuất báo cáo tại [eval/results/eval_report.md](file:///d:/P-055/eval/results/eval_report.md):
-
-```powershell
-python scripts/eval_rag_pipeline.py
+```bash
+python -m src.cli eval retrieval
 ```
 
----
+### 3.5. Đo tầng trả lời
 
-### 3.5. Chạy Toàn Bộ 162 Unit & Integration Tests
-Chạy kiểm thử tự động toàn bộ codebase (kiểm tra lint, format, RAG nodes, stores, tools):
-
-```powershell
-python -m pytest
+```bash
+python -m src.cli eval answer --compare v6 v7      # đổi PROMPT: chạy cả hai bản
+python -m src.cli eval answer --label baseline     # đổi MODEL: ghi ra file có nhãn
+python -m src.cli eval answer --doi-chieu a b      # so hai file đã ghi, không gọi model
 ```
+
+**Đổi prompt dùng `--compare`, đổi model dùng `--label` + `--doi-chieu`.**
+`--compare` chạy hai bản trong cùng một tiến trình, mà model lấy từ `Settings` —
+một tiến trình chỉ có một cấu hình.
+
+### 3.6. Chạy toàn bộ test
+
+```bash
+make check      # lint + format + test lõi AI (753 ca)
+make check-all  # thêm test API sản phẩm (140 ca)
+make cov        # test + coverage, gate 60%
+```
+
+Không test nào gọi OpenAI, Qdrant hay Postgres thật.
 
 ---
 
@@ -139,27 +177,38 @@ python -m pytest
 
 ```text
 P-055/
-├── data/                            # 📁 CHỨA FILE DỮ LIỆU THẬT
-│   ├── vop_listings.json            # 100+ căn Vinhomes Ocean Park real data
-│   └── raw/                         # File CSV tồn kho & Excel thô
-├── eval/                            # 📊 BỘ ĐÁNH GIÁ EVALUATION
-│   ├── golden_dataset.json          # 18 test cases kiểm thử chuẩn
-│   └── results/                     # Báo cáo kết quả eval (eval_report.md)
-├── scripts/                         # 📜 SCRIPT CHẠY DEMO & INGEST
-│   ├── ingest_real_data.py          # Script nạp dữ liệu thật từ data/
-│   ├── demo_generation_stream.py    # Script demo streaming & JSON output
-│   ├── demo_grounding.py            # Script demo prompt & anti-hallucination
-│   └── eval_rag_pipeline.py         # Script chạy benchmark Hit Rate & Latency
-├── src/                             # 🧠 MÃ NGUỒN CHÍNH DỰ ÁN
-│   ├── agents/                      # LangGraph Agent & Prompt nodes
-│   │   ├── nodes/generate.py        # Prompt Grounding template
-│   │   └── prompts/system_v1.md     # System prompt quy định citation
-│   ├── data/                        # Core Data Handling & Retrieval
-│   │   ├── contracts.py             # Schema Chunk, RetrievalFilter, as_context
-│   │   ├── parsers.py               # Parse dữ liệu thô
-│   │   ├── retrieval/               # Reranker & DefaultRetriever
-│   │   └── stores/                  # MemoryStore & QdrantStore
-│   ├── services/llm.py              # OpenAIProvider & ScriptedProvider
-│   └── models/chat.py               # ChatResponse DTO (.answer & .sources)
-└── RAG_ARCHITECTURE_GUIDE.md        # 📄 Tài liệu hướng dẫn này
+├── data/raw/
+│   ├── knowledge/                   # 11 tài liệu .md — NGUỒN DUY NHẤT của Qdrant
+│   ├── crawled/                     # dữ liệu thô đã crawl, KHÔNG còn ingest
+│   ├── batdongsan_crawl_raw/        # lưu trữ, ba nguồn tin rao đã gỡ khỏi kho
+│   └── meeyland_crawl_raw/
+├── eval/                            # 📊 BỘ ĐÁNH GIÁ
+│   ├── golden_dataset.json          # 35 câu — đo TRUY HỒI
+│   ├── answer_dataset.json          # 26 câu bẫy — đo TRẢ LỜI
+│   ├── runner/                      # bộ chấm bằng luật tất định
+│   └── results/                     # kết quả từng lần chạy, có nhãn
+├── src/
+│   ├── cli.py                       # 🚪 CỬA DUY NHẤT: status·ingest·search·eval
+│   ├── agents/
+│   │   ├── nodes/                   # router·tools·retrieve·generate·guardrail…
+│   │   ├── tools/                   # 6 tool, đọc Postgres theo thời gian thực
+│   │   ├── prompts/system_v6.md     # prompt ĐANG CHẠY (v7 có nhưng chưa bật)
+│   │   └── nguon.py                 # lọc nguồn "đã dùng", không phải "đã tra"
+│   ├── data/
+│   │   ├── contracts.py             # 🔒 Chunk · RetrievalFilter · as_context
+│   │   ├── ingest.py                # SOURCES — thêm nguồn mới ở đây
+│   │   └── stores/                  # memory_store · qdrant_store
+│   ├── rag/
+│   │   ├── grounding.py             # dựng prompt + chống prompt injection
+│   │   └── rerankers.py             # KeywordOverlap · CrossEncoder
+│   ├── services/llm.py              # OpenAIProvider · ScriptedProvider
+│   ├── models/chat.py               # 🔒 DTO — hợp đồng FE ↔ BE
+│   └── bootstrap.py                 # 🔑 nơi duy nhất gắn Protocol ↔ impl
+└── docs/RAG_ARCHITECTURE_GUIDE.md   # 📄 tài liệu này
 ```
+
+🔒 = đóng băng, muốn sửa phải mở PR riêng vào `develop`.
+
+⚠️ `data/vop_listings.json` trong bản tài liệu trước **không còn tồn tại**, và
+`scripts/` giờ chỉ chứa hạ tầng ghi log AI + `sync_deploy.py` — không còn script
+ingest hay demo nào.
