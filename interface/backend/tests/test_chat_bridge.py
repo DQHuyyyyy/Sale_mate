@@ -38,6 +38,7 @@ def goi_loi_ai(monkeypatch: pytest.MonkeyPatch):
         def handler(request: httpx.Request) -> httpx.Response:
             ghi_nhan["url"] = str(request.url)
             ghi_nhan["body"] = request.content.decode()
+            ghi_nhan["headers"] = dict(request.headers)
             return httpx.Response(status_code, json=body)
 
         monkeypatch.setattr(chat_service.httpx, "AsyncClient", _fake_client(httpx.MockTransport(handler)))
@@ -118,6 +119,35 @@ class TestGenerateReply:
             await chat_service.generate_reply("Hỏi gì đó", [])
 
         assert "AI_CORE_URL" in str(loi.value)
+
+
+class TestKhoaDichVu:
+    """Lõi AI có URL công khai trên Render nên nó chặn request không cầm khoá.
+
+    Quên gửi header ở đây thì mọi câu hỏi trên production trả 401 và người dùng
+    nhận "Câu hỏi gửi lên không hợp lệ" — đúng mã lỗi, sai hoàn toàn về nguyên
+    nhân, và không ai nghĩ tới việc đi so hai biến môi trường.
+    """
+
+    @pytest.mark.asyncio
+    async def test_gui_kem_khoa_khi_da_cau_hinh(self, goi_loi_ai, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(chat_service.settings, "ai_core_api_key", "khoa-test")
+        goi_loi_ai(200, {"message": "ok", "session_id": "s1"})
+
+        await chat_service.generate_reply("Hỏi gì đó", [])
+
+        assert goi_loi_ai.ghi_nhan["headers"]["x-api-key"] == "khoa-test"
+
+    @pytest.mark.asyncio
+    async def test_khong_gui_header_rong(self, goi_loi_ai, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Rỗng thì bỏ hẳn header. Gửi `X-API-Key: ""` là gửi một khoá SAI, và
+        lõi AI từ chối nó — trong khi ý định là "máy dev, chưa đặt khoá"."""
+        monkeypatch.setattr(chat_service.settings, "ai_core_api_key", "")
+        goi_loi_ai(200, {"message": "ok", "session_id": "s1"})
+
+        await chat_service.generate_reply("Hỏi gì đó", [])
+
+        assert "x-api-key" not in goi_loi_ai.ghi_nhan["headers"]
 
 
 class TestRangBuocDoDai:

@@ -1,7 +1,9 @@
 """Tên cột thật của bảng `salemate_v1` — gom một chỗ duy nhất.
 
-Tên cột trong database KHÔNG khớp `file_md/DATABASE.md`; đây là tên đọc trực
-tiếp từ `information_schema` ngày 04/08/2026:
+Tên cột trong database KHÔNG khớp bản đặc tả nào; đây là tên đọc trực tiếp từ
+`information_schema` ngày 04/08/2026 — database là nguồn sự thật, đặc tả chỉ là
+ý định. (Bản đặc tả cũ `file_md/DATABASE.md` đã bị gỡ vì trùng với
+`Context Product/`; xem `docs/lich-su/TIENDO.md` nếu cần đối chiếu lịch sử.)
 
     ma_can · "Tòa" · "Tầng" · "Số phòng" · "Loại căn\\n(PN, WC) Studio"
     "Diện tích" · "Hướng phong thủy" · "View" · "Số đỏ" · "Giá" · "Nội thất"

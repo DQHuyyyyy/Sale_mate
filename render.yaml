@@ -60,6 +60,15 @@ services:
         sync: false
       - key: AI_CORE_TIMEOUT
         value: "60"
+      # ⚠️ PHẢI trùng đúng giá trị AI_CORE_API_KEY của service salesmate-ai-core.
+      # Lệch một ký tự thì mọi câu hỏi trả 401 và người dùng nhận "Câu hỏi gửi
+      # lên không hợp lệ" — đúng mã lỗi, sai hoàn toàn về nguyên nhân.
+      #
+      # `sync: false` nên Render KHÔNG tự điền: dán tay cùng một chuỗi vào cả hai
+      # dashboard. Sinh bằng:
+      #   python -c "import secrets; print(secrets.token_urlsafe(48))"
+      - key: AI_CORE_API_KEY
+        sync: false
 
       # Một cờ này gác CẢ HAI endpoint tốn tiền, không chỉ chat:
       #
@@ -104,6 +113,15 @@ services:
   # ---- Lõi AI ----
   # Cũng theo develop. Để branch main thì nó chạy src/ của bản 05/08, lệch 13
   # file so với develop — API mới nói chuyện với lõi AI cũ, sai lệch rất khó lần.
+  #
+  # ⚠️ `type: web` nghĩa là service này có URL CÔNG KHAI trên Internet, và nó là
+  # chỗ tốn tiền model. Loại sạch hơn là `pserv` (private service, không có URL
+  # công khai) nhưng gói free KHÔNG có loại đó — nên chốt chặn là khoá dùng
+  # chung `AI_CORE_API_KEY` bên dưới, không phải cấu hình mạng.
+  #
+  # Nếu sau này lên gói trả phí: đổi `type` thành `pserv`, bỏ `healthCheckPath`,
+  # và trỏ AI_CORE_URL của API sản phẩm vào hostname nội bộ. Giữ nguyên khoá —
+  # hai lớp không loại trừ nhau.
   - type: web
     name: salesmate-ai-core
     runtime: docker
@@ -119,10 +137,26 @@ services:
     envVars:
       - key: APP_ENV
         value: production
-      # Bỏ trống cũng chạy: bootstrap.py rơi về ScriptedProvider, chat trả lời
-      # theo kịch bản sẵn thay vì gọi model thật. Nhưng RAG thì hỏng câm: thiếu
-      # key là rơi về FakeEmbedder, vector giả không khớp gì với dữ liệu đã nhúng
-      # bằng model thật, nên truy hồi luôn rỗng mà KHÔNG báo lỗi.
+
+      # ---- Chốt chặn (xem src/api/bao_ve.py) ----
+      # ⚠️ BẮT BUỘC, và phải trùng đúng AI_CORE_API_KEY của salesmate-api-dev.
+      # APP_ENV=production nên bỏ trống là lõi AI TỪ CHỐI MỌI REQUEST — cố ý:
+      # một cổng bảo vệ thất bại theo hướng mở thì nó không phải cổng.
+      - key: AI_CORE_API_KEY
+        sync: false
+      # Phanh tay chi phí, đếm cho cả tiến trình (mọi request đến từ một IP là
+      # API sản phẩm, nên đếm theo IP vô nghĩa ở đây). 0 = tắt. 60 rộng hơn hẳn
+      # lưu lượng thật — nó để bắt lúc có gì đó chạy loạn, không phải để chia
+      # phần cho người dùng; việc đó là của CHAT_RATE_LIMIT_ENABLED ở tầng trên.
+      - key: AI_CORE_RATE_LIMIT_PER_MINUTE
+        value: "60"
+      # ⚠️ BẮT BUỘC. Bỏ trống thì service KHÔNG KHỞI ĐỘNG được — `bootstrap.py`
+      # ném ConfigurationError và Render báo deploy hỏng.
+      #
+      # Đường rơi về ScriptedProvider đã bị bỏ vì nó hỏng câm: thiếu key là rơi
+      # về FakeEmbedder, vector 64 chiều không khớp collection 1536 chiều nên
+      # truy hồi luôn rỗng mà KHÔNG báo lỗi, còn người dùng thì nhận nội dung
+      # soạn sẵn tưởng là thật. Thà không chạy còn hơn phục vụ nội dung bịa ra.
       - key: OPENAI_API_KEY
         sync: false
       # gpt-5.6-luna: $0.20/$1.20 mỗi triệu token. Chạy router (phân nhãn +

@@ -37,6 +37,8 @@ class _Client:
 
     def __init__(self, status: int = 200, body: object = None) -> None:
         self._status, self._body = status, body if body is not None else [_TAI_LIEU]
+        # Header của lời gọi cuối — để kiểm khoá dịch vụ có được gửi kèm không.
+        self.headers_da_gui: dict[str, str] = {}
 
     async def __aenter__(self):
         return self
@@ -44,7 +46,8 @@ class _Client:
     async def __aexit__(self, *a):
         return False
 
-    async def get(self, url: str):
+    async def get(self, url: str, headers: dict[str, str] | None = None):
+        self.headers_da_gui = headers or {}
         return httpx.Response(self._status, json=self._body, request=httpx.Request("GET", url))
 
 
@@ -100,7 +103,7 @@ class TestDanOng:
         """Lõi AI sập không được thành lỗi 500 vô nghĩa trước mặt người dùng."""
 
         class _Hong(_Client):
-            async def get(self, url: str):
+            async def get(self, url: str, headers: dict[str, str] | None = None):
                 raise httpx.ConnectError("mất kết nối")
 
         monkeypatch.setattr(tai_lieu_router.httpx, "AsyncClient", lambda **_: _Hong())

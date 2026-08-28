@@ -25,6 +25,30 @@ dựng sẵn chỗ cắm (HITL, phân quyền, trích nguồn) nhưng chưa bậ
 2. **Luôn trích nguồn** cho khẳng định lấy từ tài liệu.
 3. **Phân quyền lọc tại tầng truy hồi**, không lọc ở UI.
 
+⚠️ Nguyên tắc 3 **chưa nối xong**: `build_nodes` ghim cứng `visibility=["public"]`
+vì `ChatRequest` không mang danh tính người dùng, mà `src/models/` đóng băng. Hôm
+nay vô hại vì cả 11 tài liệu đều `public` — `test_moi_tai_lieu_deu_public_cho_toi_khi_noi_duoc_quyen`
+canh cho điều đó không lặng lẽ hết đúng. Thêm tài liệu `internal` mà chưa làm nốt
+là nó lọt cho khách vãng lai ngay. Ba bước làm nốt ghi ở chú thích trong
+[`graph.py`](src/agents/graph.py).
+
+### Ngữ cảnh là dữ liệu, không phải chỉ thị
+
+`<ngu_canh>` bọc tài liệu trong prompt là biện pháp chống prompt injection. Nó
+chỉ có tác dụng khi nội dung bên trong **không đóng được nó**: một tài liệu chứa
+chuỗi `</ngu_canh>` sẽ cắt sớm vùng dữ liệu, và phần văn bản đứng sau đó model
+đọc như chỉ thị hệ thống.
+
+`_vo_hieu_the_dong()` trong [`src/rag/grounding.py`](src/rag/grounding.py) bẻ mọi
+biến thể thẻ đóng (kể cả `</ ngu_canh >` — XML cho phép khoảng trắng), thay bằng
+ký tự lookalike chứ không xoá, để tài liệu nói *về* thẻ đó không bị mất đoạn văn.
+
+**Hai vế phải đi cùng nhau**: escape ở code, và một câu luật trong system prompt.
+Escape chặn được thẻ nhưng không chặn được câu ra lệnh viết bằng văn xuôi; luật
+trong prompt mà vùng dữ liệu vẫn thoát ra được thì nó nói về một vùng không tồn
+tại. Luật nằm ở **cả `system_v6.md` lẫn `system_v7.md`** — `SYSTEM_PROMPT_VERSION`
+đang là **v6**, nên sửa mỗi v7 là sửa vào bản không chạy.
+
 ## Kiến trúc — điều quan trọng nhất cần nắm
 
 Bốn người làm song song. Cách ly bằng **Protocol + dependency container**:
@@ -43,6 +67,40 @@ interface/        FE + API sản phẩm, gộp một chỗ cho dễ quản lý
 ├── frontend/     Vite + React (JavaScript) — portal + widget    → huy
 └── backend/      API sản phẩm :8000, gọi lõi AI qua AI_CORE_URL
 ```
+
+### Lõi AI nằm sau một khoá dịch vụ
+
+`render.yaml` khai lõi AI là `type: web`, tức nó có **URL công khai trên
+Internet** — và nó là chỗ gọi model, tức chỗ tốn tiền. Gói free của Render không
+có private service (`pserv`), nên chốt chặn là khoá dùng chung:
+
+```
+portal :8000  ──X-API-Key──▶  lõi AI :8001
+```
+
+[`src/api/bao_ve.py`](src/api/bao_ve.py) gắn hai dependency ở **cấp router** cho
+`chat` và `documents` (không cho `health` — Render gọi `healthCheckPath` mà
+không cầm khoá nào):
+
+| Chốt | Hỏi gì | Trả |
+|---|---|---|
+| `xac_thuc_dich_vu` | ai được gọi | 401 |
+| `phanh_chi_phi` | gọi được bao nhiêu | 429 |
+
+**Khoá rỗng: production CHẶN HẾT**, môi trường khác cho qua kèm WARNING. Cổng
+bảo vệ thất bại theo hướng mở thì nó không phải cổng — quên khai biến trên Render
+là quay lại đúng trạng thái cũ, mà lần này còn có một file tên `bao_ve.py` làm
+người đọc yên tâm.
+
+**Phanh chi phí đếm TOÀN TIẾN TRÌNH, không đếm theo IP** — cố tình khác
+`han_muc.py` bên portal. Người gọi hợp lệ duy nhất là API sản phẩm, tức mọi
+request đến từ một IP; đếm theo IP thì hoặc trần rơi đúng vào lưu lượng thật,
+hoặc phải nới tới mức vô nghĩa. Công bằng giữa người dùng vẫn là việc của portal
+— đó là nơi có danh tính để mà công bằng.
+
+⚠️ `AI_CORE_API_KEY` phải trùng nhau ở **cả hai** service. Lệch một ký tự thì mọi
+câu hỏi trả 401 và người dùng nhận "Câu hỏi gửi lên không hợp lệ" — đúng mã lỗi,
+sai hoàn toàn về nguyên nhân, và không ai nghĩ tới việc đi so hai biến môi trường.
 
 **Quy tắc bắt buộc:**
 
@@ -572,6 +630,25 @@ Cả hai phải: từ chối căn không `available`, chuẩn hoá số điện 
 và chặn `TOI_DA_GIU_MOI_SO = 3`. Sale đăng nhập rồi bấm nút thì lead ghi thêm
 `sale_id`; khách vãng lai để rỗng.
 
+⚠️ **Vai trò KHÔNG phải quyền sở hữu.** `require_sale_hoac_admin` trả lời câu
+"người này có được đụng vào lead không", không trả lời "có được đụng vào lead
+NÀY không". `PATCH /api/dat-coc/{lead_id}` từng thiếu vế thứ hai: câu `UPDATE`
+không có `AND sale_id = %s`, nên bất kỳ sale nào cũng đổi được trạng thái lead
+của sale khác — gồm cả `da_ban` — và `RETURNING` trả về luôn tên với số điện
+thoại khách của họ. `lead_id` là số nguyên tăng dần nên không phải đoán gì.
+
+`_dieu_kien_so_huu()` ghép mệnh đề lọc **ngay trong câu ghi**, ở cả nhánh đổi
+trạng thái lẫn nhánh `_chot_ban` (nhánh nặng hơn — nó ghi `sales_history`). Ba
+điều phải giữ:
+
+- **Tập được GHI trùng đúng tập được ĐỌC** ở `danh_sach`: lead của mình **cộng**
+  lead chưa ai nhận (`sale_id IS NULL`). Siết thành `sale_id = %s` thuần là sale
+  nhìn thấy khách vãng lai trong danh sách mà không gọi rồi chốt được.
+- **404 không phân biệt** "không tồn tại" với "không thuộc quyền" — hai thông
+  điệp khác nhau là một kênh dò.
+- Lọc trong chính câu ghi, **không** đọc-rồi-mới-ghi: cùng một `WHERE` vừa chặn
+  vừa cập nhật, không mở khe giữa hai câu lệnh.
+
 ⚠️ **Trần 3 căn/số là phanh chống khoá sạch tồn kho.** Lead `new` làm căn thành
 "Đang giữ chỗ" và giữ chỗ không tự hết hạn, nên không có trần thì một người gửi
 100 yêu cầu là cả kho thành "hết hàng" cho tới khi có người dọn tay. Hai service
@@ -969,11 +1046,12 @@ make run-ai     # lõi AI + RAG  http://localhost:8001/docs
 make fe         # frontend      http://localhost:5173
 make infra      # Qdrant + Postgres bằng Docker
 make check      # lint + format + test lõi AI — CHẠY TRƯỚC KHI PUSH
+                # lint/format phủ CẢ interface/backend/, đúng bằng phạm vi CI
 make check-all  # check + test API sản phẩm
 make cov        # test + coverage (gate 60%)
 ```
 
-Windows: `make` cần thêm vào PATH sau khi cài — xem [RUN.md](RUN.md).
+Windows: `make` cần thêm vào PATH sau khi cài — xem [docs/RUN.md](docs/RUN.md).
 
 ## Quy ước code
 

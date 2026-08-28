@@ -207,9 +207,7 @@ class TestHanMucChat:
         assert response.status_code == 429
         assert "Retry-After" in response.headers
 
-    def test_loi_moi_lien_he_thay_cho_thong_bao_het_luot(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_loi_moi_lien_he_thay_cho_thong_bao_het_luot(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Chạm trần phải MỜI LIÊN HỆ, tuyệt đối không báo "hết lượt".
 
         Quyết định sản phẩm: người hỏi tới câu thứ 16 là lead nóng nhất trong

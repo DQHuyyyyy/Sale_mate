@@ -80,7 +80,24 @@ def build_nodes(
     nodes: dict[str, object] = {
         "router": RouterNode(llm, model=settings.llm_model_fast),
         "tools": ToolsNode(),
-        "retrieve": RetrieveNode(retriever),
+        # ⚠️ QUYỀN CỨNG "public" — tính năng làm dở, ghi lại trước khi quên.
+        #
+        # Nguyên tắc dự án là "phân quyền lọc tại tầng truy hồi, không lọc ở UI",
+        # và `RetrievalFilter.visibility` đã sẵn sàng nhận danh sách quyền thật.
+        # Thiếu vế còn lại: `ChatRequest` không mang danh tính người dùng, nên
+        # lõi AI KHÔNG BIẾT ai đang hỏi. Portal mới là chỗ có token.
+        #
+        # Hôm nay vô hại vì cả 11 tài liệu trong `data/raw/knowledge/` đều
+        # `visibility: public` — `test_moi_tai_lieu_deu_public_cho_toi_khi_noi_duoc_quyen`
+        # canh cho điều đó không lặng lẽ hết đúng. Thêm một tài liệu `internal`
+        # mà không làm nốt phần dưới đây là nó lọt ra cho khách vãng lai ngay.
+        #
+        # Làm nốt cần ba bước, theo đúng thứ tự: (1) PR contract thêm quyền vào
+        # `ChatRequest` — `src/models/` đóng băng nên phải là PR riêng; (2)
+        # portal điền quyền từ JWT, không tin client gửi lên; (3) truyền xuống
+        # đây. Khai tường minh thay vì để `RetrieveNode` lấy mặc định, để chỗ
+        # phải sửa nằm ngay trong tầm mắt.
+        "retrieve": RetrieveNode(retriever, visibility=["public"]),
         "generate": GenerateNode(
             llm,
             model=settings.llm_model_answer,

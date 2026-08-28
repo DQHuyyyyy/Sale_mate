@@ -1,6 +1,6 @@
 # Kiến trúc hệ thống — SalesMate
 
-> Cập nhật theo kiến trúc **3 service** đang chạy thật (xem `RUN.md`,
+> Cập nhật theo kiến trúc **3 service** đang chạy thật (xem `docs/RUN.md`,
 > `Makefile`, `.env.example`) — không phải bản Next.js một backend mô tả ở
 > phiên bản tài liệu trước.
 
@@ -164,7 +164,7 @@ Widget nhận luồng `text/event-stream`, mỗi message là một JSON:
 | DB | PostgreSQL (Supabase) | Dữ liệu có cấu trúc: user, căn hộ, lịch sử bán, tài liệu |
 | Quan sát | Structured JSON log · LangSmith | Truy vết từng bước agent |
 
-## 6. Chạy local (3 terminal, xem `RUN.md`)
+## 6. Chạy local (3 terminal, xem `docs/RUN.md`)
 
 ```mermaid
 graph LR

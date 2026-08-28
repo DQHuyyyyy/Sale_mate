@@ -8,6 +8,7 @@ from decimal import Decimal
 os.environ.setdefault("JWT_SECRET", "test-secret-chi-dung-trong-test-0123456789abcdef")
 os.environ.setdefault("DATABASE_URL", "postgresql://user:pass@localhost:5432/test")
 
+import pytest  # noqa: E402
 from app.core.security import (  # noqa: E402
     create_access_token,
     decode_access_token,
@@ -15,6 +16,8 @@ from app.core.security import (  # noqa: E402
     verify_password,
 )
 from app.routers.apartments import _format_area, _format_price  # noqa: E402
+from app.schemas.auth import LoginRequest, UserCreate  # noqa: E402
+from pydantic import ValidationError  # noqa: E402
 
 
 class TestPassword:
@@ -34,6 +37,26 @@ class TestPassword:
 
     def test_hai_lan_hash_ra_hai_gia_tri_khac_nhau(self) -> None:
         assert hash_password("matkhau123") != hash_password("matkhau123")
+
+
+class TestDoDaiMatKhau:
+    """Tài khoản ở đây là tài khoản NHÂN VIÊN — nó mở được danh sách lead kèm
+    tên và số điện thoại khách thật, và chốt được giao dịch."""
+
+    def _tao(self, mat_khau: str) -> UserCreate:
+        return UserCreate(username="sale02", password=mat_khau, full_name="Nguyễn Văn B")
+
+    def test_duoi_8_ky_tu_bi_chan(self) -> None:
+        with pytest.raises(ValidationError):
+            self._tao("abc1234")
+
+    def test_du_8_ky_tu_thi_qua(self) -> None:
+        assert self._tao("abc12345").password == "abc12345"
+
+    def test_dang_nhap_khong_bi_rang_do_dai(self) -> None:
+        """Ràng độ dài ở đường đăng nhập là khoá luôn người dùng cũ ra ngoài —
+        mật khẩu 6 ký tự đặt trước đây vẫn phải đăng nhập được."""
+        assert LoginRequest(username="sale01", password="abc123").password == "abc123"
 
 
 class TestToken:

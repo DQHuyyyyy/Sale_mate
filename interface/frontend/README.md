@@ -1,8 +1,8 @@
 # SalesMate — Frontend (React + Vite)
 
 Giao diện cho nhân viên sale và quản trị viên. Bám phong cách mockup
-`file_md/home.html`: brand xanh `#1570EF`, font Be Vietnam Pro, card bo góc,
-chatbot "S" nổi góc dưới phải.
+`Context Product/salesmate_portal.html`: brand xanh `#1570EF`, font Be Vietnam
+Pro, card bo góc, chatbot "S" nổi góc dưới phải.
 
 ## Chạy
 

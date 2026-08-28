@@ -315,6 +315,89 @@ class TestChotBanTuLead:
         assert as_user(SALE).patch("/api/dat-coc/1", json={"trang_thai": "da_ban"}).status_code == 409
 
 
+class TestQuyenSoHuu:
+    """Vai trò trả lời "có được đụng vào lead không", KHÔNG trả lời "lead NÀY".
+
+    `require_sale_hoac_admin` chỉ kiểm vai trò, nên trước khi vá thì bất kỳ sale
+    nào cũng PATCH được lead của sale khác — và `RETURNING` đưa luôn tên với số
+    điện thoại khách của họ về. `lead_id` là số nguyên tăng dần nên không phải
+    đoán gì.
+    """
+
+    @pytest.fixture
+    def _bat_sql(self, monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, tuple]]:
+        """Ghi lại (SQL, tham số) của mọi lời gọi để kiểm chính mệnh đề WHERE."""
+        da_chay: list[tuple[str, tuple]] = []
+
+        def ghi(sql: str, tham_so: tuple = (), *a, **k):
+            da_chay.append((sql, tham_so))
+            return _fetch_one(sql)
+
+        monkeypatch.setattr(dat_coc_router, "fetch_one", ghi)
+        return da_chay
+
+    def _cau_update(self, da_chay: list[tuple[str, tuple]]) -> tuple[str, tuple]:
+        return next((sql, ts) for sql, ts in da_chay if "UPDATE dat_coc_lead" in sql)
+
+    def test_sale_bi_rang_theo_sale_id(self, _bat_sql: list[tuple[str, tuple]]) -> None:
+        as_user(SALE).patch("/api/dat-coc/1", json={"trang_thai": "bo"})
+
+        sql, tham_so = self._cau_update(_bat_sql)
+        assert "sale_id" in sql, "Câu UPDATE không có điều kiện sở hữu"
+        assert SALE.id in tham_so, "Điều kiện sở hữu không nhận id của người đang gọi"
+
+    def test_lead_chua_ai_nhan_van_doi_duoc(self, _bat_sql: list[tuple[str, tuple]]) -> None:
+        """Tập được GHI phải trùng tập được ĐỌC ở `danh_sach`.
+
+        Khách tự đặt trên portal thì `sale_id` rỗng. Siết thành `sale_id = %s`
+        thuần là sale nhìn thấy khách vãng lai trong danh sách mà không gọi rồi
+        chốt được — hỏng đúng luồng mà màn `/giao-dich` sinh ra để phục vụ.
+        """
+        as_user(SALE).patch("/api/dat-coc/1", json={"trang_thai": "bo"})
+
+        sql, _ = self._cau_update(_bat_sql)
+        assert "sale_id IS NULL" in sql
+
+    def test_admin_khong_bi_rang(self, _bat_sql: list[tuple[str, tuple]]) -> None:
+        """Admin vốn nhìn toàn hệ thống ở `danh_sach`; ràng ở đây là mâu thuẫn."""
+        as_user(ADMIN).patch("/api/dat-coc/1", json={"trang_thai": "bo"})
+
+        sql, tham_so = self._cau_update(_bat_sql)
+        assert "sale_id" not in sql.split("RETURNING")[0]
+        assert tham_so == ("bo", 1)
+
+    def test_lead_cua_sale_khac_tra_404_va_khong_lo_thong_tin(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Mệnh đề WHERE không khớp ⇒ `fetch_one` trả None ⇒ 404.
+
+        Hai vế đều quan trọng: không ghi được, và không đọc được. Trước khi vá
+        thì `RETURNING` trả về `ho_ten` với `so_dien_thoai` của khách thuộc sale
+        khác ngay trong body 200.
+        """
+        monkeypatch.setattr(dat_coc_router, "fetch_one", lambda *a, **k: None)
+
+        r = as_user(SALE).patch("/api/dat-coc/42", json={"trang_thai": "da_coc"})
+
+        assert r.status_code == 404
+        assert _LEAD["so_dien_thoai"] not in r.text
+        assert _LEAD["ho_ten"] not in r.text
+
+    def test_chot_ban_cung_bi_rang(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Nhánh NẶNG nhất: nó ghi `sales_history` và khoá căn.
+
+        Bỏ sót ở đây là một sale chốt được giao dịch trên khách của sale khác, và
+        `sales_history` đứng tên người kia.
+        """
+        monkeypatch.setattr(dat_coc_router, "numeric_columns_ready", lambda: True)
+        monkeypatch.setattr(dat_coc_router, "get_conn", _fake_conn)
+        monkeypatch.setattr(dat_coc_router, "fetch_one", lambda sql, *a: _tra_loi(sql))
+        _SQL_DA_CHAY.clear()
+
+        as_user(SALE).patch("/api/dat-coc/1", json={"trang_thai": "da_ban"})
+
+        doc_lead = next(s for s in _SQL_DA_CHAY if "FROM dat_coc_lead" in s)
+        assert "sale_id" in doc_lead.split("FOR UPDATE")[0]
+
+
 def test_khong_con_route_ghi_nhan_ban_ngoai_man_giao_dich() -> None:
     """Chốt bán CHỈ diễn ra ở màn Giao dịch, bằng cách chốt một lead.
 

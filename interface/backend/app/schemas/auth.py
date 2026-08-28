@@ -41,7 +41,17 @@ class UserCreate(BaseModel):
     """
 
     username: str = Field(min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9._-]+$")
-    password: str = Field(min_length=6, max_length=200)
+    # 8 chứ không phải 6. Tài khoản ở đây là tài khoản NHÂN VIÊN — nó mở được
+    # danh sách lead kèm tên và số điện thoại khách thật, và chốt được giao dịch.
+    #
+    # Không ràng thêm luật "phải có hoa/số/ký tự đặc biệt": luật đó đẩy người
+    # dùng về đúng mấy khuôn dễ đoán (`Sale@2026`) trong khi độ dài mới là thứ
+    # thật sự làm chậm việc dò. Muốn chặt hơn thì nâng số này, đừng thêm luật.
+    #
+    # ⚠️ Chỉ áp cho tài khoản TẠO MỚI. Mật khẩu 6 ký tự đã đặt trước đó vẫn đăng
+    # nhập được — `LoginRequest` cố ý giữ `min_length=1`, ràng độ dài ở đường
+    # đăng nhập là khoá luôn người dùng cũ ra ngoài chứ không làm ai an toàn hơn.
+    password: str = Field(min_length=8, max_length=200)
     full_name: str = Field(min_length=1, max_length=100)
     phone: str | None = Field(default=None, max_length=20)
     email: str | None = Field(default=None, max_length=100)

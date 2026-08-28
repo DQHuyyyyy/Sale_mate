@@ -88,4 +88,4 @@ pytest -q
 ```
 
 Test hiện chỉ phủ hash mật khẩu, JWT và format giá/diện tích — không cần DB, không
-gọi mạng. Test cho route cần một database test riêng (xem `TIENDO.md`).
+gọi mạng. Test cho route cần một database test riêng (xem `docs/lich-su/TIENDO.md`).

@@ -12,7 +12,7 @@ from httpx import ASGITransport, AsyncClient
 
 from src.agents.contracts import LLMProvider
 from src.bootstrap import configure
-from src.core.config import Settings
+from src.core.config import Settings, get_settings
 from src.core.container import container
 from src.data.contracts import Embedder, VectorStore
 from src.data.ingestion.embedders import FakeEmbedder
@@ -102,6 +102,28 @@ def _chan_postgres_that(monkeypatch):
     # lead đã tạo bảng `dat_coc_lead` trên production.
     for muc_tieu in ("src.agents.tools.dat_coc", "src.data.stores.dat_coc_db"):
         monkeypatch.setattr(f"{muc_tieu}.get_dat_coc_db", lambda: db_coc)
+
+
+@pytest.fixture(autouse=True)
+def _chot_chan_o_che_do_test(settings: Settings):
+    """Cho chốt chặn của lõi AI đọc `Settings` của test, không đọc `.env` của máy.
+
+    `xac_thuc_dich_vu` gọi `get_settings()` toàn cục — cùng cái bẫy mà
+    `_chan_postgres_that` đã vá cho tồn kho. Không đè ở đây thì một máy có
+    `AI_CORE_API_KEY` trong `.env` sẽ thấy MỌI test gọi `/api/v1/chat` trả 401,
+    trong khi máy khác vẫn xanh. Test phải cho cùng kết quả trên mọi máy.
+
+    Bộ đếm của phanh chi phí cũng đặt lại: nó nằm ở cấp module, nên không dọn thì
+    lượt của test trước cộng dồn sang test sau và ca thứ 61 đỏ vì lý do không
+    liên quan gì đến nó.
+    """
+    from src.api.bao_ve import dat_lai_phanh
+
+    dat_lai_phanh()
+    app.dependency_overrides[get_settings] = lambda: settings
+    yield
+    app.dependency_overrides.pop(get_settings, None)
+    dat_lai_phanh()
 
 
 @pytest_asyncio.fixture

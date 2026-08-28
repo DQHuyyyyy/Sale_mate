@@ -52,7 +52,7 @@ Lý do đằng sau từng lựa chọn: [`docs/adr/`](docs/adr/README.md).
 ## Chạy thử
 
 Hệ thống gồm **3 service chạy song song** trong 3 terminal riêng, cộng hạ tầng
-Qdrant/Postgres — xem chi tiết ở [`RUN.md`](RUN.md). Sơ đồ đầy đủ:
+Qdrant/Postgres — xem chi tiết ở [`docs/RUN.md`](docs/RUN.md). Sơ đồ đầy đủ:
 [`docs/architecture_diagram.md`](docs/architecture_diagram.md).
 
 ### Yêu cầu
@@ -95,9 +95,21 @@ make fe                            # http://localhost:5173
 
 Mở `http://localhost:5173`, chat qua widget góc dưới phải. Frontend gọi
 `/api/*` → Vite proxy sang `:8000` (API sản phẩm) → cầu `/api/chat` gọi tiếp
-sang `:8001` (lõi AI) qua `AI_CORE_URL`. Chưa có `OPENAI_API_KEY` hợp lệ thì lõi
-AI **vẫn chạy**: tự rơi về LLM giả lập, widget vẫn stream chữ — chỉ là nội
-dung mẫu.
+sang `:8001` (lõi AI) qua `AI_CORE_URL`.
+
+> ⚠️ **`OPENAI_API_KEY` là bắt buộc để chạy lõi AI.** Thiếu khoá hợp lệ thì
+> `make run-ai` **dừng ngay lúc khởi động** với `ConfigurationError`, không phải
+> chạy tiếp bằng LLM giả lập. Đây là chủ ý: đường rơi về đồ giả lập đã bị bỏ vì
+> nó hỏng câm — `FakeEmbedder` sinh vector 64 chiều ghi vào collection 1536
+> chiều, nên truy hồi luôn rỗng mà không báo lỗi, và người dùng nhận nội dung
+> soạn sẵn tưởng là thật. Xem [`src/bootstrap.py`](src/bootstrap.py).
+>
+> **Chưa có khoá vẫn làm được gì:** chạy `make check` (toàn bộ test dùng
+> `ScriptedProvider` + `FakeEmbedder` + vector store trong bộ nhớ, không gọi
+> mạng), và chạy API sản phẩm `make run-api` + frontend `make fe` — portal, tìm
+> kiếm căn, đăng nhập, ảnh đều hoạt động. Chỉ widget chat là không.
+>
+> `ANTHROPIC_API_KEY` thì ngược lại: thiếu vẫn chạy đủ, chỉ tắt nhánh leo thang.
 
 ### 2. Hạ tầng (tuỳ chọn)
 
@@ -255,8 +267,9 @@ nhau — xem [ADR-004](docs/adr/ADR-004-module-contracts.md).
 
 ## Chất lượng
 
-- **240 test** lõi AI (`tests/`) + **38 test** API sản phẩm
-  (`interface/backend/tests/`) pass, **coverage 77%** (mục tiêu tối thiểu 60%)
+- **753 test** lõi AI (`tests/`) + **140 test** API sản phẩm
+  (`interface/backend/tests/`) pass, **coverage 76%** trên `src/` (gate tối
+  thiểu 60%) — đo ngày 28/08/2026 bằng `make cov` và `make test-api`
 - **Ruff** lint + format sạch, chạy tự động trong CI
 - CI chạy cả backend (lint · format · test · coverage gate) và frontend
   (lint · build) trên mỗi PR
@@ -288,11 +301,17 @@ Commit theo chuẩn `feat:` `fix:` `docs:` `test:` `refactor:`.
 | Tài liệu | Nội dung |
 |---|---|
 | [`CLAUDE.md`](CLAUDE.md) | Điểm vào cho cả team và AI coding assistant |
-| [`RUN.md`](RUN.md) | Chạy trên máy mình |
+| [`docs/RUN.md`](docs/RUN.md) | Chạy trên máy mình |
 | [`DEPLOY.md`](DEPLOY.md) | Đưa lên Vercel + Render, hai môi trường, chi phí 0đ |
 | [`docs/architecture_diagram.md`](docs/architecture_diagram.md) | Sơ đồ kiến trúc, luồng agent, luồng dữ liệu |
 | [`docs/adr/`](docs/adr/README.md) | Quyết định kiến trúc và lý do |
 | [`Context Product/`](Context%20Product/) | Đặc tả sản phẩm: giao diện · lõi AI · data · API |
 | [`docs/guide/`](docs/guide/) | Guidebook 10 chương của BTC |
-| [`JOURNAL.md`](JOURNAL.md) | Nhật ký phát triển theo tuần |
+| [`docs/kien-truc-loi-ai.md`](docs/kien-truc-loi-ai.md) | Lõi AI: node, cổng leo thang, phân bổ model kèm chi phí đo thật |
+| [`JOURNAL.md`](JOURNAL.md) | Nhật ký theo tuần — gồm hồ sơ giải trình phần do AI sinh |
 | [`WORKLOG.md`](WORKLOG.md) | Nhật ký công việc hàng ngày |
+| [`docs/lich-su/`](docs/lich-su/) | Bản nháp và kế hoạch đã xong việc — giữ để tra, không còn hiệu lực |
+
+Thư mục gốc chỉ giữ sáu file `.md` trên. Tài liệu cũ nằm ở `docs/lich-su/`, và
+bản đặc tả sản phẩm chỉ còn MỘT chỗ là `Context Product/` — thư mục `file_md/`
+trùng nội dung đã gỡ, vì hai bản khác độ dài thì không ai biết tin bản nào.

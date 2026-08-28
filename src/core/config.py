@@ -167,6 +167,20 @@ class Settings(BaseSettings):
     chat_max_chars: int = Field(default=2000, gt=0)
     chat_history_limit: int = Field(default=10, ge=0)
 
+    # ---------- Chốt chặn của lõi AI ----------
+    # Render khai service này là `type: web` nên nó có URL công khai. Khoá dùng
+    # chung với API sản phẩm là thứ duy nhất ngăn người lạ gọi thẳng vào đây và
+    # tiêu quota OpenAI của đội. Xem `src/api/bao_ve.py`.
+    #
+    # Rỗng: production CHẶN HẾT (cổng thất bại theo hướng mở thì không phải
+    # cổng), môi trường khác cho qua kèm WARNING để `make run-ai` vẫn thử được.
+    ai_core_api_key: str = ""
+    # Phanh tay chi phí, đếm cho CẢ tiến trình chứ không theo IP — người gọi hợp
+    # lệ duy nhất là API sản phẩm nên mọi request chung một IP. 0 = tắt.
+    # Đặt cao hơn hẳn lưu lượng thật: nó để bắt lúc có gì đó chạy loạn, không
+    # phải để chia phần cho người dùng (việc đó ở `app/core/han_muc.py`).
+    ai_core_rate_limit_per_minute: int = Field(default=60, ge=0)
+
     @property
     def cors_origin_list(self) -> list[str]:
         """CORS_ORIGINS ở .env là chuỗi ngăn cách bởi dấu phẩy."""

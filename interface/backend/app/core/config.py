@@ -41,6 +41,13 @@ class Settings(BaseSettings):
     # riêng. backend/ không gọi thẳng OpenAI nữa — OPENAI_API_KEY thuộc về lõi AI.
     ai_core_url: str = "http://localhost:8001"
     ai_core_timeout: float = 60.0
+    # Khoá dùng chung với lõi AI. PHẢI trùng `AI_CORE_API_KEY` của service kia —
+    # lệch thì mọi câu hỏi trả 401 và người dùng nhận "Câu hỏi gửi lên không hợp
+    # lệ", một thông điệp đúng mã lỗi nhưng dẫn đi sai hướng hoàn toàn.
+    #
+    # Rỗng thì không gửi header nào; chỉ chạy được khi lõi AI cũng để rỗng, tức
+    # ở máy dev. Xem `src/api/bao_ve.py`.
+    ai_core_api_key: str = ""
 
     # Hạn mức cho các endpoint AI TỐN TIỀN — /api/chat và /api/images/modify.
     # Mặc định BẬT: chúng công khai và mỗi lượt đều tốn tiền model, tắt trên môi

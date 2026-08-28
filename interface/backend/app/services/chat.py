@@ -39,6 +39,16 @@ def _loi_tu_status(status_code: int) -> str:
     return "Trợ lý S đang bận. Thử lại sau ít phút."
 
 
+def _headers() -> dict[str, str]:
+    """Khoá dịch vụ gửi kèm mọi lời gọi sang lõi AI.
+
+    Lõi AI có URL công khai trên Render, nên nó chặn request không cầm khoá.
+    Rỗng thì không gửi header nào — chỉ chạy được khi lõi AI cũng để rỗng, tức ở
+    máy dev. Xem `src/api/bao_ve.py`.
+    """
+    return {"X-API-Key": settings.ai_core_api_key} if settings.ai_core_api_key else {}
+
+
 def _build_payload(message: str, history: list[ChatMessage], session_id: str | None = None) -> dict[str, object]:
     """Ghép body theo `ChatRequest` của lõi AI (src/models/chat.py).
 
@@ -72,7 +82,7 @@ async def stream_reply(message: str, history: list[ChatMessage], session_id: str
 
     try:
         async with httpx.AsyncClient(timeout=settings.ai_core_timeout) as client:
-            async with client.stream("POST", url, json=payload) as response:
+            async with client.stream("POST", url, json=payload, headers=_headers()) as response:
                 if response.status_code >= 400:
                     body = (await response.aread())[:500]
                     logger.error("Lõi AI trả %s khi stream: %s", response.status_code, body)
@@ -93,7 +103,7 @@ async def generate_reply(message: str, history: list[ChatMessage], session_id: s
 
     try:
         async with httpx.AsyncClient(timeout=settings.ai_core_timeout) as client:
-            response = await client.post(url, json=_build_payload(message, history, session_id))
+            response = await client.post(url, json=_build_payload(message, history, session_id), headers=_headers())
     except httpx.HTTPError as exc:
         logger.exception("Không gọi được lõi AI tại %s", url)
         raise ChatError(

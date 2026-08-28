@@ -104,3 +104,43 @@ async def test_graph_hoi_can_cu_the_thi_so_lieu_tu_tool_di_vao_prompt(settings, 
     # Khong bi guardrail chan du EmptyRetriever khong tra chunk nao
     assert result["answer"] != INSUFFICIENT_MESSAGE
     assert [c.kind for c in result["citations"]] == ["db"]
+
+
+class TestQuyenTruyHoi:
+    """Dây bẫy cho lỗ hổng phân quyền CHƯA nối xong.
+
+    Nguyên tắc dự án là "phân quyền lọc tại tầng truy hồi, không lọc ở UI", và
+    `RetrievalFilter.visibility` đã sẵn sàng nhận danh sách quyền thật. Thiếu vế
+    còn lại: `ChatRequest` không mang danh tính người dùng, nên lõi AI không biết
+    ai đang hỏi và `build_nodes` đành ghim cứng `["public"]`.
+
+    Hôm nay vô hại vì mọi tài liệu trong kho đều `public`. Đó là một sự trùng
+    hợp, không phải một cơ chế — nên hai test dưới đây canh cho nó không lặng lẽ
+    hết đúng. Đọc chú thích ở `build_nodes` để biết ba bước làm nốt.
+    """
+
+    def test_truy_hoi_dang_ghim_cung_public(self, scripted_llm, settings) -> None:
+        nodes = build_nodes(scripted_llm, EmptyRetriever(), settings)
+
+        assert nodes["retrieve"]._visibility == ["public"]
+
+    def test_moi_tai_lieu_deu_public_cho_toi_khi_noi_duoc_quyen(self) -> None:
+        """Thêm một tài liệu `internal` mà chưa nối quyền là nó lọt ra cho khách
+        vãng lai NGAY, không dấu hiệu nào. Test này đỏ trước khi chuyện đó xảy
+        ra; đừng sửa nó cho xanh, hãy làm nốt phần phân quyền."""
+        from pathlib import Path
+
+        from src.data.sources.knowledge_docs import load_knowledge_dir
+
+        thu_muc = Path("data/raw/knowledge")
+        if not thu_muc.is_dir():
+            pytest.skip("Chưa có kho tài liệu trong repo này")
+
+        noi_bo = [d.doc_id for d in load_knowledge_dir(thu_muc) if d.metadata.get("visibility") != "public"]
+
+        assert noi_bo == [], (
+            f"Tài liệu không phải public: {noi_bo}. Tầng truy hồi đang ghim cứng "
+            "visibility=['public'] nên chúng không bao giờ được đọc — mà nếu ai đó "
+            "nới điều kiện đó ra thì chúng lọt cho khách vãng lai. Làm nốt phân "
+            "quyền theo chú thích ở build_nodes trước khi thêm tài liệu nội bộ."
+        )

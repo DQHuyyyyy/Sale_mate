@@ -48,6 +48,28 @@ _COT = """
 """
 
 
+def _dieu_kien_so_huu(nguoi: CurrentUser, cot: str = "sale_id") -> tuple[str, tuple]:
+    """Mệnh đề lọc quyền SỞ HỮU, ghép vào WHERE của câu ghi.
+
+    `require_sale_hoac_admin` chỉ kiểm VAI TRÒ. Vai trò trả lời câu "người này
+    có được đụng vào lead không", không trả lời câu "có được đụng vào lead NÀY
+    không" — và `lead_id` là số nguyên tăng dần nên đoán được. Thiếu mệnh đề này
+    thì một sale đổi được trạng thái lead của sale khác (gồm cả `da_ban` và
+    `bo`), và mệnh đề `RETURNING` trả về luôn tên với số điện thoại khách của họ.
+
+    Tập lead sale được GHI phải trùng đúng tập họ được ĐỌC ở `danh_sach` — lead
+    của mình cộng lead chưa ai nhận (`sale_id IS NULL`, khách tự đặt trên
+    portal). Hẹp hơn thì sale nhìn thấy khách vãng lai trong danh sách mà không
+    gọi rồi chốt được, tức là hỏng đúng luồng mà màn `/giao-dich` sinh ra để
+    phục vụ.
+
+    Admin không bị lọc: họ vốn nhìn toàn hệ thống ở `danh_sach`.
+    """
+    if nguoi.role == "admin":
+        return "", ()
+    return f" AND ({cot} = %s OR {cot} IS NULL)", (nguoi.id,)
+
+
 def chuan_hoa_sdt(tho: str) -> str:
     """Bỏ ký tự ngăn cách, quy +84 về 0.
 
@@ -199,18 +221,26 @@ def doi_trang_thai(
     """Đổi trạng thái một lead.
 
     Đây là chỗ nhả một căn về "Còn" (`bo`), và cũng là chỗ CHỐT BÁN (`da_ban`).
+
+    Lọc quyền sở hữu ngay TRONG câu ghi, không kiểm ở một bước riêng phía trước:
+    đọc rồi mới ghi là mở một khe giữa hai câu lệnh, và ở đây khe đó thừa — cùng
+    một mệnh đề `WHERE` vừa chặn vừa cập nhật. Xem `_dieu_kien_so_huu`.
     """
+    them, tham_so = _dieu_kien_so_huu(nguoi_doi)
     if payload.trang_thai == "da_ban":
         row = _chot_ban(lead_id, nguoi_doi)
     else:
         row = fetch_one(
-            """
-            UPDATE dat_coc_lead SET trang_thai = %s WHERE id = %s
+            f"""
+            UPDATE dat_coc_lead SET trang_thai = %s WHERE id = %s{them}
             RETURNING id, ma_can, ho_ten, so_dien_thoai, ghi_chu, trang_thai, created_at, sale_id
             """,
-            (payload.trang_thai, lead_id),
+            (payload.trang_thai, lead_id, *tham_so),
         )
     if row is None:
+        # KHÔNG phân biệt "không tồn tại" với "không thuộc quyền". Hai thông
+        # điệp khác nhau là một kênh dò: gọi lần lượt id 1..n rồi đọc mã lỗi là
+        # biết sale nào đang giữ bao nhiêu lead.
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Không tìm thấy lead #{lead_id}.",
@@ -240,14 +270,20 @@ def _chot_ban(lead_id: int, nguoi_doi: CurrentUser) -> dict | None:
 
     Giá ghi theo GIÁ NIÊM YẾT. Màn Giao dịch không có ô nhập giá — muốn ghi giá
     thương lượng khác thì dùng "Ghi nhận đã bán" ở trang căn hộ, chỗ đó có ô đó.
+
+    Quyền sở hữu lọc ngay trong câu `SELECT ... FOR UPDATE` mở transaction, cùng
+    mệnh đề với nhánh đổi trạng thái thường. Đây là nhánh NẶNG nhất của route —
+    nó ghi `sales_history` và khoá căn — nên bỏ sót ở đây là một sale chốt được
+    giao dịch trên khách của sale khác, và `sales_history` đứng tên người kia.
     """
     gia_tri_select = "gia_tri" if numeric_columns_ready() else "NULL::numeric AS gia_tri"
+    them, tham_so = _dieu_kien_so_huu(nguoi_doi)
 
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             "SELECT id, ma_can, ho_ten, so_dien_thoai, ghi_chu, trang_thai, created_at, sale_id "
-            "FROM dat_coc_lead WHERE id = %s FOR UPDATE",
-            (lead_id,),
+            f"FROM dat_coc_lead WHERE id = %s{them} FOR UPDATE",
+            (lead_id, *tham_so),
         )
         lead = cur.fetchone()
         if lead is None:

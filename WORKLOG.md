@@ -1,6 +1,11 @@
 # Worklog — Team P-055
 
 > Ghi lại tất cả công việc đã làm theo ngày, người thực hiện và kết quả.
+>
+> **Hồ sơ giải trình phần do AI sinh không nằm ở đây** — nó ở
+> [`JOURNAL.md`](JOURNAL.md), mục "Hồ sơ giải trình AI": đoạn nào do AI sinh,
+> kiểm bằng cách nào, và sửa lại những gì. File này chỉ ghi *việc gì đã làm*;
+> file kia ghi *chỗ nào AI làm sai và ai bắt được*.
 
 ---
 
@@ -37,7 +42,6 @@
 | Viet | Viết test cho toàn bộ phần trên | ✅ Done | 69/69 test pass, `ruff check`/`format` sạch, coverage 80% | — |
 
 **Tổng kết ngày:** Hoàn thành phần "crawl data và xử lý data cho RAG" do huy giao. Dữ liệu (tồn kho + tin đăng BĐS thật) đã sẵn sàng và chứng minh chạy được qua demo agent có trích nguồn. Còn lại: bật `ENABLE_RAG` trong `bootstrap.py`, chuyển Qdrant, và hiển thị ảnh/nguồn trong widget — cần team quyết định và phối hợp (agent + frontend), không thuộc phạm vi việc này.
->>>>>>> 45eb927d7f5be741830c682160be38901de9ffdd
 
 ---
 

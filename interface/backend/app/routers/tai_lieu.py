@@ -28,9 +28,12 @@ router = APIRouter(prefix="/api/tai-lieu", tags=["tai-lieu"])
 async def _goi_loi_ai(duong_dan: str) -> object:
     """Gọi lõi AI, đổi mọi lỗi mạng thành 502 có thông điệp đọc được."""
     url = f"{settings.ai_core_url.rstrip('/')}/api/v1/documents{duong_dan}"
+    # Khoá dịch vụ, cùng khuôn với `services/chat.py`. Lõi AI có URL công khai
+    # nên nó chặn request không cầm khoá — kể cả đường tài liệu.
+    headers = {"X-API-Key": settings.ai_core_api_key} if settings.ai_core_api_key else {}
     try:
         async with httpx.AsyncClient(timeout=settings.ai_core_timeout) as client:
-            r = await client.get(url)
+            r = await client.get(url, headers=headers)
     except httpx.HTTPError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

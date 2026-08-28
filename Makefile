@@ -90,11 +90,18 @@ test-api:
 cov:
 	$(PY) -m pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=60
 
+# Phủ CẢ interface/backend/ — CI (`.github/workflows/ci-api.yml`) vốn đã chạy
+# `ruff check interface/backend/`, nên bỏ nó ra khỏi đây nghĩa là khâu kiểm cục
+# bộ hẹp hơn khâu kiểm trên CI. Hệ quả đã xảy ra thật: một lỗi N802 ở
+# `tests/test_images.py` qua được `make check`, lên tới CI mới đỏ — mà CI thì
+# chạy sau, lúc PR đã mở.
+LINT_PATHS := src/ tests/ interface/backend/
+
 lint:
-	$(PY) -m ruff check src/ tests/
+	$(PY) -m ruff check $(LINT_PATHS)
 
 format:
-	$(PY) -m ruff format src/ tests/
+	$(PY) -m ruff format $(LINT_PATHS)
 
 typecheck:
 	$(PY) -m mypy src/

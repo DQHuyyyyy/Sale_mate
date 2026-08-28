@@ -1,7 +1,7 @@
 # Deploy — SalesMate
 
 Bản này dựng **một môi trường chạy từ nhánh `develop`, chi phí 0đ**, đủ cho
-khoảng 10 người dùng thử. Chạy máy mình thì xem [RUN.md](RUN.md).
+khoảng 10 người dùng thử. Chạy máy mình thì xem [docs/RUN.md](docs/RUN.md).
 
 > **Vì sao chưa deploy `main`.** Nhánh `main` đang là bản 05/08, lạc hậu 33
 > commit và **chưa có thư mục `interface/`** — trỏ service vào đó là build hỏng
@@ -133,12 +133,24 @@ Render dựng hai service, cả hai đều theo nhánh `develop`, và hỏi các
 | `SUPABASE_SERVICE_ROLE_KEY` | cùng trang |
 | `CORS_ORIGINS` | *để trống, điền ở bước 3* |
 | `AI_CORE_URL` | `https://salesmate-ai-core.onrender.com` |
+| `AI_CORE_API_KEY` | chuỗi tự sinh, **dán y hệt sang `salesmate-ai-core`** |
 
 `JWT_SECRET` Render tự sinh, không phải nhập.
 
-Với `salesmate-ai-core`, `OPENAI_API_KEY` bỏ trống cũng chạy: hệ thống rơi về
-`ScriptedProvider`, chat trả lời theo kịch bản thay vì gọi model thật. Điền key
-vào khi muốn chat thật.
+Sinh `AI_CORE_API_KEY` một lần rồi dán vào **cả hai** service:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+⚠️ Với `salesmate-ai-core`, **`OPENAI_API_KEY` là bắt buộc**. Bỏ trống thì
+service **không khởi động** — `bootstrap.py` ném `ConfigurationError`, và Render
+sẽ báo deploy hỏng. Đường rơi về `ScriptedProvider` đã bị bỏ vì nó hỏng câm:
+`FakeEmbedder` sinh vector 64 chiều ghi vào collection 1536 chiều nên truy hồi
+luôn rỗng mà không báo lỗi, còn người dùng thì nhận nội dung soạn sẵn tưởng là
+thật.
+
+`ANTHROPIC_API_KEY` thì ngược lại — thiếu vẫn chạy đủ, chỉ tắt nhánh leo thang.
 
 Deploy xong, kiểm tra từng cái:
 
@@ -340,5 +352,6 @@ Vercel thì nhập trong dashboard.
 | `JWT_SECRET` | Render tự sinh | ≥32 ký tự, không phải nhập |
 | `CORS_ORIGINS` | `salesmate-api-dev` | URL Vercel |
 | `AI_CORE_URL` | `salesmate-api-dev` | trỏ về `salesmate-ai-core` |
-| `OPENAI_API_KEY` | `salesmate-ai-core` | bỏ trống → chat chạy kịch bản |
+| `AI_CORE_API_KEY` | **cả hai service** | phải TRÙNG nhau; lệch là mọi câu hỏi trả 401 |
+| `OPENAI_API_KEY` | `salesmate-ai-core` | **bắt buộc** — bỏ trống thì service không khởi động |
 | `VITE_API_BASE_URL` | Vercel | Production và Preview cùng giá trị |
