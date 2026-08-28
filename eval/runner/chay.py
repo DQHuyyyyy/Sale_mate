@@ -160,6 +160,11 @@ def _cau_hinh() -> dict[str, Any]:
         "orchestrator_model": s.orchestrator_model,
         "orchestrator_effort": s.orchestrator_effort,
         "che_do_leo_thang": s.che_do_leo_thang,
+        # Cần cho bảng chi phí: cổng chạy bằng Sonnet nên nó là một khoản
+        # Anthropic thật. Thiếu dòng này thì báo cáo tính thiếu ~40% chi phí mỗi
+        # lượt mà không có dấu hiệu gì.
+        "enable_cong_chinh_sach": s.enable_cong_chinh_sach,
+        "cong_chinh_sach_model": s.cong_chinh_sach_model or s.orchestrator_model,
     }
 
 

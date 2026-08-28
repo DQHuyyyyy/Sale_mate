@@ -1,0 +1,52 @@
+{
+  "_doc": "Đáp án tham chiếu cho nhóm RAG (R01-R05) — việc của NGÀY 1 trong plan. Cần cho Context Recall và cho Judge chấm có tham chiếu.",
+
+  "_cach_viet": "Mỗi đáp án dựng TỪ TÀI LIỆU GỐC trong data/raw/knowledge/, không viết theo trí nhớ. `khang_dinh` là các mệnh đề rời có thể kiểm được — Context Recall đếm bao nhiêu mệnh đề trong số đó xuất hiện ở ngữ cảnh truy hồi được. `phai_tu_choi` nghĩa là kho KHÔNG có thông tin, và đáp án đúng là từ chối.",
+
+  "_can_nguoi_duyet": "⚠️ Đây là bản DỰNG TỪ NGUỒN, chưa phải bản expert ký duyệt. R03 có yếu tố pháp lý nên plan yêu cầu người có thẩm quyền xác nhận trước khi dùng kết luận pass/fail.",
+
+  "R01": {
+    "cau_hoi": "Chính sách chiết khấu khi thanh toán sớm là gì?",
+    "phai_tu_choi": false,
+    "nguon": ["knowledge:Ưu đãi của Vinhomes OceanPark 2", "knowledge:Ưu đãi Vinhomes OceanPark 3"],
+    "dap_an": "Vinhomes áp dụng ưu đãi tới 9% khi khách chọn thanh toán sớm và không vay ngân hàng. Ưu đãi này có ở cả Ocean Park 2 và Ocean Park 3.",
+    "khang_dinh": ["9%", "thanh toán sớm", "không vay ngân hàng"],
+    "ghi_chu": "Kho dùng từ 'ưu đãi', câu hỏi dùng từ 'chiết khấu' — khoảng cách từ vựng này chính là thứ case R01 kiểm."
+  },
+
+  "R02": {
+    "cau_hoi": "Ocean Park 1 có những tiện ích nội khu nào?",
+    "phai_tu_choi": false,
+    "nguon": ["knowledge:Hệ thống tiện ích tổng quan của Vinhome Ocean Park", "knowledge:Tổng quan dự án Vinhomes Ocean Park 1"],
+    "dap_an": "Ocean Park 1 có biển hồ nước mặn rộng 6,1 ha với cát trắng và hàng dừa; hồ điều hòa trung tâm 24,5 ha (hồ Ngọc Trai) có đường dạo bộ và bến thuyền; Đại học VinUni, hệ thống liên cấp Vinschool và y tế Vinmec; trung tâm thương mại Vincom Mega Mall Ocean Park; cùng hàng chục công viên BBQ và sân thể thao ngoài trời. Mật độ xây dựng thấp, gần 19%.",
+    "khang_dinh": ["6,1", "24,5", "VinUni", "Vinschool", "Vinmec", "Vincom"],
+    "ghi_chu": "Kiểm cả chiều ngược: KHÔNG được thêm tiện ích không có trong tài liệu."
+  },
+
+  "R03": {
+    "cau_hoi": "Nếu khách đặt cọc rồi muốn huỷ thì chính sách hoàn tiền thế nào?",
+    "phai_tu_choi": true,
+    "nguon": [],
+    "dap_an": "Kho tài liệu không có thông tin về hoàn cọc, mức phạt hay điều kiện huỷ. Đáp án đúng là nói rõ chưa có dữ liệu và chuyển sang người phụ trách — KHÔNG suy diễn điều khoản.",
+    "khang_dinh": [],
+    "ghi_chu": "Đã grep toàn kho 'hoàn cọc|hoàn tiền|huỷ cọc|phạt cọc': không file nào có. Tiêu đề phap-ly-thu-tuc.md CÓ chữ 'đặt cọc' nhưng thân bài chỉ nói sang tên, thuế phí, vay — không có mục hoàn cọc. ⚠️ Yếu tố pháp lý: cần người có thẩm quyền duyệt trước khi chốt pass/fail."
+  },
+
+  "R04": {
+    "cau_hoi": "Chính sách bảo hành nội thất là gì?",
+    "phai_tu_choi": true,
+    "nguon": [],
+    "dap_an": "Kho không có tài liệu nào về bảo hành. Đáp án đúng là từ chối và KHÔNG nêu bất kỳ cam kết bảo hành cụ thể nào.",
+    "khang_dinh": [],
+    "ghi_chu": "Đã grep toàn kho 'bảo hành': không có. Đây là case cố ý ngoài phạm vi tài liệu, dùng để đo ngưỡng độ phủ."
+  },
+
+  "R05": {
+    "cau_hoi": "Phí quản lý chung cư hàng tháng là bao nhiêu?",
+    "phai_tu_choi": true,
+    "nguon": [],
+    "dap_an": "Kho không có biểu phí quản lý. Đáp án đúng là nói chưa có dữ liệu và hỏi rõ phân khu/toà — KHÔNG được nêu một con số, và KHÔNG được trộn phí giữa các dự án.",
+    "khang_dinh": [],
+    "ghi_chu": "Đã grep toàn kho 'phí quản lý|phí dịch vụ': không có. Golden dataset xếp case này vào Context Precision — điều cần kiểm là trợ lý có phân biệt theo dự án hay không, chứ không phải nó có con số hay không."
+  }
+}

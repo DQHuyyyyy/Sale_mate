@@ -30,7 +30,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from eval.runner import bang_diem, giam_khao, phan_loai_loi  # noqa: E402
+from eval.runner import bang_diem, chi_so, doi_chieu_db, giam_khao, phan_loai_loi  # noqa: E402
 from eval.runner.bo_cau_hoi import doc_golden  # noqa: E402
 
 GOC = Path(__file__).resolve().parents[2]
@@ -159,7 +159,11 @@ async def _cham_bang_judge(
             d.get("ky_vong", ""),
         )
         ra[ma] = await _mot_lan_cham(provider, ma, he_thong, prompt, model)
-        print(f"  {ma}: {ra[ma].diem or '—'}/5  {ra[ma].ly_do[:70] or ra[ma].loi[:70]}")
+        gia = ra[ma].chi_phi(model)
+        print(f"  {ma}: {ra[ma].diem or '—'}/5  ${gia or 0:.5f}  {ra[ma].ly_do[:56] or ra[ma].loi[:56]}")
+
+    tong = sum(d.chi_phi(model) or 0 for d in ra.values())
+    print(f"  --> chi phí chấm: ${tong:.4f} cho {len(ra)} câu (${tong / max(len(ra), 1):.5f}/câu)")
     return ra
 
 
@@ -171,7 +175,51 @@ async def _mot_lan_cham(provider: Any, ma: str, he_thong: str, prompt: str, mode
         luot = await provider.run_turn(he_thong, loi_nhan, tools=[], model=model)
     except Exception as exc:  # noqa: BLE001 - một câu hỏng không được chặn cả bộ
         return giam_khao.DiemJudge(ma=ma, loi=f"{type(exc).__name__}: {exc}")
-    return giam_khao.doc_ket_qua(ma, luot.text, luot.token_vao, luot.token_ra)
+    return giam_khao.doc_ket_qua(ma, luot.text, luot)
+
+
+def _doc_lai_diem(duong: Path) -> dict[str, giam_khao.DiemJudge]:
+    """Dựng lại điểm Judge từ một file điểm đã có — chấm lại mà KHÔNG tốn credit.
+
+    Judge là đường chấm DUY NHẤT tiêu credit (10/28 câu). Rubric đứng yên mà
+    chạy lại Judge chỉ để sửa một luật rule-based là đốt tiền cho một kết quả
+    đã biết. Đổi rubric thì bỏ cờ này đi, lúc đó gọi lại model mới đúng.
+    """
+    goi = json.loads(duong.read_text(encoding="utf-8"))
+    ra: dict[str, giam_khao.DiemJudge] = {}
+    for d in goi.get("dong", []):
+        if d.get("diem_judge") is None and not d.get("loi_judge"):
+            continue
+        ra[str(d["ma"])] = giam_khao.DiemJudge(
+            ma=str(d["ma"]),
+            diem=d.get("diem_judge"),
+            faithfulness=d.get("faithfulness"),
+            answer_relevancy=d.get("answer_relevancy"),
+            ly_do=d.get("ly_do_judge", ""),
+            khang_dinh_khong_nguon=d.get("khang_dinh_khong_nguon", []),
+            loi=d.get("loi_judge", ""),
+        )
+    return ra
+
+
+async def _cham_precision(provider: Any, cau_hoi: str, model: str) -> dict[str, Any]:
+    """Context Precision cho MỘT câu — tỷ lệ đoạn top-k thật sự liên quan.
+
+    Tính một lần rồi ghi vào file điểm: sinh lại Excel hay chấm lại rule-based
+    đều đọc số đã lưu, không gọi model thêm lần nào.
+    """
+    from src.agents.contracts import OrchestratorMessage
+
+    doan = await chi_so.doan_truy_hoi_async(cau_hoi)
+    if not doan:
+        return {"dat": 0, "tong": 0, "ly_do": "Truy hồi không trả về đoạn nào"}
+
+    prompt = giam_khao.dung_prompt_precision(cau_hoi, doan)
+    luot = await provider.run_turn(
+        giam_khao.PROMPT_PRECISION, [OrchestratorMessage(role="user", content=prompt)], tools=[], model=model
+    )
+    dat, tong, ly_do = giam_khao.doc_precision(luot.text, len(doan))
+    return {"dat": dat, "tong": tong, "ly_do": ly_do}
 
 
 def _ket_luan(dat_luat: bool | None, diem: int | None) -> bool | None:
@@ -186,19 +234,40 @@ def _ket_luan(dat_luat: bool | None, diem: int | None) -> bool | None:
     return dat_luat
 
 
+def _ket_luan_cuoi(dat_luat: bool | None, diem: int | None, db: Any) -> tuple[bool | None, str]:
+    """Gộp ba đường chấm. Đối chiếu DB THẮNG cả rule-based lẫn Judge.
+
+    Nó so câu trả lời với nguồn sự thật; hai đường kia chỉ đọc câu chữ. Judge
+    chấm 5/5 cho một câu mạch lạc mà sai số liệu là chuyện có thật — chính vì
+    thế golden dataset xếp nhóm Tool-use vào "exact match với DB".
+    """
+    if db is not None and db.dat is not None:
+        return db.dat, f"đối chiếu DB: {db.giai_thich}"
+    return _ket_luan(dat_luat, diem), ""
+
+
 def dung_dong(
     d: dict[str, Any],
     luat: dict[str, Any],
     diem: giam_khao.DiemJudge | None,
     nguong_do_phu: float,
+    db: Any = None,
+    recall: tuple[int, int, list[str]] | None = None,
 ) -> dict[str, Any]:
     dat_luat, vi_pham = cham_luat(d, luat)
-    ket_luan = _ket_luan(dat_luat, diem.diem if diem else None)
+    ket_luan, ghi_chu_db = _ket_luan_cuoi(dat_luat, diem.diem if diem else None, db)
+    if ghi_chu_db:
+        vi_pham = [*vi_pham, ghi_chu_db] if ket_luan is False else vi_pham
     # Case FAIL vì dataset mâu thuẫn với hệ thống thì KHÔNG xếp tầng lỗi: hệ
     # thống không hỏng ở tầng nào cả, và một dòng "lỗi guardrail" ở bảng Ngày 4
     # sẽ cử người đi sửa đúng chỗ đang chạy tốt.
     if luat.get("ghi_chu_xung_dot"):
         tang, giai_thich = "", "Không xếp tầng — đây là xung đột dataset, xem mục riêng."
+    elif ket_luan is False and recall is not None and recall[2]:
+        # Context Recall THẮNG phép kiểm theo độ phủ. Độ phủ cao chỉ nói "có đoạn
+        # trông giống", không nói "lấy đúng tài liệu" — xem `chi_so.recall_theo_ma`.
+        tang = "retrieval"
+        giai_thich = f"Truy hồi KHÔNG lấy về {recall[2]} — model từ chối là đúng với thứ nó được đưa."
     else:
         tang, giai_thich = phan_loai_loi.phan_loai(d, nguong_do_phu, ket_luan)
     return {
@@ -220,7 +289,69 @@ def dung_dong(
         "giai_thich_loi": giai_thich,
         "do_dai": len(d.get("cau_tra_loi") or ""),
         "co_leo_thang": any(b.get("step") == "orchestrate" for b in d.get("buoc", [])),
+        "context_recall": ({"dat": recall[0], "tong": recall[1], "thieu": recall[2]} if recall else None),
+        "doi_chieu_db": (
+            {"dat": db.dat, "giai_thich": db.giai_thich, "su_that_db": db.su_that_db} if db is not None else None
+        ),
     }
+
+
+def _chay_doi_chieu_db(chay: list[dict[str, Any]], portal_url: str) -> dict[str, Any]:
+    """Chạy mọi phép đối chiếu DB, trả về theo mã case.
+
+    Đây là đường chấm KHÁCH QUAN nhất trong ba đường: nó so câu trả lời với
+    database, không so với câu chữ. Golden dataset xếp nhóm Tool-use vào đúng
+    cách chấm này ("exact match số liệu").
+    """
+    theo_ma = {str(d.get("ma")): d for d in chay}
+    ra: dict[str, Any] = {}
+
+    for ma, d in theo_ma.items():
+        kq = doi_chieu_db.doi_chieu(ma, d.get("cau_tra_loi", ""))
+        if kq is not None:
+            ra[ma] = kq
+
+    if "T03" in theo_ma:
+        ra["T03"] = doi_chieu_db.t03_chat_vs_bo_loc_ui(theo_ma["T03"], portal_url)
+    if "M01a" in theo_ma and "M01b" in theo_ma:
+        ra["M01b"] = doi_chieu_db.tap_con_cua_luot_truoc(theo_ma["M01b"], theo_ma["M01a"])
+    if "M03b" in theo_ma:
+        ra["M03b"] = doi_chieu_db.dung_pham_vi(theo_ma["M03b"], "Ocean Park 1", "1PN")
+    return ra
+
+
+# Câu nào được đo Context Precision — plan (sheet 3) khai đúng R05.
+CAU_PRECISION = ("R05",)
+
+
+def _lay_precision(args: Any, chay: list[dict[str, Any]], luat: dict[str, Any]) -> dict[str, Any]:
+    """Lấy Context Precision: đọc lại từ file cũ nếu có, không thì gọi Judge một lần."""
+    if args.dung_lai_diem:
+        cu = json.loads(Path(args.dung_lai_diem).read_text(encoding="utf-8")).get("context_precision")
+        if cu:
+            print(f"Dùng lại Context Precision từ {args.dung_lai_diem} — không gọi model.")
+            return cu
+    if args.khong_judge:
+        return {}
+
+    from src.core.config import get_settings
+    from src.services.anthropic_llm import AnthropicToolProvider
+
+    s = get_settings()
+    provider = AnthropicToolProvider(s.anthropic_api_key, default_model=args.model, effort=args.effort, max_tokens=512)
+    theo_ma = {str(d.get("ma")): d for d in chay}
+
+    ra: dict[str, Any] = {}
+    for ma in CAU_PRECISION:
+        if ma not in theo_ma:
+            continue
+        cau = theo_ma[ma].get("cau_hoi") or theo_ma[ma].get("cau_hoi_xlsx", "")
+        try:
+            ra[ma] = asyncio.run(_cham_precision(provider, cau, args.model))
+        except Exception as exc:  # noqa: BLE001 - hỏng thì bỏ chỉ số, không dừng cả bộ
+            ra[ma] = {"dat": 0, "tong": 0, "ly_do": f"{type(exc).__name__}: {exc}"}
+        print(f"  Context Precision {ma}: {ra[ma]['dat']}/{ra[ma]['tong']} — {ra[ma]['ly_do'][:70]}")
+    return ra
 
 
 def main() -> int:
@@ -229,6 +360,12 @@ def main() -> int:
     parser.add_argument("--model", default=_model_judge_mac_dinh())
     parser.add_argument("--effort", default="low", help="low/medium/high — ga chi phí của Sonnet 5")
     parser.add_argument("--khong-judge", action="store_true", help="Chỉ chấm rule-based, không gọi model")
+    parser.add_argument("--khong-db", action="store_true", help="Bỏ qua đối chiếu DB (khi không có kết nối)")
+    parser.add_argument(
+        "--dung-lai-diem",
+        help="Đọc điểm Judge từ file diem_*.json đã có thay vì gọi model. Chấm lại KHÔNG tốn credit.",
+    )
+    parser.add_argument("--portal-url", default=doi_chieu_db.URL_PORTAL_MAC_DINH, help="Portal cho phép kiểm T03")
     args = parser.parse_args()
 
     duong = Path(args.file)
@@ -244,16 +381,41 @@ def main() -> int:
 
     can_judge = [d for d in chay if luat_tat_ca.get(str(d.get("ma")), {}).get("judge")]
     diem: dict[str, giam_khao.DiemJudge] = {}
-    if can_judge and not args.khong_judge:
+    if args.dung_lai_diem:
+        diem = _doc_lai_diem(Path(args.dung_lai_diem))
+        print(f"Dùng lại {len(diem)} điểm Judge từ {args.dung_lai_diem} — không gọi model.")
+    elif can_judge and not args.khong_judge:
         print(f"Gọi {args.model} chấm {len(can_judge)} câu (effort={args.effort}):")
         diem = asyncio.run(_cham_bang_judge(can_judge, _tai_kho_van_ban(), args.model, args.effort))
 
+    db: dict[str, Any] = {}
+    if not args.khong_db:
+        print("Đối chiếu database…")
+        db = _chay_doi_chieu_db(chay, args.portal_url)
+        for ma, kq in sorted(db.items()):
+            print(
+                f"  {ma}: {'đạt' if kq.dat else ('KHÔNG ĐẠT' if kq.dat is False else 'chưa kết luận')} — {kq.giai_thich[:80]}"
+            )
+
+    recall = {} if args.khong_db else chi_so.recall_theo_ma({str(d["ma"]): d for d in chay})
+
     nguong = float(goi.get("cau_hinh", {}).get("coverage_threshold", 0.35))
-    dong = [dung_dong(d, luat_tat_ca.get(str(d.get("ma")), {}), diem.get(str(d.get("ma"))), nguong) for d in chay]
+    dong = [
+        dung_dong(
+            d,
+            luat_tat_ca.get(str(d.get("ma")), {}),
+            diem.get(str(d.get("ma"))),
+            nguong,
+            db.get(str(d.get("ma"))),
+            recall.get(str(d.get("ma"))),
+        )
+        for d in chay
+    ]
     bo_qua = [d for d in goi.get("ket_qua", []) if not d.get("da_chay", True)]
 
     goi_diem = {
         "nguon": duong.name,
+        "context_precision": _lay_precision(args, chay, luat_tat_ca),
         "model_judge": args.model if diem else "(không chấm bằng model)",
         "cau_hinh_lan_chay": goi.get("cau_hinh", {}),
         "canh_bao_bias": giam_khao.canh_bao_bias(
