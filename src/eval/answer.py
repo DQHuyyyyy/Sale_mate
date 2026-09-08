@@ -12,6 +12,11 @@ hướng ngược nhau:
 - `tra_loi_mot_phan` — nửa có nửa không. Sai cả hai phía đều bị bắt.
 - `ngoai_pham_vi` — ngoài hẳn Ocean Park.
 
+Chấm cả DÒNG NGUỒN, không chỉ câu chữ. Câu khai `nguon_phai_rong` (tuỳ chọn) đòi
+lượt đó không được trưng nguồn nào — sinh ra từ ca VOP9999: trợ lý từ chối hoàn
+hảo mà dưới đó vẫn liệt kê ba tài liệu không liên quan, và sale đọc xong tưởng
+chúng nói về căn vừa hỏi. Đo mỗi câu chữ thì lỗi ấy không bao giờ hiện ra số.
+
 Chấm bằng luật tất định, KHÔNG dùng LLM làm giám khảo: giám khảo model thêm một
 nguồn nhiễu nữa vào đúng thứ đang muốn đo, tốn tiền gấp đôi, và bản thân nó cũng
 cần được kiểm chứng. Câu hỏi ở đây — "từ chối hay trả lời, có bịa số không" —
@@ -28,7 +33,7 @@ from pydantic import BaseModel, Field
 
 from src.agents.contracts import LLMProvider
 from src.agents.graph import CONTEXT_NODES, build_nodes
-from src.agents.nguon import _khong_dau, la_loi_tu_choi
+from src.agents.nguon import _khong_dau, la_loi_tu_choi, loc_nguon_da_dung
 from src.agents.nodes.generate import build_messages
 from src.agents.prompts import load_prompt
 from src.agents.state import initial_state
@@ -60,6 +65,10 @@ class KetQuaCau(BaseModel):
     dat: bool = False
     ly_do_truot: str = ""
     da_tu_choi: bool = False
+    # Dòng "Nguồn" mà người dùng THẬT SỰ nhìn thấy — đã qua `loc_nguon_da_dung`,
+    # không phải danh sách thô của truy hồi. Rỗng mặc định nên file kết quả cũ
+    # vẫn đọc lại được.
+    nguon: list[str] = Field(default_factory=list)
 
 
 class TongKet(BaseModel):
@@ -124,12 +133,20 @@ class TongKet(BaseModel):
         return "\n".join(dong)
 
 
-def cham(case: dict[str, Any], cau_tra_loi: str) -> KetQuaCau:
+def cham(case: dict[str, Any], cau_tra_loi: str, nguon: list[str] | None = None) -> KetQuaCau:
     """Chấm một câu. Thuần, không I/O — đây là phần test được mà không tốn tiền.
 
     Dùng lại `la_loi_tu_choi` của `src/agents/nguon.py`, chính hàm ĐANG CHẠY THẬT
     lúc runtime để quyết định có hiện nguồn hay không. Viết bộ dò thứ hai ở đây
     là mở đường cho eval và sản phẩm hiểu "từ chối" theo hai kiểu khác nhau.
+
+    `nguon` là dòng "Nguồn" người dùng thật sự nhìn thấy. Chấm cả nó vì câu trả
+    lời đúng vẫn hỏng nếu phần nguồn sai: ca VOP9999 từ chối hoàn hảo mà dưới đó
+    liệt kê ba tài liệu không liên quan, và sale đọc xong tưởng chúng nói về căn
+    đó. Câu khai `nguon_phai_rong` là câu bắt đúng chuyện này.
+
+    Tuỳ chọn, mặc định `None` = không kiểm — bộ chấm vẫn gọi được từ test thuần
+    mà không phải dựng cả pipeline truy hồi.
     """
     kq = KetQuaCau(
         id=case["id"],
@@ -137,6 +154,7 @@ def cham(case: dict[str, Any], cau_tra_loi: str) -> KetQuaCau:
         cau_hoi=case["cau_hoi"],
         cau_tra_loi=cau_tra_loi,
         da_tu_choi=la_loi_tu_choi(cau_tra_loi),
+        nguon=list(nguon or []),
     )
     sach = _khong_dau(cau_tra_loi)
 
@@ -151,6 +169,8 @@ def cham(case: dict[str, Any], cau_tra_loi: str) -> KetQuaCau:
             kq.ly_do_truot = f"thiếu dữ kiện bắt buộc: {', '.join(thieu)}"
         elif cam:
             kq.ly_do_truot = f"nêu thứ không có trong tài liệu: {', '.join(cam)}"
+        elif case.get("nguon_phai_rong") and kq.nguon:
+            kq.ly_do_truot = f"trưng nguồn không liên quan: {', '.join(kq.nguon)}"
 
     kq.dat = not kq.ly_do_truot
     return kq
@@ -176,8 +196,11 @@ async def _tra_loi_mot_cau(
     nodes: dict[str, Any],
     llm: LLMProvider,
     lich_su: list[ChatMessage] | None = None,
-) -> str:
+) -> tuple[str, list[str]]:
     """Chạy đúng đường sản phẩm: router → tools → retrieve → prompt → model.
+
+    Trả về cả câu trả lời lẫn dòng "Nguồn" đã lọc, vì phần nguồn cũng là thứ
+    người dùng nhìn thấy và cũng sai được một cách độc lập với câu chữ.
 
     Cố ý KHÔNG ép `needs_retrieval`: để router tự quyết đúng như lúc chạy thật.
     Ép bật sẽ che mất một lớp hành vi có thật — câu ngoài phạm vi bị xếp nhãn
@@ -201,7 +224,14 @@ async def _tra_loi_mot_cau(
         temperature=settings.llm_temperature,
         max_tokens=settings.llm_max_tokens,
     )
-    return tra_loi.strip()
+    tra_loi = tra_loi.strip()
+
+    # Gộp hai đường sinh nguồn rồi lọc bằng CHÍNH hàm chạy thật lúc runtime —
+    # cùng lý do bộ chấm dùng lại `la_loi_tu_choi`. Dựng bộ lọc thứ hai ở đây là
+    # đo một sản phẩm khác với sản phẩm đang chạy.
+    citations = [*state.get("citations", []), *state.get("tool_citations", [])]
+    nguon = loc_nguon_da_dung(citations, tra_loi, co_du_lieu_tool=bool(state.get("tool_context")))
+    return tra_loi, [c.title for c in nguon]
 
 
 def duong_dan_ket_qua(nhan: str) -> Path:
@@ -271,11 +301,11 @@ async def run_answer_eval(prompt_version: str, *, nhan: str | None = None) -> To
 
     for case in bo_cau:
         try:
-            tra_loi = await _tra_loi_mot_cau(case["cau_hoi"], prompt, settings, nodes, llm, _doc_lich_su(case))
+            tra_loi, nguon = await _tra_loi_mot_cau(case["cau_hoi"], prompt, settings, nodes, llm, _doc_lich_su(case))
         except Exception as exc:  # noqa: BLE001 - một câu hỏng không được dừng cả lượt đo
             logger.warning("Câu %s lỗi: %s", case["id"], exc)
-            tra_loi = ""
-        kq = cham(case, tra_loi)
+            tra_loi, nguon = "", []
+        kq = cham(case, tra_loi, nguon)
         tong_ket.ghi_nhan(kq)
         logger.info("[%s] %s %s", "OK  " if kq.dat else "MISS", case["id"], kq.ly_do_truot)
 

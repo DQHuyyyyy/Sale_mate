@@ -108,19 +108,41 @@ function dungInDam(text, khoa) {
 
 const LA_MA_CAN = /^[A-Za-z]{2,4}\d{2,5}$/;
 
+const laMaCan = (nguon) => LA_MA_CAN.test(String(nguon.title ?? '').trim());
+
+/**
+ * Nguồn này là TÀI LIỆU hay là DỮ LIỆU tra cứu?
+ *
+ * Không chia theo `kind`. `kind` nói nguồn ĐẾN TỪ đâu (`db` = tool đã dùng thật,
+ * `doc` = truy hồi lấy về), còn người đọc dòng nguồn cần biết nó TRỎ VÀO đâu:
+ * một căn hộ cụ thể hay một văn bản chính sách. Hai câu hỏi khác nhau, và tool
+ * `tinh_khoan_vay` là ca chứng minh — nó trả `kind="db"` (tool thật sự đã dùng)
+ * nhưng nhãn là tên tài liệu chính sách và `doc_id` là `knowledge:…`, mở ra
+ * được trang toàn văn. Xếp nó vào dòng "dữ liệu căn hộ" là nói sai bản chất.
+ *
+ * Nên tiền tố `doc_id` mới là thứ quyết, đúng luật đã dùng để quyết bấm được
+ * hay không ở `MotNguon`.
+ */
+const laTaiLieu = (nguon) =>
+  nguon.kind === 'doc' || String(nguon.doc_id ?? '').startsWith('knowledge:');
+
 /**
  * Một nguồn — bấm được cho cả hai loại.
  *
  * Mã căn mở đúng căn đó; tên tài liệu mở `/tai-lieu/{doc_id}` xem toàn văn.
  * Trước đây tên tài liệu để chữ thường vì chưa có trang nào để mở, nên trích
  * nguồn chỉ là lời hứa: người đọc phải tin mà không kiểm được.
+ *
+ * Dấu ngoặc kép chỉ bọc TÊN TÀI LIỆU, không bọc mã căn: tên tài liệu dài và
+ * nhiều chữ nên cần ranh giới khi liệt kê nhiều cái cách nhau bằng dấu phẩy,
+ * còn "VOP841" thì tự nó đã là một khối.
  */
 function MotNguon({ nguon, onChonCan }) {
-  const ten = nguon.title;
-  if (LA_MA_CAN.test(ten) && onChonCan) {
+  const ten = String(nguon.title ?? '').trim();
+  if (laMaCan(nguon) && onChonCan) {
     return (
       <button type="button" className="ctl-trich-nut" onClick={() => onChonCan(ten)}>
-        &quot;{ten}&quot;
+        {ten}
       </button>
     );
   }
@@ -136,7 +158,35 @@ function MotNguon({ nguon, onChonCan }) {
       </Link>
     );
   }
-  return `"${ten}"`;
+  return laMaCan(nguon) ? ten : `"${ten}"`;
+}
+
+/**
+ * Giờ đọc dữ liệu, dạng `08:32 08/09/2026`.
+ *
+ * Nói "đọc lúc" chứ KHÔNG nói "cập nhật lúc": mốc này là lúc trợ lý truy vấn
+ * Postgres, không phải lúc ai đó sửa giá. Hai thứ khác nhau, và hệ thống chỉ
+ * biết cái thứ nhất — viết thành "cập nhật" là khẳng định một điều không kiểm
+ * được, đúng thứ nguyên tắc "không bịa số" cấm.
+ */
+function dinhDangLuc(luc) {
+  const thoi_diem = new Date(luc);
+  if (Number.isNaN(thoi_diem.getTime())) return '';
+  const hai = (so) => String(so).padStart(2, '0');
+  return (
+    `${hai(thoi_diem.getHours())}:${hai(thoi_diem.getMinutes())} ` +
+    `${hai(thoi_diem.getDate())}/${hai(thoi_diem.getMonth() + 1)}/${thoi_diem.getFullYear()}`
+  );
+}
+
+/** Liệt kê các nguồn, ngăn bằng dấu phẩy. */
+function LietKe({ nguon, onChonCan, tuChiSo = 0 }) {
+  return nguon.map((n, i) => (
+    <span key={n.doc_id ? `${n.doc_id}-${n.title}` : n.title}>
+      {i + tuChiSo > 0 && ', '}
+      <MotNguon nguon={n} onChonCan={onChonCan} />
+    </span>
+  ));
 }
 
 /** Dựng một đoạn chữ. Dấu trích nguồn đã được `gomNguon` gỡ từ trước. */
@@ -144,20 +194,57 @@ function dungChu(text, khoa) {
   return dungInDam(String(text), khoa);
 }
 
-/** Dòng nguồn duy nhất ở cuối câu trả lời. */
-function DongNguon({ nguon, onChonCan }) {
+/**
+ * Khối nguồn ở cuối câu trả lời — TÁCH THEO LOẠI, không gộp một dòng.
+ *
+ * Nhãn cũ là "Nguồn:" rồi liệt kê thẳng `"VOP841", "VOP619"`. Đợt test
+ * 08/09/2026 cho thấy sale không hiểu dãy mã trần đó là gì — có người tưởng
+ * là lỗi hiển thị hoặc log debug sót lại. "Dữ liệu tham chiếu" nói rõ đây là
+ * thứ trợ lý đã tra để trả lời, không phải một phần của câu trả lời.
+ *
+ * Tách hai dòng vì hai loại nguồn trả lời hai câu hỏi khác nhau, và gộp chúng
+ * lại từng gây hiểu nhầm thật: lượt hỏi căn VOP9999 liệt kê chung một dòng cả
+ * "Chính sách hỗ trợ lãi suất chung" lẫn "Tổng quan Ocean Park 1/3", và người
+ * đọc tưởng ba tài liệu đó nói về căn VOP9999.
+ *
+ * Mốc thời gian chỉ gắn cho dòng DỮ LIỆU. Giá và tình trạng căn đọc thẳng từ
+ * Postgres lúc hỏi nên mốc đó có nghĩa; tài liệu thì là bản chụp trong vector
+ * store và hệ thống không biết nó được nạp lúc nào — gắn một con giờ vào đấy là
+ * hứa một điều không kiểm được.
+ */
+function DongNguon({ nguon, onChonCan, luc }) {
   if (!nguon.length) return null;
 
+  const taiLieu = nguon.filter(laTaiLieu);
+  const duLieu = nguon.filter((n) => !laTaiLieu(n));
+  // Mã căn đứng trước nhãn tổng hợp ("Dữ liệu tồn kho") để chữ "căn" nói đúng
+  // về phần ngay sau nó.
+  const maCan = duLieu.filter(laMaCan);
+  const tongHop = duLieu.filter((n) => !laMaCan(n));
+
   return (
-    <p className="ctl-nguon">
-      <span className="ctl-nguon-nhan">Nguồn:</span>{' '}
-      {nguon.map((n, i) => (
-        <span key={n.doc_id ? `${n.doc_id}-${n.title}` : n.title}>
-          {i > 0 && ', '}
-          <MotNguon nguon={n} onChonCan={onChonCan} />
-        </span>
-      ))}
-    </p>
+    <div className="ctl-nguon">
+      {duLieu.length > 0 && (
+        <p className="ctl-nguon-dong">
+          <span className="ctl-nguon-nhan">
+            <span aria-hidden="true">📄</span> Dữ liệu tham chiếu:
+          </span>{' '}
+          {maCan.length > 0 && 'căn '}
+          <LietKe nguon={maCan} onChonCan={onChonCan} />
+          <LietKe nguon={tongHop} onChonCan={onChonCan} tuChiSo={maCan.length} />
+          {luc && <span className="ctl-nguon-luc"> · đọc lúc {dinhDangLuc(luc)}</span>}
+        </p>
+      )}
+
+      {taiLieu.length > 0 && (
+        <p className="ctl-nguon-dong">
+          <span className="ctl-nguon-nhan">
+            <span aria-hidden="true">📄</span> Theo tài liệu:
+          </span>{' '}
+          <LietKe nguon={taiLieu} onChonCan={onChonCan} />
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -213,8 +300,11 @@ function DungBang({ dong, khoa }) {
  *   nguồn (hỏi ngược, từ chối, chưa khẳng định gì). Chỉ `false` mới chặn —
  *   `undefined` nghĩa là chưa có event `done`, giữ nguyên hành vi cũ để một
  *   lượt stream đứt giữa chừng không mất sạch nguồn.
+ * @param nguonLuc Mốc thời gian (ms) lúc widget nhận được event `sources`, tức
+ *   lúc trợ lý vừa đọc xong dữ liệu. Không có thì dòng dữ liệu không hiện giờ —
+ *   thà thiếu còn hơn hiện một mốc không biết từ đâu ra.
  */
-export default function CauTraLoi({ text, onChonCan, nguonThat, choTrichNguon }) {
+export default function CauTraLoi({ text, onChonCan, nguonThat, choTrichNguon, nguonLuc }) {
   // `gomNguon` vẫn chạy để GỠ dấu trích khỏi thân bài — "[VOP758]" giữa câu là
   // cú pháp nội bộ, người đọc không cần thấy. Nhưng TÊN nó rút ra thì bỏ đi.
   const { than } = gomNguon(text);
@@ -278,7 +368,7 @@ export default function CauTraLoi({ text, onChonCan, nguonThat, choTrichNguon })
   return (
     <>
       {phanTu}
-      <DongNguon nguon={nguon} onChonCan={onChonCan} />
+      <DongNguon nguon={nguon} onChonCan={onChonCan} luc={nguonLuc} />
     </>
   );
 }

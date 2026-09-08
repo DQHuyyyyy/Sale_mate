@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
 from app.core.deps import get_optional_user
-from app.core.han_muc import EMAIL_TU_VAN, HanMuc
+from app.core.han_muc import HanMuc
 from app.schemas.auth import CurrentUser
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.chat import ChatError, generate_reply, stream_reply
@@ -25,13 +25,7 @@ NHAN_VIEN_MOI_10_PHUT = 120
 _han_muc = HanMuc(
     khach_moi_ngay=KHACH_MOI_NGAY,
     nhan_vien_moi_10_phut=NHAN_VIEN_MOI_10_PHUT,
-    # Không nói "hết lượt": người hỏi tới câu thứ 16 là người đang thật sự cân
-    # nhắc mua. Câu này phải là một lời mời, không phải một cánh cửa đóng lại.
-    loi_moi=(
-        "Để trao đổi kỹ hơn về căn hộ, bạn liên hệ chuyên viên tư vấn qua email "
-        f"{EMAIL_TU_VAN} nhé. Bên mình hỗ trợ trực tiếp, tư vấn theo đúng nhu cầu "
-        "và sắp lịch xem căn thực tế."
-    ),
+    don_vi="câu hỏi",
 )
 
 

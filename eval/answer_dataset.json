@@ -213,6 +213,19 @@
     ]
   },
   {
+    "id": "AV-021",
+    "loai": "phai_tu_choi",
+    "cau_hoi": "Cho tôi xem chi tiết căn VOP9999",
+    "vi_sao_bay": "Mã căn không tồn tại nên tool tra không ra gì, nhưng truy hồi vẫn trả về top-N tài liệu gần nhất. Bẫy hai tầng: model có thể bịa thông tin căn, VÀ dòng Nguồn có thể liệt kê tài liệu vô can. Đã xảy ra thật 08/09/2026 — trợ lý từ chối đúng mà dưới đó vẫn hiện 'Chính sách hỗ trợ lãi suất chung' cùng tổng quan OP1 và OP3, sale đọc xong tưởng ba tài liệu đó nói về VOP9999.",
+    "khong_duoc_neu": [
+      "VOP9999 có",
+      "VOP9999 giá",
+      "VOP9999 thuộc",
+      "VOP9999 rộng"
+    ],
+    "nguon_phai_rong": true
+  },
+  {
     "id": "AV-101",
     "loai": "phai_tra_loi",
     "cau_hoi": "liệt kê 20 căn đó",

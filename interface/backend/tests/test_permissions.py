@@ -13,7 +13,7 @@ os.environ.setdefault("DATABASE_URL", "postgresql://user:pass@localhost:5432/tes
 
 import pytest  # noqa: E402
 from app.core import han_muc as han_muc_mod  # noqa: E402
-from app.core.deps import get_current_user  # noqa: E402
+from app.core.deps import get_current_user, get_optional_user  # noqa: E402
 from app.main import app  # noqa: E402
 from app.routers import apartments as apartments_router  # noqa: E402
 from app.routers import chat as chat_router  # noqa: E402
@@ -207,26 +207,59 @@ class TestHanMucChat:
         assert response.status_code == 429
         assert "Retry-After" in response.headers
 
-    def test_loi_moi_lien_he_thay_cho_thong_bao_het_luot(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Chạm trần phải MỜI LIÊN HỆ, tuyệt đối không báo "hết lượt".
-
-        Quyết định sản phẩm: người hỏi tới câu thứ 16 là lead nóng nhất trong
-        ngày. Báo cho họ một bức tường là mất khách đúng lúc họ quan tâm nhất.
-        Test này là thứ giữ cho câu đó không bị đổi ngược về thông báo kỹ thuật.
-        """
-        client = self._chuan_bi(monkeypatch, bat_han_muc=True)
-
+    @staticmethod
+    def _cau_cham_tran(client: TestClient) -> str:
         body = {"message": "chào", "history": []}
         for _ in range(chat_router.KHACH_MOI_NGAY):
             client.post("/api/chat", json=body)
+        return client.post("/api/chat", json=body).json()["detail"]
 
+    def test_noi_thang_la_het_luot_mien_phi(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Câu chạm trần phải nói rõ CHUYỆN GÌ vừa xảy ra và VIỆC GÌ cần làm.
+
+        Bản trước cố ý nói vòng — chỉ mời liên hệ chuyên viên tư vấn, không nhắc
+        quota — với lý do không muốn dựng một bức tường trước mặt lead nóng nhất
+        trong ngày. Đợt test 08/09/2026 đo được cái giá của cách nói đó: sale đọc
+        lời mời như một câu trả lời nghiệp vụ và tưởng trợ lý KHÔNG BIẾT câu trả
+        lời, rồi mất niềm tin vào chất lượng bot.
+
+        Ba vế dưới đây là thứ giữ cho câu không trôi ngược về một lời mời mơ hồ.
+        """
+        loi = self._cau_cham_tran(self._chuan_bi(monkeypatch, bat_han_muc=True))
+
+        assert str(chat_router.KHACH_MOI_NGAY) in loi
+        assert "miễn phí" in loi.lower()
+        assert "đăng nhập" in loi.lower()
+
+    def test_khong_lo_dia_chi_lien_he_ca_nhan(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Không địa chỉ email nào được lọt ra giao diện production.
+
+        Hằng `EMAIL_TU_VAN` cũ giữ email CÁ NHÂN của một thành viên và nó hiện
+        thẳng cho mọi khách vãng lai chạm trần. Dò dấu `@` chứ không dò đúng
+        chuỗi cũ: mục tiêu là chặn cả lần sau ai đó dán một địa chỉ khác vào.
+        """
+        loi = self._cau_cham_tran(self._chuan_bi(monkeypatch, bat_han_muc=True))
+
+        assert "@" not in loi
+        assert not hasattr(han_muc_mod, "EMAIL_TU_VAN")
+
+    def test_nhan_vien_khong_bi_bao_di_dang_nhap(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Người ĐÃ đăng nhập chạm trần thì bảo họ đăng nhập là chỉ sai đường.
+
+        Trần của nhân viên là phanh chống vòng lặp retry, không phải trần chi
+        phí — câu của họ phải nói đúng chuyện đó.
+        """
+        client = self._chuan_bi(monkeypatch, bat_han_muc=True)
+        app.dependency_overrides[get_optional_user] = lambda: SALE
+        chat_router._han_muc.nhan_vien._hits.clear()
+
+        body = {"message": "chào", "history": []}
+        for _ in range(chat_router.NHAN_VIEN_MOI_10_PHUT):
+            client.post("/api/chat", json=body)
         loi = client.post("/api/chat", json=body).json()["detail"]
 
-        assert han_muc_mod.EMAIL_TU_VAN in loi
-        # Cả cách nói thẳng lẫn cách nói vòng đều bị cấm: "thử lại sau N giây"
-        # chính là "hết lượt" viết khác đi.
-        for cam in ("hết lượt", "giới hạn", "quá nhiều", "thử lại sau", "hạn mức"):
-            assert cam not in loi.lower(), cam
+        assert "đăng nhập" not in loi.lower()
+        assert "@" not in loi
 
     def test_tat_han_muc_thi_goi_bao_nhieu_cung_duoc(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Cờ tắt phải thật sự bỏ qua bộ đếm, không chỉ nới rộng nó."""

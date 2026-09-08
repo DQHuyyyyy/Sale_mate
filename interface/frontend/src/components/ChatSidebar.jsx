@@ -1,8 +1,10 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { danhThucTroLy, getApartment, modifyApartmentImage, streamChatMessage } from '../api';
+import { useAuth } from '../context/AuthContext';
 import AnhPhongTo from './AnhPhongTo';
 import CauTraLoi from './CauTraLoi';
+import LoginModal from './LoginModal';
 import { CloseIcon, ExpandIcon, PlusIcon, RobotMascot, SendIcon, WandIcon } from './Icons';
 
 // Gợi ý mở đầu. NHÃN và CÂU HỎI tách nhau có chủ đích: nút đọc gọn là
@@ -168,28 +170,23 @@ function moTaBuoc(event, daTraTonKho = false) {
   return null;
 }
 
-// Địa chỉ email nằm sẵn trong câu backend trả về — rút ra để dựng nút bấm được.
-// CỐ Ý không khai lại email ở đây: khai hai nơi thì sửa một nơi là nút mở ra một
-// địa chỉ khác với địa chỉ đang hiện trên màn hình. Không khớp thì vẫn không sao,
-// email vẫn đọc được trong thân bài, chỉ mất cái nút.
-const EMAIL_TRONG_CAU = /[\w.+-]+@[\w-]+\.[\w.-]+/;
-
 /**
  * Dựng bong bóng cho một lỗi gọi API.
  *
- * 429 KHÔNG phải lỗi dưới góc nhìn người dùng: backend trả về lời mời liên hệ
- * chuyên viên tư vấn, cố ý không nói "hết lượt". Tô đỏ nó là dịch ngược lời mời
- * đó thành một sự cố kỹ thuật — đúng thứ quyết định sản phẩm muốn tránh.
+ * 429 không phải lỗi kỹ thuật mà là THÔNG BÁO HỆ THỐNG: đã hết lượt hỏi miễn
+ * phí của tài khoản khách. Nó được đánh dấu riêng (`hanMuc`) để dựng thành một
+ * khối trông khác hẳn bong bóng trả lời nghiệp vụ.
+ *
+ * Vì sao phải khác hẳn: đợt test 08/09/2026 cho thấy khi câu chạm trần trông
+ * giống một câu trả lời bình thường, sale đọc nó như "trợ lý không biết" chứ
+ * không phải "đã hết lượt" — rồi mất niềm tin vào chất lượng bot. Chuyện đang
+ * xảy ra và việc cần làm tiếp phải nhìn ra được bằng mắt, trước khi đọc chữ.
+ *
+ * Cũng không tô đỏ như `err`: người dùng không làm gì sai.
  */
-function khungLoi(error, maCanQuanTam) {
+function khungLoi(error) {
   if (error?.status === 429) {
-    return {
-      content: error.message,
-      lienHe: true,
-      error: false,
-      emailTuVan: error.message?.match(EMAIL_TRONG_CAU)?.[0] ?? null,
-      maCanQuanTam,
-    };
+    return { content: error.message, hanMuc: true, error: false };
   }
   return { content: error.message, error: true };
 }
@@ -235,6 +232,15 @@ export default function ChatSidebar({ open, onToggle }) {
 
   // Ảnh đang mở to. null = không mở.
   const [anhPhongTo, setAnhPhongTo] = useState(null);
+
+  // Đăng nhập mở ngay trong widget, không đá người dùng sang trang khác — họ
+  // đang giữa một cuộc hội thoại và quay lại là mất hết lịch sử trong state.
+  //
+  // `user` quyết định khối chạm trần có nút "Đăng nhập ngay" hay không: câu của
+  // backend cho người ĐÃ đăng nhập nói về việc gửi quá nhanh, dựng nút đăng
+  // nhập dưới nó là chỉ sai đường.
+  const { user } = useAuth();
+  const [moDangNhap, setMoDangNhap] = useState(false);
 
   // Lượt sửa tiếp theo lấy ảnh nào làm gốc: 'goc' = ảnh thật trong gallery,
   // 'ai' = ảnh AI vừa sinh. Chỉ là LỰA CHỌN MẶC ĐỊNH — người dùng đổi được.
@@ -425,8 +431,13 @@ export default function ChatSidebar({ open, onToggle }) {
             // Giữ NGUYÊN đối tượng citation, không rút lấy mỗi `title`: cần
             // `doc_id` để dựng đường dẫn tới trang tài liệu, và `kind` để biết
             // nhãn là mã căn hay tên tài liệu.
+            // Ghi luôn MỐC nhận được. Giá và tình trạng căn đọc thẳng từ
+            // Postgres ngay trong lượt này, nên đây là lúc dữ liệu được đọc —
+            // sale cần biết con số trước mặt mới cỡ nào. Chấm mốc ở FE chứ
+            // không xin backend vì `Citation` là hợp đồng đóng băng, không có
+            // trường thời gian, và chênh lệch giữa hai đầu chỉ là mili giây.
             const nguon = (event.citations ?? []).filter((c) => c?.title);
-            if (nguon.length) capNhat({ nguonThat: nguon });
+            if (nguon.length) capNhat({ nguonThat: nguon, nguonLuc: Date.now() });
           } else if (event.type === 'done') {
             // Trợ lý hỏi ngược thì kèm sẵn vài phương án bấm được. Gắn vào
             // đúng bong bóng vừa trả lời, không để state riêng — người dùng
@@ -448,7 +459,7 @@ export default function ChatSidebar({ open, onToggle }) {
         sessionRef.current,
       );
     } catch (error) {
-      capNhat(khungLoi(error, maCanDangXem));
+      capNhat(khungLoi(error));
     } finally {
       setSending(false);
       setBuoc('');
@@ -517,7 +528,7 @@ export default function ChatSidebar({ open, onToggle }) {
       );
     } catch (error) {
       setMessages((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, ...khungLoi(error, maCanDangXem) } : item)),
+        prev.map((item) => (item.id === id ? { ...item, ...khungLoi(error) } : item)),
       );
     } finally {
       setSending(false);
@@ -619,68 +630,79 @@ export default function ChatSidebar({ open, onToggle }) {
             // con TRỰC TIẾP của flex container. Bọc thêm một lớp div là bong
             // bóng của người dùng tụt về bên trái.
             <Fragment key={item.id ?? index}>
-              <div
-                className={item.role === 'user' ? 'cmsg u' : item.error ? 'cmsg a err' : 'cmsg a'}
-              >
-                {/* Tin của người dùng giữ nguyên văn — họ gõ gì hiện đúng thế.
-                    Chỉ câu trả lời của trợ lý mới dựng markdown.
+              {/* Chạm trần hạn mức KHÔNG dựng thành bong bóng trả lời. Nó là
+                  thông báo hệ thống: nền vàng, viền trái, biểu tượng cảnh báo —
+                  khác hẳn cả bong bóng trắng của trợ lý lẫn bong bóng đỏ của
+                  lỗi. Sale phân biệt được bằng mắt trước khi đọc chữ, đúng thứ
+                  đợt test 08/09/2026 chỉ ra là đang thiếu.
 
-                    `onChonCan` biến trích nguồn dạng mã căn thành nút mở đúng
-                    căn đó bên trái. Điều hướng để ở đây, không đưa vào
-                    CauTraLoi: component đó chỉ dựng chữ, không nên biết tới
-                    router. */}
-                {item.role === 'user' ? (
-                  item.content
-                ) : (
-                  <CauTraLoi
-                    text={item.content}
-                    nguonThat={item.nguonThat}
-                    choTrichNguon={item.choTrichNguon}
-                    onChonCan={(ma) => navigate(`/apartments/${encodeURIComponent(ma)}`)}
-                  />
-                )}
-
-                {/* Ảnh do AI dựng. Nhãn nằm NGAY TRÊN ảnh chứ không phải cuối
-                    tin nhắn: người dùng chụp màn hình gửi cho khách thì nhãn
-                    phải đi theo ảnh, nếu không đó thành ảnh thật của căn. */}
-                {item.anhAI && (
-                  <figure className="cw-anh-ai">
-                    {/* <button> chứ không phải onClick trên <img>: bàn phím và
-                        trình đọc màn hình dùng được, và con trỏ đổi thành tay
-                        nên người dùng biết là bấm được. */}
+                  Nút "Đăng nhập ngay" là hành động ĐÚNG duy nhất còn lại, và
+                  chỉ hiện cho người chưa đăng nhập — xem `moDangNhap`. */}
+              {item.hanMuc ? (
+                <div className="cw-han-muc" role="status">
+                  <p className="cw-han-muc-tin">
+                    <span className="cw-han-muc-bieu-tuong" aria-hidden="true">
+                      ⚠️
+                    </span>
+                    {item.content}
+                  </p>
+                  {!user && (
                     <button
                       type="button"
-                      className="cw-anh-mo"
-                      aria-label="Phóng to ảnh"
-                      onClick={() => setAnhPhongTo({ src: item.anhAI, alt: item.content })}
+                      className="cw-han-muc-nut"
+                      onClick={() => setMoDangNhap(true)}
                     >
-                      <img src={item.anhAI} alt={item.content} />
-                      <span className="cw-anh-zoom" aria-hidden="true">
-                        <ExpandIcon />
-                      </span>
+                      Đăng nhập ngay
                     </button>
-                    <figcaption>Ảnh minh hoạ do AI tạo — không phải ảnh thật của căn</figcaption>
-                  </figure>
-                )}
+                  )}
+                </div>
+              ) : (
+                <div
+                  className={item.role === 'user' ? 'cmsg u' : item.error ? 'cmsg a err' : 'cmsg a'}
+                >
+                  {/* Tin của người dùng giữ nguyên văn — họ gõ gì hiện đúng thế.
+                      Chỉ câu trả lời của trợ lý mới dựng markdown.
 
-                {/* Lời mời liên hệ chuyên viên tư vấn. Nút `mailto` chứ không
-                    chỉ để chữ: trên điện thoại, bắt khách bôi đen rồi chép một
-                    địa chỉ email là mất phần lớn số người định liên hệ thật.
-                    Kèm sẵn tiêu đề và mã căn đang xem để chuyên viên biết ngay
-                    khách quan tâm căn nào. */}
-                {item.lienHe && item.emailTuVan && (
-                  <a
-                    className="cw-lien-he"
-                    href={`mailto:${item.emailTuVan}?subject=${encodeURIComponent(
-                      item.maCanQuanTam
-                        ? `Quan tâm căn ${item.maCanQuanTam} — Vinhomes Ocean Park`
-                        : 'Quan tâm căn hộ Vinhomes Ocean Park',
-                    )}`}
-                  >
-                    Gửi email cho chuyên viên tư vấn
-                  </a>
-                )}
-              </div>
+                      `onChonCan` biến trích nguồn dạng mã căn thành nút mở đúng
+                      căn đó bên trái. Điều hướng để ở đây, không đưa vào
+                      CauTraLoi: component đó chỉ dựng chữ, không nên biết tới
+                      router. */}
+                  {item.role === 'user' ? (
+                    item.content
+                  ) : (
+                    <CauTraLoi
+                      text={item.content}
+                      nguonThat={item.nguonThat}
+                      nguonLuc={item.nguonLuc}
+                      choTrichNguon={item.choTrichNguon}
+                      onChonCan={(ma) => navigate(`/apartments/${encodeURIComponent(ma)}`)}
+                    />
+                  )}
+
+                  {/* Ảnh do AI dựng. Nhãn nằm NGAY TRÊN ảnh chứ không phải cuối
+                      tin nhắn: người dùng chụp màn hình gửi cho khách thì nhãn
+                      phải đi theo ảnh, nếu không đó thành ảnh thật của căn. */}
+                  {item.anhAI && (
+                    <figure className="cw-anh-ai">
+                      {/* <button> chứ không phải onClick trên <img>: bàn phím và
+                          trình đọc màn hình dùng được, và con trỏ đổi thành tay
+                          nên người dùng biết là bấm được. */}
+                      <button
+                        type="button"
+                        className="cw-anh-mo"
+                        aria-label="Phóng to ảnh"
+                        onClick={() => setAnhPhongTo({ src: item.anhAI, alt: item.content })}
+                      >
+                        <img src={item.anhAI} alt={item.content} />
+                        <span className="cw-anh-zoom" aria-hidden="true">
+                          <ExpandIcon />
+                        </span>
+                      </button>
+                      <figcaption>Ảnh minh hoạ do AI tạo — không phải ảnh thật của căn</figcaption>
+                    </figure>
+                  )}
+                </div>
+              )}
 
               {/* Phương án chọn sẵn: vừa là đáp án cho câu hỏi ngược, vừa là
                   gợi ý hỏi tiếp sau một câu trả lời. Dùng lại đúng lớp `qa`
@@ -823,6 +845,11 @@ export default function ChatSidebar({ open, onToggle }) {
           onDong={() => setAnhPhongTo(null)}
         />
       )}
+
+      {/* Đăng nhập ngay trong widget. Đăng nhập xong `user` đổi, khối chạm trần
+          tự bỏ nút đi, và lượt hỏi tiếp theo đã đi kèm token nên tính vào hạn
+          mức nhân viên — người dùng không phải làm thêm bước nào. */}
+      {moDangNhap && <LoginModal onClose={() => setMoDangNhap(false)} />}
     </aside>
   );
 }

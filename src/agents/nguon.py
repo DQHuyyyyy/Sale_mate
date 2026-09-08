@@ -19,7 +19,8 @@ Luật ở đây cố ý ĐƠN GIẢN và kiểm chứng được, không đoán
   câu trả lời. Model nhắc căn nào thì căn đó là nguồn.
 - Nguồn tài liệu (`kind="doc"`): lượt có dữ liệu tool thì các con số đến từ tool,
   tài liệu chỉ giữ khi model trích tên nó tường minh. Lượt không có tool thì câu
-  trả lời chắc chắn dựng từ tài liệu, giữ vài cái điểm cao nhất.
+  trả lời chắc chắn dựng từ tài liệu, giữ vài cái điểm cao nhất — TRỪ lượt từ
+  chối, vốn không dựng từ tài liệu nào nên cũng đòi model gọi tên.
 """
 
 from __future__ import annotations
@@ -258,7 +259,8 @@ def loc_nguon_da_dung(
     # `phai_tu_choi`, đổi định nghĩa là đổi luôn số đo lịch sử. Ràng thêm điều
     # kiện tại chỗ này thì eval giữ nguyên nghĩa, còn dòng "Nguồn" phủ đúng thứ
     # câu trả lời khẳng định.
-    if la_loi_tu_choi(cau_tra_loi) and not _co_khang_dinh_ve_can(cau_tra_loi):
+    la_tu_choi = la_loi_tu_choi(cau_tra_loi)
+    if la_tu_choi and not _co_khang_dinh_ve_can(cau_tra_loi):
         return []
 
     if not cau_tra_loi.strip():
@@ -277,7 +279,30 @@ def loc_nguon_da_dung(
             # với câu chữ, nên luật "phải xuất hiện trong câu trả lời" không áp
             # dụng được. Bỏ vế này thì câu "còn 30 căn đang bán" mất sạch nguồn.
             giu.append(nguon)
-        elif nguon.kind == "db" or co_du_lieu_tool:
+        elif nguon.kind == "db" or co_du_lieu_tool or la_tu_choi:
+            # `la_tu_choi` siết luật tài liệu lên mức chặt nhất: phải được model
+            # GỌI TÊN mới giữ.
+            #
+            # Ca thật, đo trên production: hỏi "cho tôi xem chi tiết căn VOP9999"
+            # (mã không có trong kho). Tool tra không ra gì nên `co_du_lieu_tool`
+            # là False, trợ lý từ chối đúng — nhưng truy hồi vẫn trả về top-N
+            # tài liệu gần nhất, và nhánh "lượt không có tool thì giữ 3 cái điểm
+            # cao nhất" bên dưới dựng lên "Chính sách hỗ trợ lãi suất chung",
+            # "Tổng quan Ocean Park 1", "Tổng quan Ocean Park 3" — ba tài liệu
+            # không liên quan gì tới một mã căn cụ thể.
+            #
+            # Nhánh ấy có lý cho câu trả lời BÌNH THƯỜNG: không tool thì câu chữ
+            # chắc chắn dựng từ tài liệu, nên giữ vài cái đầu là đúng. Nhưng một
+            # lời TỪ CHỐI thì theo định nghĩa không dựng từ tài liệu nào cả —
+            # giữ lại "vài cái điểm cao nhất" ở đó là trưng bằng chứng cho một
+            # câu không khẳng định gì từ chúng.
+            #
+            # Vì sao không chữa bằng ngưỡng similarity ở tầng truy hồi:
+            # `KeywordOverlapReranker` cho điểm rất phẳng — đo thật là 0,468–0,888
+            # kể cả với đoạn không liên quan (xem CLAUDE.md, mục cổng leo thang).
+            # Ngưỡng nào cắt được ba tài liệu này cũng cắt luôn tài liệu đúng ở
+            # những lượt khác. Luật "model có gọi tên không" thì tất định và
+            # kiểm được bằng mắt.
             if _co_trong(nhan, cau_tra_loi):
                 giu.append(nguon)
         elif tai_lieu_con_lai > 0:

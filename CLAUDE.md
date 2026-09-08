@@ -102,6 +102,31 @@ hoặc phải nới tới mức vô nghĩa. Công bằng giữa người dùng v
 câu hỏi trả 401 và người dùng nhận "Câu hỏi gửi lên không hợp lệ" — đúng mã lỗi,
 sai hoàn toàn về nguyên nhân, và không ai nghĩ tới việc đi so hai biến môi trường.
 
+### Chạm trần hạn mức là THÔNG BÁO HỆ THỐNG, không phải câu trả lời
+
+[`han_muc.py`](interface/backend/app/core/han_muc.py) gác `/api/chat` (15 câu/ngày
+cho khách) và `/api/images/modify` (10 lượt/ngày). Ba luật:
+
+- **Nói thẳng là hết lượt miễn phí, kèm con số.** Bản trước cố ý nói vòng — chỉ
+  mời liên hệ chuyên viên tư vấn, không nhắc quota — để không dựng bức tường
+  trước mặt lead nóng nhất trong ngày. Đợt test 08/09/2026 đo được cái giá: sale
+  đọc lời mời như một câu trả lời nghiệp vụ, tưởng trợ lý **không biết** câu trả
+  lời, rồi mất niềm tin vào chất lượng bot. Lời mời còn dẫn tới hành động sai
+  (gửi email) trong khi việc đúng là đăng nhập.
+- **Khách và nhân viên nhận hai câu khác nhau.** Bảo người đã đăng nhập đi đăng
+  nhập là chỉ sai đường; trần của nhân viên vốn là phanh chống vòng lặp retry,
+  không phải trần chi phí.
+- ⚠️ **Không địa chỉ liên hệ cá nhân nào trong bất kỳ luồng nào.** Hằng
+  `EMAIL_TU_VAN` cũ giữ email cá nhân của một thành viên và nó hiện thẳng ra
+  production cho mọi khách vãng lai chạm trần. Cần kênh hỗ trợ thì phải là địa
+  chỉ chính thức của đội, đặt qua biến môi trường.
+
+FE dựng nó thành khối riêng (`.cw-han-muc` — nền vàng, viền trái, nút "Đăng nhập
+ngay" mở `LoginModal` ngay trong widget), khác hẳn cả bong bóng trắng của trợ lý
+lẫn bong bóng đỏ của lỗi. Người dùng không làm gì sai nên **không tô đỏ**; và
+phân biệt được bằng mắt trước khi đọc chữ mới là thứ chữa được lỗi hiểu nhầm ở
+trên.
+
 **Quy tắc bắt buộc:**
 
 - Module chỉ import `contracts.py` và `models/` của module khác.
@@ -185,6 +210,12 @@ cột phanh: nới prompt mà làm nó giảm là đổi lỗi nhẹ lấy lỗi
 Chấm bằng luật tất định, không dùng LLM làm giám khảo. Bộ chấm dùng lại
 `la_loi_tu_choi()` của [`src/agents/nguon.py`](src/agents/nguon.py) — chính hàm
 đang chạy thật lúc runtime — nên eval và sản phẩm hiểu "từ chối" giống hệt nhau.
+
+**Chấm cả dòng "Nguồn", không chỉ câu chữ.** Câu khai `nguon_phai_rong: true`
+(tuỳ chọn) đòi lượt đó không được trưng nguồn nào; bộ chấm lọc bằng chính
+`loc_nguon_da_dung()` đang chạy thật. Sinh ra từ ca AV-021 (`căn VOP9999`): trợ
+lý từ chối hoàn hảo, mọi cột đều xanh, mà dưới đó vẫn liệt kê ba tài liệu vô can.
+Đo mỗi câu chữ thì lỗi ấy không bao giờ hiện ra số.
 
 Thêm nguồn mới: viết hàm `ingest_<tên>()` trong `src/data/ingest.py` rồi thêm
 một dòng vào `SOURCES` cuối file đó. **Không tạo script rời** — bài học cũ: bốn
@@ -832,6 +863,26 @@ Trần `TOI_DA_NGUON_TAI_LIEU = 3` cũng đếm **tài liệu**, không đếm �
 | `kind="db"` (mã căn) | mã căn xuất hiện trong câu trả lời |
 | `kind="doc"`, lượt CÓ dữ liệu tool | model trích tên tài liệu tường minh — nhận cả **tên rút gọn** trong dấu `[…]`, tối thiểu 15 ký tự |
 | `kind="doc"`, lượt KHÔNG có tool | giữ 3 cái điểm cao nhất |
+| `kind="doc"`, lượt **TỪ CHỐI** | như lượt có tool: phải được gọi tên |
+
+**Lượt từ chối đòi tài liệu phải được GỌI TÊN.** Hàng cuối bảng trên là ngoại lệ
+của hàng liền trước, và nó sinh ra từ một ca đo được: hỏi "cho tôi xem chi tiết
+căn VOP9999" (mã không có trong kho). Tool tra không ra gì nên `co_du_lieu_tool`
+là `False`, trợ lý từ chối **đúng** — nhưng truy hồi vẫn trả top-N tài liệu gần
+nhất, và nhánh "không tool thì giữ 3 cái điểm cao nhất" dựng lên "Chính sách hỗ
+trợ lãi suất chung", "Tổng quan Ocean Park 1", "Tổng quan Ocean Park 3". Sale đọc
+xong tưởng ba tài liệu đó nói về VOP9999.
+
+Nhánh ấy vẫn đúng cho câu trả lời bình thường — không tool thì câu chữ chắc chắn
+dựng từ tài liệu. Nhưng một lời từ chối theo định nghĩa **không dựng từ tài liệu
+nào**, nên "vài cái điểm cao nhất" ở đó là bằng chứng cho một khẳng định không
+tồn tại.
+
+⚠️ **Đừng chữa bằng ngưỡng similarity ở tầng truy hồi.** Cách đó nghe hợp lý
+nhưng `KeywordOverlapReranker` cho điểm rất phẳng — đo thật 0,468–0,888 kể cả với
+đoạn không liên quan (xem mục cổng leo thang). Ngưỡng nào cắt được ba tài liệu
+trên cũng cắt luôn tài liệu đúng ở lượt khác. Luật "model có gọi tên không" thì
+tất định và kiểm được bằng mắt.
 
 Lọc ở đâu: đường stream lọc ngay trước khi phát `SOURCES` (đó là lý do event này
 bị giữ lại từ `_prepare_context` rồi mới phát sau khi hết token); đường graph lọc
@@ -922,6 +973,29 @@ Nên backend nói thẳng qua `data.cho_trich_nguon` của event `done`: `False`
 FE vẫn **gỡ** dấu khỏi thân bài nhưng **không** dựng dòng "Nguồn". Quyết định
 nằm ở một chỗ duy nhất là Python; FE chỉ nghe theo. `undefined` (stream đứt
 giữa chừng) giữ nguyên hành vi cũ để không mất sạch nguồn vì một lỗi mạng.
+
+### Nhãn hiển thị — hai dòng, không gộp
+
+Nhãn cũ là `Nguồn: "VOP841", "VOP619"`. Đợt test 08/09/2026 cho thấy sale không
+hiểu dãy mã trần đó là gì — có người tưởng là lỗi hiển thị hoặc log debug sót
+lại. `DongNguon` trong `CauTraLoi.jsx` giờ tách theo LOẠI:
+
+```
+📄 Dữ liệu tham chiếu: căn VOP841, VOP619 · đọc lúc 08:32 08/09/2026
+📄 Theo tài liệu: "Chính sách hỗ trợ lãi suất chung của Vinhomes"
+```
+
+**Chia theo tiền tố `doc_id`, không chia theo `kind`** — cùng lý do đã quyết việc
+bấm được hay không. `kind` nói nguồn ĐẾN TỪ đâu; người đọc cần biết nó TRỎ VÀO
+đâu. `tinh_khoan_vay` là ca chứng minh: `kind="db"` mà nhãn là tên tài liệu và
+`doc_id` là `knowledge:…`, xếp nó vào dòng dữ liệu căn hộ là nói sai bản chất.
+
+**Mốc thời gian chỉ gắn cho dòng DỮ LIỆU, và viết là "đọc lúc" chứ không phải
+"cập nhật lúc".** Hệ thống biết lúc nó truy vấn Postgres, không biết lúc ai đó
+sửa giá — viết thành "cập nhật" là khẳng định một điều không kiểm được. Tài liệu
+không có mốc nào vì chúng là bản chụp trong vector store và ta không biết lần
+`ingest` cuối là khi nào. Mốc chấm ở FE lúc nhận event `sources` (`nguonLuc`),
+không xin backend: `Citation` là hợp đồng đóng băng, không có trường thời gian.
 
 ## Gợi ý câu hỏi tiếp theo — và đường dẫn tới đặt cọc
 

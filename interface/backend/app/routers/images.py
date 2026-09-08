@@ -16,7 +16,7 @@ import base64
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.core.deps import get_optional_user
-from app.core.han_muc import EMAIL_TU_VAN, HanMuc
+from app.core.han_muc import HanMuc
 from app.schemas.auth import CurrentUser
 from app.schemas.images import ModifyImageRequest, ModifyImageResponse
 from app.services.image_edit import ImageEditError, sua_anh_can
@@ -31,13 +31,9 @@ NHAN_VIEN_MOI_10_PHUT = 40
 _han_muc = HanMuc(
     khach_moi_ngay=KHACH_MOI_NGAY,
     nhan_vien_moi_10_phut=NHAN_VIEN_MOI_10_PHUT,
-    # Cùng luật với chat: mời liên hệ, không báo hết lượt. Câu khác đi vì người
-    # đang thử bố trí nội thất quan tâm thứ khác với người đang hỏi giá.
-    loi_moi=(
-        "Để xem thêm phương án bố trí nội thất cho căn này, bạn liên hệ chuyên viên "
-        f"tư vấn qua email {EMAIL_TU_VAN} nhé. Bên mình dựng phương án chi tiết theo "
-        "đúng nhu cầu của bạn."
-    ),
+    # Cùng khuôn thông báo với chat, chỉ khác thứ được đếm: người dùng chạm trần
+    # ở hai chỗ khác nhau vẫn phải nhận ra ngay đây là cùng một chuyện.
+    don_vi="lượt tạo ảnh",
 )
 
 

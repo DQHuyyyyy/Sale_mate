@@ -403,3 +403,67 @@ class TestTuChoiNhacLaiTieuChi:
         tra_loi = "Căn VOP619 có 2 phòng ngủ. Mình chưa có đủ dữ liệu về giá."
 
         assert [c.title for c in loc_nguon_da_dung([_db("VOP619")], tra_loi, co_du_lieu_tool=True)] == ["VOP619"]
+
+
+class TestTuChoiKhongKeoTheoTaiLieuVoCan:
+    """Lời từ chối KHÔNG được kéo theo tài liệu chỉ vì truy hồi trả về chúng.
+
+    Ca thật, đo trong đợt test 08/09/2026: hỏi "cho tôi xem chi tiết căn VOP9999"
+    (mã không có trong kho). Trợ lý từ chối đúng, không bịa gì — nhưng dưới đó
+    vẫn hiện "Chính sách hỗ trợ lãi suất chung của Vinhomes", "Tổng quan dự án
+    Vinhomes Ocean Park 1", "Tổng quan dự án Vinhomes Ocean Park 3".
+
+    Vì sao chúng lọt: tool tra VOP9999 không ra gì nên `co_du_lieu_tool=False`,
+    rơi vào nhánh "lượt không có tool thì giữ 3 tài liệu điểm cao nhất". Nhánh ấy
+    đúng cho câu trả lời bình thường — không tool thì câu chữ dựng từ tài liệu.
+    Nhưng một lời từ chối theo định nghĩa không dựng từ tài liệu nào.
+
+    Rủi ro không phải chuyện thẩm mỹ: sale đọc xong tưởng ba tài liệu đó nói về
+    căn VOP9999 và mang thông tin sai đi tư vấn khách.
+    """
+
+    TRA_LOI = (
+        "Mình chưa có đủ dữ liệu để trả lời chính xác về căn VOP9999. "
+        "Bạn cho mình biết thêm thông tin căn hộ cần tra cứu nhé."
+    )
+
+    def test_ma_can_khong_ton_tai_thi_khong_con_nguon_nao(self) -> None:
+        nguon = [
+            _doc("Chính sách hỗ trợ lãi suất chung của Vinhomes"),
+            _doc("Tổng quan dự án Vinhomes Ocean Park 1"),
+            _doc("Tổng quan dự án Vinhomes Ocean Park 3"),
+        ]
+
+        assert loc_nguon_da_dung(nguon, self.TRA_LOI, co_du_lieu_tool=False) == []
+
+    def test_tu_choi_van_giu_tai_lieu_neu_model_goi_ten(self) -> None:
+        """Chốt ngược: từ chối MỘT PHẦN mà có trích tài liệu thì nguồn phải còn.
+
+        Không có vế này thì luật mới thành "từ chối là xoá sạch", và câu
+        "Theo Chính sách hỗ trợ lãi suất chung của Vinhomes thì trần là 6%, còn
+        lãi suất của căn VOP9999 mình chưa có dữ liệu" mất chỗ dựa cho con số 6%.
+        """
+        nguon = [
+            _doc("Chính sách hỗ trợ lãi suất chung của Vinhomes"),
+            _doc("Tổng quan dự án Vinhomes Ocean Park 1"),
+        ]
+        tra_loi = (
+            "Theo Chính sách hỗ trợ lãi suất chung của Vinhomes, trần lãi suất là 6%/năm. "
+            "Còn căn VOP9999 thì mình chưa có đủ dữ liệu."
+        )
+
+        giu = loc_nguon_da_dung(nguon, tra_loi, co_du_lieu_tool=False)
+
+        assert [c.title for c in giu] == ["Chính sách hỗ trợ lãi suất chung của Vinhomes"]
+
+    def test_cau_tra_loi_binh_thuong_van_giu_ba_tai_lieu_dau(self) -> None:
+        """Luật mới chỉ siết nhánh TỪ CHỐI, không đụng đường đi chung.
+
+        Câu trả lời thật không có tool thì vẫn dựng từ tài liệu, và đòi model
+        gọi tên từng cái là xoá nguồn của gần hết các lượt hỏi chính sách.
+        """
+        nguon = [_doc(f"Tài liệu {i}") for i in range(5)]
+
+        giu = loc_nguon_da_dung(nguon, "Dự án có biển hồ nước mặn rộng 6,1 ha.", co_du_lieu_tool=False)
+
+        assert len(giu) == TOI_DA_NGUON_TAI_LIEU

@@ -1487,25 +1487,52 @@ table.data tbody tr:hover {
   background: #fef3f2;
   color: #b42318;
 }
-/* Nút mở email cho chuyên viên tư vấn, hiện dưới lời mời khi khách vãng lai
-   dùng hết lượt hỏi. Tô đậm như một hành động chính chứ không phải một dòng chữ
-   phụ: đây là bước tiếp theo duy nhất còn lại của cả phiên, và người đọc tới đây
-   là người quan tâm nhất. Không dùng lớp `err` — xem `khungLoi` trong
-   ChatSidebar.jsx. */
-.cw-lien-he {
+/* Thông báo hệ thống khi chạm trần hạn mức — KHÔNG phải một bong bóng trả lời.
+   Nền vàng nhạt và vạch đứng bên trái để phân biệt bằng mắt với cả bong bóng
+   trắng của trợ lý lẫn bong bóng đỏ của lỗi; đây là chuyện của hệ thống, không
+   phải câu trả lời nghiệp vụ và cũng không phải lỗi người dùng gây ra.
+
+   Vì sao cần: khi câu chạm trần trông giống một câu trả lời bình thường, sale
+   đọc nó như "trợ lý không biết" chứ không phải "đã hết lượt" — xem `khungLoi`
+   trong ChatSidebar.jsx. */
+.cw-han-muc {
+  align-self: stretch;
+  padding: 12px 14px;
+  border: 1px solid #fde68a;
+  border-left: 4px solid #f59e0b;
+  border-radius: 12px;
+  background: #fffbeb;
+  color: #78350f;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.cw-han-muc-tin {
+  margin: 0;
+}
+.cw-han-muc-bieu-tuong {
+  margin-right: 6px;
+}
+/* Hành động ĐÚNG duy nhất còn lại của phiên, nên tô đậm như một nút chính chứ
+   không để thành một dòng chữ phụ. */
+.cw-han-muc-nut {
   display: block;
-  margin-top: 10px;
+  width: 100%;
+  margin-top: 12px;
   padding: 9px 12px;
+  border: 0;
   border-radius: 10px;
   background: var(--brand);
   color: #fff;
+  font: inherit;
   font-weight: 600;
-  font-size: 13px;
-  text-align: center;
-  text-decoration: none;
+  cursor: pointer;
 }
-.cw-lien-he:hover {
+.cw-han-muc-nut:hover {
   filter: brightness(0.94);
+}
+.cw-han-muc-nut:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 .ctyping {
   display: flex;
@@ -1534,9 +1561,12 @@ table.data tbody tr:hover {
   margin-bottom: 4px;
 }
 
-/* Nguồn gom một dòng ở cuối câu trả lời, ngăn bằng vạch mảnh. Nhỏ và nhạt để
-   không tranh chỗ với nội dung, nhưng vẫn đọc được — đây là thứ chứng minh trợ
-   lý không bịa, không phải chú thích cho có. */
+/* Khối nguồn ở cuối câu trả lời, ngăn bằng vạch mảnh. Nhỏ và nhạt để không
+   tranh chỗ với nội dung, nhưng vẫn đọc được — đây là thứ chứng minh trợ lý
+   không bịa, không phải chú thích cho có.
+
+   Một dòng cho dữ liệu căn hộ, một dòng cho tài liệu. Xem `DongNguon` trong
+   CauTraLoi.jsx để biết vì sao không gộp. */
 .ctl-nguon {
   margin: 10px 0 0;
   padding-top: 7px;
@@ -1545,8 +1575,19 @@ table.data tbody tr:hover {
   line-height: 1.6;
   color: var(--faint);
 }
+.ctl-nguon-dong {
+  margin: 0;
+}
+.ctl-nguon-dong + .ctl-nguon-dong {
+  margin-top: 3px;
+}
 .ctl-nguon-nhan {
   font-weight: 600;
+}
+/* Mốc thời gian là chú thích cho dòng dữ liệu, không phải một nguồn — nhạt hơn
+   một bậc để mắt không đọc nó lẫn vào danh sách mã căn. */
+.ctl-nguon-luc {
+  opacity: 0.8;
 }
 /* Trích nguồn là mã căn thì bấm được để mở căn đó bên trái. Dùng <button> chứ
    không phải <span onClick> để bàn phím và trình đọc màn hình dùng được; reset

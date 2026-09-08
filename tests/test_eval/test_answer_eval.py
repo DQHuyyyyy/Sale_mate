@@ -134,3 +134,43 @@ class TestSoSanh:
         sau.ghi_nhan(cham(_case("phai_tu_choi"), "Phí quản lý 15.000 đồng/m2."))
 
         assert "nới quá tay" in so_sanh(truoc, sau)
+
+
+class TestChamCaDongNguon:
+    """Câu trả lời đúng vẫn hỏng nếu dòng "Nguồn" sai.
+
+    Ca thật 08/09/2026: hỏi căn VOP9999 (mã không tồn tại), trợ lý từ chối hoàn
+    hảo — không bịa một chữ — nhưng dưới đó liệt kê "Chính sách hỗ trợ lãi suất
+    chung của Vinhomes" cùng tổng quan Ocean Park 1 và 3. Sale đọc xong tưởng ba
+    tài liệu ấy nói về VOP9999.
+
+    Đo mỗi câu chữ thì lỗi này không bao giờ hiện ra số: mọi cột đều xanh.
+    """
+
+    def test_tu_choi_ma_van_trung_nguon_thi_truot(self) -> None:
+        kq = cham(
+            _case("phai_tu_choi", nguon_phai_rong=True),
+            _TU_CHOI,
+            ["Tổng quan dự án Vinhomes Ocean Park 1"],
+        )
+
+        assert not kq.dat
+        assert "trưng nguồn không liên quan" in kq.ly_do_truot
+
+    def test_tu_choi_va_khong_nguon_nao_thi_dat(self) -> None:
+        assert cham(_case("phai_tu_choi", nguon_phai_rong=True), _TU_CHOI, []).dat
+
+    def test_cau_khong_khai_thi_nguon_khong_bi_cham(self) -> None:
+        """Luật chỉ áp cho câu khai tường minh — 26 câu cũ giữ nguyên cách chấm."""
+        assert cham(_case("phai_tu_choi"), _TU_CHOI, ["Một tài liệu nào đó"]).dat
+
+    def test_khong_truyen_nguon_thi_bo_qua(self) -> None:
+        """Gọi kiểu cũ `cham(case, tra_loi)` vẫn chạy — bộ chấm test được mà
+        không phải dựng cả pipeline truy hồi."""
+        assert cham(_case("phai_tu_choi", nguon_phai_rong=True), _TU_CHOI).dat
+
+    def test_bo_du_lieu_co_ca_ma_can_khong_ton_tai(self) -> None:
+        """Bộ câu hỏi phải giữ được ca này, không chỉ luật chấm."""
+        bo_cau = json.loads(DATASET_PATH.read_text(encoding="utf-8"))
+
+        assert any(c.get("nguon_phai_rong") for c in bo_cau), "thiếu ca kiểm dòng Nguồn"
